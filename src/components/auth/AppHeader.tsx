@@ -18,7 +18,7 @@ export function AppHeader({ name, email }: { name: string | null; email: string 
           >
             <GraduationCapIcon className="h-5 w-5" />
           </span>
-          <span className="text-base font-bold tracking-tight text-fg">{brand.name}</span>
+          <span className="text-base font-bold tracking-tight whitespace-nowrap text-fg">{brand.name}</span>
         </div>
 
         <div className="flex items-center gap-3 sm:gap-4">

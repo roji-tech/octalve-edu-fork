@@ -177,13 +177,25 @@ one-off pattern sources, referenced once for a specific technique and then done:
   session cookie + 12-hour server cap; ticked → the 30 d / 90 d policy, 7 d for admins). AlEemaan has the
   same, in its own green, plus the admin shell. Still to come in this series, each designed in the plan
   first: **0.5.B** nonce-based CSP, **0.5.C** password reset/change, **0.5.D** TOTP MFA.
+- **Phase 0.5.D (TOTP two-step verification) is BUILT AND VERIFIED** — branch `claude/totp-mfa`, stacked on the
+  password-reset branch. Password → (if the account has an *active* second factor) a short-lived, attempt-limited
+  **challenge and no session** → `POST /api/v1/auth/login/mfa` with a code or a recovery code → session. TOTP is
+  our own RFC 6238 (`lib/auth/mfa/`), secrets AES-256-GCM-encrypted under `MFA_ENCRYPTION_KEY` (required — no key,
+  no MFA; **never add a development fallback key**), recovery codes keyed-hashed. **Rules that follow:** (1) a
+  session from a sign-in is created in **`completeSignIn()` only**; (2) every "use it once" rule (a TOTP step, a
+  recovery code, a challenge, a confirmation) is a **conditional UPDATE whose row count decides**, never a read
+  then a write; (3) `lib/auth/mfa/codes.ts` is imported by client components — keep it free of `node:crypto`;
+  (4) the enrolment secret lives in component state only, and the QR is drawn in the browser, never by an online
+  service; (5) a password reset/change kills pending challenges but a reset **never** turns MFA off. Lost both
+  factors: `pnpm mfa:reset -- <email>`. Record: `docs/development-history/phases/phase-0.5.D-totp-mfa.md`;
+  next: 0.5.E extras (planned in the plan doc), then the §0.5.2 work.
 - **Phase 0.5.C (password reset and change) is BUILT AND VERIFIED** — branch `claude/password-reset`, stacked on
   the CSP branch. Forgot → emailed single-use link (token in the URL *fragment*, hashed at rest, 30 min) → reset
   deletes all the person's sessions; change-password re-verifies the current password and keeps only this
   session. One shared rule for new passwords: `checkNewPassword()`. Email via `lib/email` (`EMAIL_TRANSPORT`
   = resend | console | file; production needs `RESEND_API_KEY` + `EMAIL_FROM`). **Never make the forgot-password
   response depend on whether the account exists** (content or timing). Record:
-  `docs/development-history/phases/phase-0.5.C-password-reset.md`; next: 0.5.D (TOTP), then 0.5.E extras (plan).
+  `docs/development-history/phases/phase-0.5.C-password-reset.md`; next: 0.5.D (TOTP — built, see above), then 0.5.E extras (plan).
 - **Phase 0.5.B (nonce-based script CSP) is BUILT AND VERIFIED** — branch `claude/csp-nonce`, stacked on the
   0.5.A branch. `src/proxy.ts` mints a nonce per page request and sets the policy (`src/lib/security/csp.ts`);
   `CSP_REPORT_ONLY=true` is the live-deployment valve; the API has a static `default-src 'none'` policy. **Rules

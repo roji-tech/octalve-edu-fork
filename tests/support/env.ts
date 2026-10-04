@@ -58,6 +58,11 @@ process.env.DEPLOYMENT_MODE = "solo";
 process.env.EMAIL_TRANSPORT = "file";
 process.env.EMAIL_FILE = EMAIL_FILE;
 
+/// A fixed key for two-step verification, so the in-process tests and both servers agree on it
+/// (32 bytes, base64). Tests that need "no key" delete it from process.env for their own duration.
+export const TEST_MFA_KEY = Buffer.alloc(32, 7).toString("base64");
+process.env.MFA_ENCRYPTION_KEY = TEST_MFA_KEY;
+
 /// Environment for the Next.js servers under test. Explicit and complete on
 /// purpose: nothing from a developer's shell or .env may change what is tested.
 export function serverEnv(appUrl: string): Record<string, string> {

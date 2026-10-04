@@ -8,6 +8,7 @@ import { hashPassword, verifyPassword, PASSWORD_MAX_LENGTH } from "@/lib/auth/pa
 import { checkNewPassword } from "@/lib/auth/password-policy";
 import { revokeOtherSessions } from "@/lib/auth/session";
 import { auditPersonEvent } from "@/lib/auth/audit";
+import { deleteUserChallenges } from "@/lib/auth/mfa/challenge";
 import { passwordChangedEmail } from "@/lib/email/messages";
 import { sendEmailQuietly } from "@/lib/email/transport";
 
@@ -58,6 +59,7 @@ export const POST = withAuth(async (req, auth) => {
 
   await prisma.user.update({ where: { id: auth.userId }, data: { passwordHash: await hashPassword(newPassword) } });
   await revokeOtherSessions(auth.userId, auth.sessionId);
+  await deleteUserChallenges(auth.userId); // a pending sign-in challenge proved the OLD password
   await refundAttempt(key);
 
   after(async () => {

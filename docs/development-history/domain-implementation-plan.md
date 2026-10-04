@@ -898,6 +898,40 @@ the per-IP limit on step 2.
 days" (it would quietly weaken the factor), mandatory-MFA policy and step-up (Settings work), an active-devices
 page.
 
+**As built (2026-10-05)** — record: `phases/phase-0.5.D-totp-mfa.md`. As designed, with these refinements:
+- **No key, no MFA — in every environment, not only production.** `MFA_ENCRYPTION_KEY` (32 bytes, base64) is
+  required; without a valid one the account page says two-step verification isn't available, enrolment answers
+  503 `MFA_UNAVAILABLE`, and sign-in step 2 answers the same *before* spending anything. There is deliberately
+  no development fallback key — a baked-in default is the kind of thing that ships to production by accident.
+- **Recovery codes are stored as keyed hashes (HMAC-SHA256), not plain SHA-256.** A code has 50 bits, so a
+  stolen table of plain hashes could be ground through offline; the key lives in the environment, not the
+  database. Both the AES key and the HMAC key are *derived* from the root key with HKDF (one root secret is never
+  used raw for two purposes). The AES-GCM box carries the owner's user id as AAD, so a ciphertext copied onto
+  another person's row fails to decrypt. Recovery codes are Crockford base32 (`XXXXX-XXXXX`, exactly 50 random
+  bits); typing `o`/`i`/`l` still works.
+- **The challenge spends an attempt *before* the code is checked**, atomically (a conditional increment), so
+  twenty simultaneous guesses on one challenge get five checks, not twenty; a person holds at most five live
+  challenges; and a password **reset or change deletes pending challenges** (a challenge is proof of the old
+  password). A reset still never touches the second factor itself.
+- **Limits on step 2:** per challenge 5 attempts; per **account 10 failures / 5 minutes across all challenges**
+  (hard — the real bound for someone who knows the password and can mint challenges at will); per IP 30. A
+  correct code is refunded; a malformed one (not 6 digits / not a recovery code) is a typo and is refunded too.
+- **Confirming records the step it used**, so the very code that turned two-step verification on can't also sign
+  in — the next code can (an authenticator shows it within 30 s). Confirming and turning off both sign the person
+  out of their *other* devices and send a notice; so does a recovery-code sign-in and a recovery-code
+  regeneration. Audit actions: `MFA_ENABLED`, `MFA_DISABLED`, `MFA_RECOVERY_CODE_USED`,
+  `MFA_RECOVERY_CODES_REPLACED`, `MFA_RESET`.
+- **One `completeSignIn()` creates every session from a sign-in** (rotate a presented session, admin cap,
+  `remember`); step 1 and step 2 both call it. The browser-safe half of the code rules (`lib/auth/mfa/codes.ts`)
+  has no `node:crypto`, so the screens check a code's *shape* with the same function the server uses.
+- **The QR code is drawn in the browser** by the pinned `qrcode` package (dynamic import, `data:` PNG, always
+  dark-on-white in both themes); the tests decode it with `jsqr` and check it encodes the key shown beside it.
+  The secret is held in component state only — never storage, URL or cookie.
+- **Operator recovery:** `pnpm mfa:reset -- <email>` (`scripts/mfa-reset.mjs`, plain Node + Prisma, tested as a
+  child process) removes the factor, signs the person out everywhere and audits it.
+- Small fix on the way: the signed-in header's "Sign out" button wrapped onto two lines on narrow phones; it is
+  now icon-only below `sm` (the accessible name is unchanged).
+
 #### 0.5.E — Account lifecycle extras (planned 2026-10-04; each designed here before it is built)
 
 Prompted by the question "what else would a Django/Djoser-style auth give us?". Mapping and decisions:
@@ -916,6 +950,58 @@ Prompted by the question "what else would a Django/Djoser-style auth give us?". 
   self-service; designed with the Users pages.
 
 ---
+
+#### 0.5.F — Dev tooling: a dev email inbox now, a mock Paystack with Finance (planned 2026-10-05; nothing built)
+
+**Source.** The maintainer's guide *"Development Email System & Dual-Mode Paystack Integration"* (a pattern already
+used locally and on a staging deploy of another project). It has two halves: (1) an in-app **dev email inbox** —
+when no real mail key is set, outgoing mail is captured in a 50-message ring buffer bound to `globalThis` (so HMR
+doesn't wipe it) and shown in a floating widget; (2) a **dual-mode Paystack engine** — a `PaymentTransaction` table, a
+REST client (Naira ↔ kobo only at the HTTP boundary, HMAC-SHA512 over the *raw* body with `timingSafeEqual`), a
+**mock checkout** that fires genuinely signed webhooks at our own handler (no tunnels, no test cards), and one atomic
+`fulfillPayment(reference)` — `updateMany({ where: { reference, status: 'PENDING' } })` as the lock — called by both
+the webhook and the browser's return page, so the redirect-beats-webhook race resolves to exactly one fulfilment;
+the amount is re-checked against Paystack's verify call (< ₦0.01 tolerance). The architecture is adopted; the
+details below are what had to change to fit *these* repos.
+
+**Where each half lands.**
+- **The dev inbox → a fourth email transport, `inbox`,** in `lib/email/transport.ts` (beside `resend` / `console` /
+  `file`), plus `GET`/`DELETE /api/v1/dev/email-inbox` and a floating widget on the layout. It is the natural next
+  small step: reset links and the 0.5.D notices become visible locally *and* on a staging deploy with no mail
+  provider. Our messages are plain text, so the widget shows text — it never injects HTML.
+- **The Paystack engine → the Finance phase (M2).** It needs the fee/invoice models it fulfils (`PaymentTransaction`
+  gains a `tenantId` in Octalve Edu — RLS, §0.5.2 — or a branch in AlEemaan), so it is *designed* here and *built*
+  there, with the guide as the reference.
+
+**Changes the guide needs before it is safe here** (each becomes a test):
+1. **The gate must fail closed.** The guide's `devToolsEnabled()` is `VERCEL_ENV !== 'production'`. On any host that
+   is not Vercel — our self-hosted Solo installs and AlEemaan's live school — `VERCEL_ENV` is unset, so the gate is
+   **open in production**, and (with the mock) a missing `PAYSTACK_SECRET_KEY` would silently turn the system into
+   one that accepts free "payments". Replace it with an explicit opt-in: dev tools are on only when `DEV_TOOLS=true`
+   **and** `APP_ENV` is `development` or `staging`; an unset `APP_ENV` under `NODE_ENV=production` is production.
+   Production **never** enables them, and a missing `PAYSTACK_SECRET_KEY` in production is a hard `PAYSTACK_NOT_CONFIGURED`,
+   never a fallback to the mock. A unit test walks the whole environment matrix.
+2. **The inbox must not be public on a reachable staging URL.** It is unauthenticated in the guide — but a reset link
+   or a recovery-code notice in it is an account takeover for anyone who finds the URL. It cannot just require a
+   session (password reset happens signed out). On `development` (localhost) it stays open; on `staging` it requires
+   `DEV_TOOLS_TOKEN`, entered once in the widget. Both routes answer 404 when tools are off.
+3. **No `dangerouslySetInnerHTML`.** Plain text only here; if HTML mail is ever added, render it in a
+   `sandbox`ed `srcdoc` iframe. The widget must also pass our nonce CSP (no inline script/style) and axe, in both themes.
+4. **CSRF uses our `validateCSRF()`.** The guide's `origin.includes(host)` is a substring test (`evil-localhost:3000.com`
+   passes it).
+5. **The webhook keeps the guide's discipline** — raw body first, constant-time signature check, 200 even when
+   fulfilment throws — and gains our limiter. `GET …/status` runs `fulfillPayment` (a side effect behind an
+   unauthenticated GET that makes an outbound Paystack call per request), so it is rate-limited per IP and per reference.
+6. **Money stays `Decimal` Naira everywhere**; kobo exists only inside `lib/paystack.ts`.
+
+**Tests this implies (written before the code, like every phase):** the gate matrix; inbox ring buffer (50 cap,
+survives a simulated reload, newest first); routes 404 when off and token-gated on staging; an email containing
+`<script>`/`<img onerror>` renders inert; the `inbox` transport selected by default only when tools are on;
+and, with Finance: a signature computed over a *re-stringified* body is refused, 20 simultaneous `fulfillPayment`
+calls produce exactly one fulfilment, an amount mismatch throws, the mock cannot be reached or used in production,
+and the mock's self-webhook goes through the real handler.
+
+**Build order:** the `inbox` transport + widget first (small; both repos; after 0.5.D); the Paystack engine with Finance.
 
 ## Phase 1 — MVP: Core SIS + Finance
 

@@ -1,6 +1,9 @@
 import crypto from "node:crypto";
 import bcrypt from "bcryptjs";
 import { PrismaClient, Role } from "@prisma/client";
+import { encryptSecret } from "@/lib/auth/mfa/secret-box";
+import { generateRecoveryCodes, hashRecoveryCode, normaliseRecoveryCode } from "@/lib/auth/mfa/recovery-codes";
+import { generateTotpSecret, totpAt } from "@/lib/auth/mfa/totp";
 import { TEST_DATABASE_NAME, TEST_DATABASE_URL } from "./env";
 
 /// A client that is hard-wired to the TEST database (never the ambient
@@ -90,5 +93,31 @@ export async function createUser(
   }
   return { id: user.id, email, name, password: password ?? "", tenantId: opts.role ? tenant.id : null };
 }
+
+export type TestMfa = { secret: Buffer; recoveryCodes: string[] };
+
+/// Turns two-step verification ON for a user directly in the database — a confirmed credential and ten
+/// recovery codes — for tests about SIGN-IN. (The enrolment flow itself is tested through the real routes.)
+export async function enableMfa(userId: string): Promise<TestMfa> {
+  const secret = generateTotpSecret();
+  await db.mfaCredential.create({
+    data: { userId, secretEnc: encryptSecret(secret, userId), confirmedAt: new Date() },
+  });
+  const recoveryCodes = generateRecoveryCodes();
+  await db.mfaRecoveryCode.createMany({
+    data: recoveryCodes.map((code) => ({ userId, codeHash: hashRecoveryCode(normaliseRecoveryCode(code)!) })),
+  });
+  return { secret, recoveryCodes };
+}
+
+/// The code an authenticator would show right now (`offsetSteps` shifts it by whole 30-second steps).
+/// The server accepts the current step ±1, so offset 0 is safe even if a step boundary passes mid-request;
+/// API tests that need a code the server must REFUSE use ±3 for the same reason.
+export const codeFor = (secret: Buffer, offsetSteps = 0): string => totpAt(secret, Date.now(), offsetSteps);
+
+/// Simulates time passing between sign-ins: forgets which step was last accepted, so the same current code
+/// is acceptable again. (Tests about replay itself must NOT call this.)
+export const rewindMfa = (userId: string) =>
+  db.mfaCredential.update({ where: { userId }, data: { lastUsedStep: null } });
 
 export { Role };

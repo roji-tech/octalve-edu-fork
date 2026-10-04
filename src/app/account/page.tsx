@@ -4,7 +4,10 @@ import { getSession } from "@/lib/auth/session";
 import { AppHeader } from "@/components/auth/AppHeader";
 import { ChangePasswordForm } from "@/components/auth/ChangePasswordForm";
 import { SessionRevalidator } from "@/components/auth/SessionRevalidator";
+import { TwoStepPanel } from "@/components/auth/TwoStepPanel";
 import { Card } from "@/components/ui/Card";
+import { mfaConfigured } from "@/lib/auth/mfa/secret-box";
+import { getMfaStatus } from "@/lib/auth/mfa/service";
 
 export const metadata: Metadata = { title: "Account" };
 export const dynamic = "force-dynamic";
@@ -15,6 +18,7 @@ export default async function AccountPage() {
   const session = await getSession();
   if (!session) redirect("/login");
   const { name, email } = session.user;
+  const mfa = await getMfaStatus(session.userId);
 
   return (
     <div className="min-h-screen bg-canvas text-fg-2">
@@ -43,6 +47,18 @@ export default async function AccountPage() {
             Changing it signs you out of every other device.
           </p>
           <ChangePasswordForm />
+        </Card>
+
+        <Card>
+          <h2 className="text-lg font-semibold text-fg">Two-step verification</h2>
+          <p className="mt-1 text-sm text-fg-muted">
+            Protect your account with a code from an authenticator app, as well as your password.
+          </p>
+          <TwoStepPanel
+            available={mfaConfigured()}
+            enabled={mfa.enabled}
+            recoveryCodesRemaining={mfa.recoveryCodesRemaining}
+          />
         </Card>
       </main>
     </div>

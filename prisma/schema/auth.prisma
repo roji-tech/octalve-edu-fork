@@ -25,9 +25,12 @@ model User {
   /// Nullable: an invited-but-not-yet-activated user has none (Phase 0.5 plan).
   passwordHash  String?
 
-  sessions    Session[]
-  resetTokens PasswordResetToken[]
-  memberships TenantMembership[]
+  sessions         Session[]
+  resetTokens      PasswordResetToken[]
+  memberships      TenantMembership[]
+  mfaCredential    MfaCredential?
+  mfaRecoveryCodes MfaRecoveryCode[]
+  mfaChallenges    MfaChallenge[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -71,6 +74,61 @@ model PasswordResetToken {
   createdAt DateTime  @default(now())
   expiresAt DateTime
   usedAt    DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// --- Two-step verification (domain-implementation-plan.md §0.5.D) -------------------------------------
+// TOTP (RFC 6238) plus single-use recovery codes. The second factor is enforced AT SIGN-IN: a person who
+// has a confirmed credential never gets a session from their password alone (see MfaChallenge).
+
+/// One authenticator per person. `secretEnc` is the TOTP secret AES-256-GCM-encrypted under
+/// MFA_ENCRYPTION_KEY (bound to `userId` as AAD) — it must be readable to check a code, so it cannot be
+/// hashed, and it is never stored in the clear. A credential with `confirmedAt` null is an enrolment in
+/// progress, NOT an active factor: sign-in ignores it until the person has proved they can produce a code.
+model MfaCredential {
+  id           String    @id @default(cuid())
+  userId       String    @unique
+  secretEnc    String
+  confirmedAt  DateTime?
+  /// The highest 30-second step already accepted. A code for this step or any earlier one is refused, so
+  /// a code can't be used twice (replay / shoulder-surfing). Advanced with a conditional update, so two
+  /// simultaneous submissions of one code can't both win.
+  lastUsedStep Int?
+  createdAt    DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+/// Ten single-use codes per person, replaced as a set. `codeHash` is an HMAC (keyed from
+/// MFA_ENCRYPTION_KEY), never the code: the codes have 50 bits, so a plain hash could be ground offline.
+model MfaRecoveryCode {
+  id        String    @id @default(cuid())
+  userId    String
+  codeHash  String
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, codeHash])
+  @@index([userId])
+}
+
+/// The "pending MFA" state between a correct password and a correct second factor. It is NOT a session:
+/// no cookie, and withAuth cannot see it. The plaintext token (256 bits) exists only in the JSON response
+/// to sign-in step 1, held in memory by the sign-in page; only its SHA-256 hash is stored. Short-lived,
+/// a handful of attempts, single use. `remember` carries the "Keep me signed in" choice made at step 1.
+model MfaChallenge {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  userId    String
+  remember  Boolean  @default(false)
+  attempts  Int      @default(0)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 

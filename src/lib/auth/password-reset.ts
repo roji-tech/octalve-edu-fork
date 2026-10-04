@@ -49,6 +49,9 @@ export async function resetPasswordWithToken(
     const row = await tx.passwordResetToken.findUniqueOrThrow({ where: { tokenHash } });
     await tx.user.update({ where: { id: row.userId }, data: { passwordHash: newPasswordHash } });
     await tx.session.deleteMany({ where: { userId: row.userId } });
+    // A pending sign-in challenge is proof of the OLD password — it must not outlive it. (The second FACTOR
+    // itself is untouched: a reset never switches two-step verification off.)
+    await tx.mfaChallenge.deleteMany({ where: { userId: row.userId } });
     await tx.passwordResetToken.deleteMany({ where: { userId: row.userId, id: { not: row.id } } });
     return { userId: row.userId };
   });

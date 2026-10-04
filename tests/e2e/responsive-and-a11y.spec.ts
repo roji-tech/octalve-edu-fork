@@ -1,9 +1,10 @@
 import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
 import { test, expect } from "../support/fixtures";
-import { Role, createUser, resetDatabase, seedInstance } from "./../support/db";
+import { Role, codeFor, createUser, db, enableMfa, resetDatabase, seedInstance } from "./../support/db";
 import { linkFrom, waitForMail } from "../support/outbox";
-import { alerts, fillCredentials, passwordField, signInButton, signInThroughUi } from "./helpers";
+import { base32Decode } from "@/lib/auth/mfa/base32";
+import { alerts, codeField, fillCredentials, mfaHeading, passwordField, recoveryField, signInButton, signInThroughUi, verifyButton } from "./helpers";
 
 // Runs on the desktop AND the phone project (see playwright.config.ts).
 //  - axe-core, WCAG 2.2 A/AA rules, on every screen and on the STATES that
@@ -214,6 +215,135 @@ test.describe("password reset and change screens", () => {
     await page.getByRole("button", { name: "Change password" }).click();
     await expect(page.getByRole("status").filter({ hasText: "Password changed" })).toBeVisible();
     await checkScreen(page, "/account (changed)", isMobile);
+  });
+});
+
+test.describe("two-step verification screens", () => {
+  test.beforeAll(async () => {
+    await seedInstance();
+  });
+
+  const startSignIn = async (page: Page, user: { email: string; password: string }) => {
+    await page.goto("/login");
+    await fillCredentials(page, user.email, user.password);
+    await signInButton(page).click();
+    await expect(mfaHeading(page)).toBeVisible();
+  };
+
+  test("sign-in step 2: the code, its errors, the recovery-code form", async ({ page, isMobile }) => {
+    const user = await createUser({ role: Role.ADMIN });
+    const { secret } = await enableMfa(user.id);
+    await startSignIn(page, user);
+    await checkScreen(page, "/login step 2 (code)", isMobile);
+
+    await verifyButton(page).click();
+    await expect(page.getByText("Enter your authentication code.")).toBeVisible();
+    await checkScreen(page, "/login step 2 (validation error)", isMobile);
+
+    await codeField(page).fill(codeFor(secret, 3));
+    await verifyButton(page).click();
+    await expect(alerts(page)).toContainText("That code isn't right");
+    await checkScreen(page, "/login step 2 (wrong code)", isMobile);
+
+    await page.getByRole("button", { name: "Use a recovery code instead" }).click();
+    await expect(recoveryField(page)).toBeVisible();
+    await checkScreen(page, "/login step 2 (recovery code)", isMobile);
+    await recoveryField(page).fill("ABCDE-FGHJK");
+    await verifyButton(page).click();
+    await expect(alerts(page)).toContainText("isn't right");
+    await checkScreen(page, "/login step 2 (wrong recovery code)", isMobile);
+  });
+
+  test("sign-in step 2: the paused state", async ({ page, isMobile }) => {
+    test.setTimeout(120_000);
+    const user = await createUser({ role: Role.ADMIN });
+    const { secret } = await enableMfa(user.id);
+    // Ten wrong codes in the window lock the account's step 2 (five per challenge, so two challenges).
+    for (let round = 0; round < 2; round++) {
+      await startSignIn(page, user);
+      for (let i = 0; i < 5; i++) {
+        await codeField(page).fill(codeFor(secret, 3));
+        await verifyButton(page).click();
+        await expect(alerts(page)).toContainText("That code isn't right");
+        await expect(codeField(page)).toHaveValue("");
+      }
+      await codeField(page).fill(codeFor(secret, 3));
+      await verifyButton(page).click();
+      await expect(page.getByRole("heading", { name: "Sign in to your dashboard" })).toBeVisible();
+    }
+    await startSignIn(page, user);
+    await codeField(page).fill(codeFor(secret));
+    await verifyButton(page).click();
+    await expect(alerts(page)).toContainText("Verification is paused for a moment");
+    await checkScreen(page, "/login step 2 (paused)", isMobile);
+  });
+
+  test("/account: turning it on — password, scan, a wrong code, the recovery codes, the finished state", async ({ page, isMobile }) => {
+    const user = await createUser({ role: Role.ADMIN });
+    await signInThroughUi(page, user);
+    await page.goto("/account");
+    await expect(page.getByRole("button", { name: "Set up two-step verification" })).toBeVisible();
+    await checkScreen(page, "/account (two-step off)", isMobile);
+
+    await page.getByRole("button", { name: "Set up two-step verification" }).click();
+    await checkScreen(page, "/account two-step (password step)", isMobile);
+    await page.getByRole("button", { name: "Continue" }).click();
+    await expect(page.getByText("Enter your password.")).toBeVisible();
+    await checkScreen(page, "/account two-step (password error)", isMobile);
+
+    await page.getByLabel("Password", { exact: true }).fill(user.password);
+    await page.getByRole("button", { name: "Continue" }).click();
+    const qr = page.getByRole("img", { name: /QR code/ });
+    await expect(qr).toBeVisible();
+    await expect.poll(() => qr.evaluate((el: HTMLImageElement) => el.complete && el.naturalWidth > 0)).toBe(true);
+    await checkScreen(page, "/account two-step (scan)", isMobile);
+
+    const key = (await page.getByText(/^[A-Z2-7]{4}( [A-Z2-7]{4}){7}$/).textContent())!.replace(/\s/g, "");
+    const secret = base32Decode(key)!;
+    await codeField(page).fill(codeFor(secret, 3));
+    await page.getByRole("button", { name: "Turn on" }).click();
+    await expect(page.getByText(/That code isn't right/)).toBeVisible();
+    await checkScreen(page, "/account two-step (scan, wrong code)", isMobile);
+
+    await codeField(page).fill(codeFor(secret));
+    await page.getByRole("button", { name: "Turn on" }).click();
+    await expect(page.getByRole("heading", { name: "Save your recovery codes" })).toBeVisible();
+    await checkScreen(page, "/account two-step (recovery codes)", isMobile);
+
+    await page.getByLabel("I have saved my recovery codes").check();
+    await page.getByRole("button", { name: "Done" }).click();
+    await expect(page.getByText("10 of 10")).toBeVisible();
+    await checkScreen(page, "/account two-step (on)", isMobile);
+  });
+
+  test("/account: managing it — low on codes, new codes, turning it off with its errors", async ({ page, isMobile }) => {
+    const user = await createUser({ role: Role.ADMIN });
+    const { secret } = await enableMfa(user.id);
+    // Two recovery codes left.
+    const keep = (await db.mfaRecoveryCode.findMany({ where: { userId: user.id }, take: 2, select: { id: true } })).map((r) => r.id);
+    await db.mfaRecoveryCode.updateMany({ where: { userId: user.id, id: { notIn: keep } }, data: { usedAt: new Date() } });
+    await startSignIn(page, user);
+    await codeField(page).fill(codeFor(secret));
+    await verifyButton(page).click();
+    await expect(page).toHaveURL(/\/dashboard$/);
+
+    await page.goto("/account");
+    await expect(alerts(page)).toContainText("running low");
+    await checkScreen(page, "/account two-step (on, running low)", isMobile);
+
+    await page.getByRole("button", { name: "Generate new recovery codes" }).click();
+    await page.getByRole("button", { name: "Generate new codes" }).click();
+    await expect(page.getByText("Enter the 6-digit code.")).toBeVisible();
+    await checkScreen(page, "/account two-step (new codes, error)", isMobile);
+    await page.getByRole("button", { name: "Cancel" }).click();
+
+    await page.getByRole("button", { name: "Turn off two-step verification" }).click();
+    await checkScreen(page, "/account two-step (turn off)", isMobile);
+    await page.getByRole("button", { name: "Turn off", exact: true }).click();
+    await expect(page.getByText("Enter your password.")).toBeVisible();
+    await checkScreen(page, "/account two-step (turn off, errors)", isMobile);
+    await page.getByRole("button", { name: "Use a recovery code instead" }).click();
+    await checkScreen(page, "/account two-step (turn off, recovery code)", isMobile);
   });
 });
 

@@ -1,6 +1,5 @@
 import type { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { Role } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { ok, fail, noStore } from "@/lib/api/envelope";
 import { validateCSRF } from "@/lib/auth/csrf";
@@ -11,12 +10,9 @@ import {
   getClientIp,
 } from "@/lib/auth/rate-limit";
 import { verifyPassword, PASSWORD_MAX_LENGTH } from "@/lib/auth/password";
-import {
-  createSession,
-  deleteSessionByToken,
-  setSessionCookie,
-  SESSION_COOKIE_NAME,
-} from "@/lib/auth/session";
+import { completeSignIn } from "@/lib/auth/complete-sign-in";
+import { createChallenge } from "@/lib/auth/mfa/challenge";
+import { hasActiveMfa } from "@/lib/auth/mfa/service";
 
 const loginSchema = z.object({
   // 254 = the practical RFC 5321 maximum; also bounds the size of the
@@ -50,11 +46,10 @@ const INVALID_CREDENTIALS_MESSAGE = "Invalid email or password";
  * POST /api/v1/auth/login
  * Hand-rolled (Auth.js is not used at all — see domain-implementation-plan.md
  * §0.5.1). Guard order: CSRF → reserve rate-limit slots → parse → validate →
- * constant-time credential check → rotate + create session.
- *
- * The pending-MFA step (design in §0.5.1, built later) slots in between
- * "password verified" and "createSession": password alone must never yield a
- * real session for an MFA-enrolled account.
+ * constant-time credential check → (if the account has two-step verification:
+ * a pending challenge, NO session — POST /login/mfa finishes it) → rotate +
+ * create session via completeSignIn(), the one place a session is ever made
+ * from a sign-in.
  */
 async function handleLogin(req: NextRequest): Promise<NextResponse> {
   if (!validateCSRF(req)) {
@@ -108,29 +103,18 @@ async function handleLogin(req: NextRequest): Promise<NextResponse> {
   await refundAttempt(ipKey);
   await refundAttempt(pairKey);
 
-  // Rotate: a session already presented is deleted before the new one exists,
-  // never left valid alongside it.
-  const presentedToken = req.cookies.get(SESSION_COOKIE_NAME)?.value;
-  if (presentedToken) await deleteSessionByToken(presentedToken);
+  // Two-step verification (plan §0.5.D): the password is proven, but for a person with an ACTIVE second
+  // factor that is only the first step. No session is created here — no cookie, nothing withAuth can see —
+  // just a short-lived, attempt-limited challenge for POST /login/mfa to redeem. The "wrong password"
+  // answers above are unchanged, so whether an account has MFA is revealed only to someone who already
+  // knows its password. The response deliberately carries no user details.
+  if (await hasActiveMfa(user.id)) {
+    const challenge = await createChallenge(user.id, remember);
+    return ok({ mfaRequired: true, challenge, accountThrottled });
+  }
 
-  // An ADMIN anywhere gets the shorter absolute session lifetime.
-  const holdsAdmin = Boolean(
-    await prisma.tenantMembership.findFirst({
-      where: { userId: user.id, role: Role.ADMIN },
-      select: { id: true },
-    }),
-  );
-  const { token, expires, persistent } = await createSession(user.id, req.headers.get("user-agent"), {
-    admin: holdsAdmin,
-    remember,
-  });
-
-  const response = ok({
-    user: { id: user.id, name: user.name, email: user.email },
-    accountThrottled, // surfaced so the UI can show a soft notice, never a hard block
-  });
-  // Not remembered → a browser-session cookie (and a 12-hour server-side cap).
-  return setSessionCookie(response, token, persistent ? expires : null);
+  // `accountThrottled` is surfaced so the UI can show a soft notice, never a hard block.
+  return completeSignIn(req, user, remember, { accountThrottled });
 }
 
 export async function POST(req: NextRequest) {

@@ -45,6 +45,34 @@ export async function signOut(page: Page) {
   await page.getByRole("button", { name: "Sign out" }).click();
 }
 
+// --- Two-step verification (plan §0.5.D) -------------------------------------------------------------------
+export const codeField = (page: Page) => page.getByLabel("Authentication code");
+export const recoveryField = (page: Page) => page.getByLabel("Recovery code");
+export const verifyButton = (page: Page) => page.getByRole("button", { name: "Verify", exact: true });
+export const mfaHeading = (page: Page) => page.getByRole("heading", { level: 1, name: "Two-step verification" });
+
+/// Signs in through BOTH steps: password, then a code (`{ code }`) or a recovery code (`{ recoveryCode }`).
+export async function signInWithSecondFactor(
+  page: Page,
+  user: { email: string; password: string },
+  factor: { code: string } | { recoveryCode: string },
+  opts: { remember?: boolean } = {},
+) {
+  await page.goto("/login");
+  await fillCredentials(page, user.email, user.password);
+  if (opts.remember) await keepSignedInBox(page).check();
+  await signInButton(page).click();
+  await expect(mfaHeading(page)).toBeVisible();
+  if ("recoveryCode" in factor) {
+    await page.getByRole("button", { name: "Use a recovery code instead" }).click();
+    await recoveryField(page).fill(factor.recoveryCode);
+  } else {
+    await codeField(page).fill(factor.code);
+  }
+  await verifyButton(page).click();
+  await expect(page).toHaveURL(/\/dashboard$/);
+}
+
 /// Requests the page makes to the login API, for "did it send anything?" checks.
 export function trackLoginRequests(page: Page) {
   const requests: string[] = [];

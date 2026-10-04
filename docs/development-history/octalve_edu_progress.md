@@ -221,21 +221,36 @@ password and keeps only the current session. One shared rule, `checkNewPassword(
 `lib/email` (Resend by plain fetch / console / file). 377 tests pass; 18 injected bugs all caught (one survived
 first — a test was added). Needs `RESEND_API_KEY` + `EMAIL_FROM` in production.
 
+## TOTP two-step verification build (2026-10-05) — built and verified, stacked again
+
+Design: plan §0.5.D (+ "As built"). Record: `phases/phase-0.5.D-totp-mfa.md`. Branch `claude/totp-mfa`, **based on
+`claude/password-reset`**. Sign-in becomes two steps for anyone with an *active* second factor: the password yields a
+short-lived, attempt-limited **challenge and no session**; `POST /api/v1/auth/login/mfa` with a code or recovery code
+is the only thing that then creates one (through the single `completeSignIn()`), carrying the "Keep me signed in"
+choice made at step 1. TOTP is our own RFC 6238 (checked against the RFCs' published vectors), secrets are
+AES-256-GCM-encrypted under `MFA_ENCRYPTION_KEY` (**required — no key, no MFA**), recovery codes are keyed-hashed,
+every "use it once" rule is a conditional update (ten simultaneous submissions of one code: one winner). The account
+page has the Two-step verification card (QR drawn in the browser, recovery codes with Copy/Download),
+`pnpm mfa:reset -- <email>` is the operator's way back in. 548 tests pass; **49 injected bugs, all caught**. Needs
+`MFA_ENCRYPTION_KEY` in production; losing or changing it makes every stored secret undecryptable (→ `mfa:reset`).
+Also planned (not built): plan §0.5.F — a dev email inbox now and a mock Paystack with Finance, adapted from the
+maintainer's guide (its `VERCEL_ENV` gate would be *open* on our self-hosted installs; the adaptation fails closed).
+
 ## Next action
 
-**Hand §0.5.1 and then 0.5.A to the maintainer for review and merge** (PRs from
-`claude/auth-0.5.1-port`, then `claude/design-tokens-theme`, on the fork into
-`octalve-core/octalve-edu`; the second is stacked on the first).
+**The first four phases are open as stacked PRs on the fork** (`roji-tech/octalve-edu-fork` #1 auth → #2 0.5.A →
+#3 0.5.B → #4 0.5.C; each is based on the one before — merge in order). **0.5.D is pushed on `claude/totp-mfa`
+(based on 0.5.C); its PR is not opened yet.**
 
-**The back-port to AlEemaan is done and verified** — shared names, the hardening deltas, the 72-byte
-password policy, `method="post"`, the sign-in screens it lacked, and this test suite — on branch
-`claude/octalve-auth-sync` of `roji-tech/AlEemaan` (its `phases/phase-0.5.1.6-octalve-sync.md`),
-awaiting *that* repo's maintainer review/merge. From here on a change to the shared mechanism is made
-in both repos or logged as a divergence in both plan docs (§0.5.1.6 there, the shared-names table here).
+**The back-port to AlEemaan is done, verified and merged there** — shared names, the hardening deltas, the 72-byte
+password policy, `method="post"`, the sign-in screens it lacked and this test suite (`roji-tech/AlEemaan` #2), then
+its design language and shell (#3). Its #4 (0.5.B CSP) and #5 (0.5.C password reset) are open; its 0.5.D is pushed,
+no PR yet. From here on a change to the shared mechanism is made in both repos or logged as a divergence in both
+plan docs (§0.5.1.6 there, the shared-names table here).
 
 Then, in order: the rest of the Phase 0.5 addenda, each designed in the plan first and built in both repos
-— ~~**0.5.B** the nonce-based script CSP~~ (done), **0.5.C** password reset and change, **0.5.D** TOTP MFA (must
-precede Phase 1's Settings UI); then the tenant-trust-boundary resolver and `forTenant()` with its explicit
+— ~~**0.5.B** the nonce-based script CSP~~, ~~**0.5.C** password reset and change~~, ~~**0.5.D** TOTP MFA~~ (all built,
+in review/stacked), then **0.5.F** the dev email inbox (planned), **0.5.E** the account-lifecycle extras (planned); then the tenant-trust-boundary resolver and `forTenant()` with its explicit
 RLS role setup (§0.5.2 — needs a real `app_user` Postgres role created first, and `withAuth`'s
 `roles`/`permissions` options and this repo's app shell arrive here); the shared API helpers (§0.5.3, and
 the Redis-backed rate limiter before any multi-instance SaaS deployment). Then that phase's negative-test
