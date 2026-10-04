@@ -26,6 +26,7 @@ model User {
   passwordHash  String?
 
   sessions    Session[]
+  resetTokens PasswordResetToken[]
   memberships TenantMembership[]
 
   createdAt DateTime @default(now())
@@ -59,13 +60,19 @@ model Session {
   @@index([userId])
 }
 
-/// Unused so far — reserved for the future password-reset / invite flows. Its
-/// `token` will need to be stored hashed (single-use, short-lived) when those
-/// are designed; revisit this shape then rather than guessing now.
-model VerificationToken {
-  identifier String
-  token      String   @unique
-  expires    DateTime
+/// Password-reset links (domain-implementation-plan.md §0.5.C). Same rule as sessions: only a HASH of the
+/// token is stored — the plaintext exists only in the emailed link — so a leaked database yields no usable
+/// link. Single use (`usedAt`, claimed with a conditional update) and short-lived (`expiresAt`).
+/// Replaces the Auth.js-era `VerificationToken` model, which was never used.
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  tokenHash String    @unique
+  userId    String
+  createdAt DateTime  @default(now())
+  expiresAt DateTime
+  usedAt    DateTime?
 
-  @@unique([identifier, token])
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }

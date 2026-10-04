@@ -142,6 +142,12 @@ export async function revokeUserSessions(userId: string, exceptToken?: string): 
   });
 }
 
+/// Deletes every session of a user EXCEPT the one with this id — "sign out everywhere else" (password
+/// change, enabling two-step verification): the person keeps the session they are using.
+export async function revokeOtherSessions(userId: string, keepSessionId: string): Promise<void> {
+  await prisma.session.deleteMany({ where: { userId, id: { not: keepSessionId } } });
+}
+
 /// Deletes every expired session (idle or absolute). Returns how many.
 /// Intended for a scheduled nightly job — the job runner arrives with the
 /// BullMQ infrastructure; until then this is callable and verified.

@@ -209,6 +209,18 @@ worth remembering: `'strict-dynamic'` trusts script created by trusted script, s
 **markup** injection (what XSS is); the first injection tests used `createElement("script")` and the "attack"
 ran — they now splice attacker markup into the real response.
 
+## Password reset and change build (2026-10-04) — built and verified, stacked again
+
+Design: plan §0.5.C (+ "As built"); extras mapped in §0.5.E. Record: `phases/phase-0.5.C-password-reset.md`. Branch
+`claude/password-reset`, **based on `claude/csp-nonce`**. Forgot-password answers identically whether or not the
+account exists (content and timing — the work runs in `after()`); the emailed link carries a 256-bit token in the
+URL fragment, stored only as a SHA-256 hash, single-use (claimed with a conditional update — 20 concurrent
+attempts, one winner) and valid 30 minutes; a reset signs the person out everywhere and does not sign them in;
+change-password (a new Account page here, in the plain header until §0.5.2's shell) re-verifies the current
+password and keeps only the current session. One shared rule, `checkNewPassword()`, for setup/reset/change.
+`lib/email` (Resend by plain fetch / console / file). 377 tests pass; 18 injected bugs all caught (one survived
+first — a test was added). Needs `RESEND_API_KEY` + `EMAIL_FROM` in production.
+
 ## Next action
 
 **Hand §0.5.1 and then 0.5.A to the maintainer for review and merge** (PRs from

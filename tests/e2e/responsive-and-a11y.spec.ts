@@ -2,6 +2,7 @@ import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
 import { test, expect } from "../support/fixtures";
 import { Role, createUser, resetDatabase, seedInstance } from "./../support/db";
+import { linkFrom, waitForMail } from "../support/outbox";
 import { alerts, fillCredentials, passwordField, signInButton, signInThroughUi } from "./helpers";
 
 // Runs on the desktop AND the phone project (see playwright.config.ts).
@@ -152,6 +153,67 @@ test.describe("dashboard", () => {
     await expect(page.getByRole("heading", { name: /Welcome/ })).toBeVisible();
     await expectNoHorizontalScroll(page, "/dashboard (long name)");
     await checkScreen(page, "/dashboard (long name)", isMobile);
+  });
+});
+
+test.describe("password reset and change screens", () => {
+  test.beforeAll(async () => {
+    await seedInstance();
+  });
+
+  test("/forgot-password: idle, validation error, and the confirmation", async ({ page, isMobile }) => {
+    await page.goto("/forgot-password");
+    await expect(page.getByRole("heading", { name: "Forgot your password?" })).toBeVisible();
+    await checkScreen(page, "/forgot-password (idle)", isMobile);
+    await page.getByRole("button", { name: "Send reset link" }).click();
+    await expect(page.getByText("Enter your email address.")).toBeVisible();
+    await checkScreen(page, "/forgot-password (validation error)", isMobile);
+    await page.getByLabel("Email address").fill("someone@test.example");
+    await page.getByRole("button", { name: "Send reset link" }).click();
+    await expect(page.getByRole("heading", { name: "Check your email" })).toBeVisible();
+    await checkScreen(page, "/forgot-password (sent)", isMobile);
+  });
+
+  test("/reset-password: the form, its errors, success, and the dead-link states", async ({ page, isMobile }) => {
+    const user = await createUser();
+    await page.goto("/forgot-password");
+    await page.getByLabel("Email address").fill(user.email);
+    await page.getByRole("button", { name: "Send reset link" }).click();
+    const mail = await waitForMail(user.email);
+    await page.goto(linkFrom(mail[0]));
+    await expect(page.getByRole("heading", { name: "Choose a new password" })).toBeVisible();
+    await checkScreen(page, "/reset-password (form)", isMobile);
+    await page.getByLabel("New password", { exact: true }).fill("short1");
+    await page.getByLabel("Confirm new password").fill("short1");
+    await page.getByRole("button", { name: "Set new password" }).click();
+    await expect(page.getByText(/at least 8 characters/)).toBeVisible();
+    await checkScreen(page, "/reset-password (error)", isMobile);
+    await page.getByLabel("New password", { exact: true }).fill("a-fine-password-1");
+    await page.getByLabel("Confirm new password").fill("a-fine-password-1");
+    await page.getByRole("button", { name: "Set new password" }).click();
+    await expect(page.getByRole("heading", { name: "Password updated" })).toBeVisible();
+    await checkScreen(page, "/reset-password (success)", isMobile);
+
+    await page.goto("/reset-password");
+    await expect(page.getByRole("heading", { name: "This link can't be used" })).toBeVisible();
+    await checkScreen(page, "/reset-password (no token)", isMobile);
+  });
+
+  test("/account with the Password card: idle, errors, success", async ({ page, isMobile }) => {
+    const user = await createUser({ role: Role.ADMIN });
+    await signInThroughUi(page, user);
+    await page.goto("/account");
+    await expect(page.getByRole("heading", { level: 1, name: "Account" })).toBeVisible();
+    await checkScreen(page, "/account (idle)", isMobile);
+    await page.getByRole("button", { name: "Change password" }).click();
+    await expect(page.getByText("Enter your current password.")).toBeVisible();
+    await checkScreen(page, "/account (validation errors)", isMobile);
+    await page.getByLabel("Current password").fill(user.password);
+    await page.getByLabel("New password", { exact: true }).fill("yet-another-pass-3");
+    await page.getByLabel("Confirm new password").fill("yet-another-pass-3");
+    await page.getByRole("button", { name: "Change password" }).click();
+    await expect(page.getByRole("status").filter({ hasText: "Password changed" })).toBeVisible();
+    await checkScreen(page, "/account (changed)", isMobile);
   });
 });
 

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { GraduationCapIcon } from "@/components/ui/icons";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { brand } from "@/lib/brand";
@@ -25,6 +26,12 @@ export function AppHeader({ name, email }: { name: string | null; email: string 
             {name && <p className="truncate text-sm font-medium text-fg">{name}</p>}
             {email && <p className="truncate text-xs text-fg-muted">{email}</p>}
           </div>
+          <Link
+            href="/account"
+            className="inline-flex min-h-11 items-center rounded-lg px-2 text-sm font-medium text-fg-2 hover:text-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          >
+            Account
+          </Link>
           <ThemeToggle />
           <SignOutButton />
         </div>

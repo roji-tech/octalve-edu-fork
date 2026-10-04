@@ -7,6 +7,8 @@ export type TextFieldProps = Omit<InputHTMLAttributes<HTMLInputElement>, "id"> &
   error?: string | null;
   /// Rendered inside the input's right edge (e.g. a show/hide button).
   trailing?: ReactNode;
+  /// Rendered at the right end of the label row (e.g. "Forgot password?").
+  labelAction?: ReactNode;
   ref?: Ref<HTMLInputElement>;
 };
 
@@ -21,6 +23,7 @@ export function TextField({
   hint,
   error,
   trailing,
+  labelAction,
   className = "",
   ref,
   ...rest
@@ -33,12 +36,12 @@ export function TextField({
 
   return (
     <div>
-      <label
-        htmlFor={inputId}
-        className="mb-1.5 block text-xs font-semibold tracking-wide text-fg-2 uppercase"
-      >
-        {label}
-      </label>
+      <div className="mb-1.5 flex items-center justify-between gap-3">
+        <label htmlFor={inputId} className="block text-xs font-semibold tracking-wide text-fg-2 uppercase">
+          {label}
+        </label>
+        {labelAction}
+      </div>
       <div className="relative">
         <input
           ref={ref}

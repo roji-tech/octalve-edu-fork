@@ -124,12 +124,14 @@ test.describe("client-side validation", () => {
 test.describe("using only the keyboard", () => {
   test.skip(({ isMobile }) => isMobile, "tab order is a desktop concern");
 
-  test("the email field is focused on arrival, Tab moves email → password → show/hide → keep-signed-in → Sign in, Enter submits", async ({ page }) => {
+  test("the email field is focused on arrival, Tab moves email → forgot-password link → password → show/hide → keep-signed-in → Sign in, Enter submits", async ({ page }) => {
     const user = await createUser({ role: Role.ADMIN });
     await page.goto("/login");
 
     await expect(emailField(page)).toBeFocused();
     await page.keyboard.type(user.email);
+    await page.keyboard.press("Tab");
+    await expect(page.getByRole("link", { name: "Forgot password?" })).toBeFocused(); // in the Password label row
     await page.keyboard.press("Tab");
     await expect(passwordField(page)).toBeFocused();
     await page.keyboard.type(user.password);

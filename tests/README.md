@@ -69,6 +69,7 @@ in the app.
   so scope alerts to `<main>` (`alerts(page)` in `e2e/helpers.ts`). The sign-in brand panel is
   `aria-hidden` and repeats the product name, so a bare `getByText("Octalve Edu")` is a strict-mode
   violation on a phone — scope it (`getByRole("main")`).
+- **The inbox.** The servers run with `EMAIL_TRANSPORT=file`; every message they send is a JSON line in `tests/.tmp/outbox.jsonl`. `support/outbox.ts` reads it (`waitForMail(to)`, `mailAfterGrace(to)` for "nothing was sent", `tokenFrom`/`linkFrom`). Mail goes out *after* the HTTP response, so poll; use a unique address per test and tests never see each other's mail.
 - **Every browser test is a CSP test.** The auto `csp` fixture (`support/fixtures.ts`) records every `securitypolicyviolation` and fails the test if any occurred. A test that *provokes* one calls `csp.take()`, which returns and clears them. To test markup injection, splice the payload into the real server response with `page.route` — not `page.evaluate(createElement("script"))`: `'strict-dynamic'` trusts script made by trusted script and DevTools-evaluated code is exempt, so that "attack" simply runs.
 - **Both themes, every time.** `checkScreen()` in `responsive-and-a11y.spec.ts` runs axe and the
   overflow check in the dark *and* the light theme (flipping `data-theme` — the colours are CSS

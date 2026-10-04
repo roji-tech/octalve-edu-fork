@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Alert } from "@/components/ui/Alert";
@@ -167,6 +168,14 @@ export function LoginForm() {
           maxLength={128}
           disabled={busy}
           placeholder="Enter your password"
+          labelAction={
+            <Link
+              href="/forgot-password"
+              className="-my-3 inline-flex min-h-11 items-center rounded-md px-1 text-xs font-medium text-brand-fg hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            >
+              Forgot password?
+            </Link>
+          }
         />
 
         <div className="space-y-4 empty:hidden">

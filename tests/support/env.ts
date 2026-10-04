@@ -12,6 +12,9 @@ try {
   // no .env — fine
 }
 
+/// The "inbox": EMAIL_TRANSPORT=file appends one JSON line per message here (see tests/support/outbox.ts).
+export const EMAIL_FILE = `${process.cwd()}/tests/.tmp/outbox.jsonl`;
+
 export const HTTP_PORT = 3100; // plain-HTTP app: APP_URL=http://localhost:3100 -> unprefixed cookie
 export const HTTPS_APP_PORT = 3101; // same build, APP_URL=https://localhost:3443
 export const TLS_PORT = 3443; // TLS-terminating reverse proxy in front of 3101
@@ -52,6 +55,8 @@ process.env.DATABASE_URL = TEST_DATABASE_URL;
 // https project has its own server with its own APP_URL.
 process.env.APP_URL = HTTP_URL;
 process.env.DEPLOYMENT_MODE = "solo";
+process.env.EMAIL_TRANSPORT = "file";
+process.env.EMAIL_FILE = EMAIL_FILE;
 
 /// Environment for the Next.js servers under test. Explicit and complete on
 /// purpose: nothing from a developer's shell or .env may change what is tested.
@@ -68,5 +73,7 @@ export function serverEnv(appUrl: string): Record<string, string> {
     CLIENT_IP_HEADER: "x-real-ip",
     TRUSTED_PROXY_HOPS: "1",
     SETUP_TOKEN: "",
+    EMAIL_TRANSPORT: "file",
+    EMAIL_FILE,
   };
 }

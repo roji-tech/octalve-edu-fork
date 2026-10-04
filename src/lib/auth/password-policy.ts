@@ -24,3 +24,21 @@ export const PASSWORD_MAX_BYTES = 72;
 export function passwordByteLength(password: string): number {
   return new TextEncoder().encode(password).length;
 }
+
+/// The ONE rule for choosing a NEW password — setup, reset and change all use it, so they cannot drift
+/// (the live feedback in the forms uses it too: this module is client-safe). Returns the first problem
+/// as a sentence the person can act on, or null when the password is acceptable. Login does not use
+/// this (see PASSWORD_MAX_BYTES).
+export function checkNewPassword(password: string): string | null {
+  if (password.length < 8) return "Password must be at least 8 characters long";
+  if (password.length > PASSWORD_MAX_LENGTH) {
+    return `Password must be at most ${PASSWORD_MAX_LENGTH} characters long`;
+  }
+  // bcrypt ignores everything past byte 72 — reject rather than silently truncate.
+  if (passwordByteLength(password) > PASSWORD_MAX_BYTES) {
+    return `Password must be at most ${PASSWORD_MAX_BYTES} bytes long (${PASSWORD_MAX_BYTES} characters; fewer if it contains emoji or non-Latin letters)`;
+  }
+  if (!/[a-zA-Z]/.test(password)) return "Password must contain at least one letter";
+  if (!/\d/.test(password)) return "Password must contain at least one number";
+  return null;
+}

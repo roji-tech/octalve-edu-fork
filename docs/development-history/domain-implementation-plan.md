@@ -817,6 +817,19 @@ token in the query string; let change-password skip the current-password check.
 **Not in scope:** SMS or security-question recovery (weaker than email), admin-initiated resets (with
 Users/Settings), breached-password checking, and "active devices" (needs its own page).
 
+**As built (2026-10-04)** — record: `phases/phase-0.5.C-password-reset.md`. As designed, with these refinements:
+the password rule now lives in one function, `checkNewPassword()` (client-safe; setup, reset, change and the
+live form feedback all call it); the limiter's window is its fixed 5 minutes, so limits are *per 5 minutes*
+(forgot: 10 per IP, 3 per address; reset: 10 failures per IP, successes and typos refunded; change: 5 wrong
+current passwords per account); the new `lib/email/` is plain `fetch` to Resend (no SDK dependency) with
+`console` and `file` transports; `sendEmailQuietly()` never throws, because a send failure shown to the
+requester would be an oracle; the notice and audit work runs in `after()` too; a reset also clears the browser's
+session cookie. The never-used Auth.js `VerificationToken` table was dropped in the migration (replaced by
+`PasswordResetToken`). The sign-in screen's "Forgot password?" link — drawn in the artifact — is now real.
+Octalve Edu has no app shell until §0.5.2, so its Account page (profile + Password card) is a plain page
+with an "Account" link in the header; AlEemaan's lives in the shell. Audit: Octalve Edu writes one row per
+school the person belongs to; AlEemaan one row.
+
 #### 0.5.D — TOTP two-step verification (designed 2026-09-30, before any code)
 
 **Scope.** Optional per person for now: enrol an authenticator app, be challenged at sign-in, use recovery
@@ -884,6 +897,23 @@ the per-IP limit on step 2.
 **Not in scope:** WebAuthn/passkeys and SMS codes (a later, separate design), trusted-device "remember for 30
 days" (it would quietly weaken the factor), mandatory-MFA policy and step-up (Settings work), an active-devices
 page.
+
+#### 0.5.E — Account lifecycle extras (planned 2026-10-04; each designed here before it is built)
+
+Prompted by the question "what else would a Django/Djoser-style auth give us?". Mapping and decisions:
+- **Built or designed already:** login/logout/current-user (0.5.1), password reset and change (0.5.C), two-step
+  verification (0.5.D). **Deliberately not used:** token/JWT endpoints (revocable database sessions are a design
+  decision), social login.
+- **Invite & activate** (Djoser's activation flow, adapted): schools invite people; the email carries a
+  single-use, hashed, short-lived link built on exactly the 0.5.C token machinery to set a first password.
+  Arrives with the Users pages (self-signup for Octalve Edu's SaaS mode is a later, separate design).
+- **Change email with confirmation:** the new address must prove it is reachable (a link to the NEW address),
+  the old address is told, other sessions are revoked; reuses the token table with a `purpose` column.
+- **Edit profile** (name) — trivial once the above exist; audited.
+- **Active devices:** list sessions (user agent, last used — the columns already exist), revoke one or all
+  others. Needs its own page.
+- **Account deletion:** for a school this is an administrator *deactivation* (history must survive), not
+  self-service; designed with the Users pages.
 
 ---
 
