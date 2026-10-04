@@ -16,7 +16,11 @@ test.describe("baseline security headers", () => {
     test(`${path}: framing denied, no MIME sniffing, referrer trimmed, no X-Powered-By`, async () => {
       const res = await api(path);
       expect(res.headers.get("x-frame-options")).toBe("DENY");
-      expect(res.headers.get("content-security-policy")).toContain("frame-ancestors 'none'");
+      // Pages carry the per-request nonce policy (proxy.ts), the API its static one (next.config.ts); both
+      // forbid framing. Static assets are excluded from the proxy and carry neither (tests/api/csp.spec.ts).
+      if (path !== "/favicon.ico") {
+        expect(res.headers.get("content-security-policy")).toContain("frame-ancestors 'none'");
+      }
       expect(res.headers.get("x-content-type-options")).toBe("nosniff");
       expect(res.headers.get("referrer-policy")).toBe("strict-origin-when-cross-origin");
       expect(res.headers.get("x-powered-by")).toBeNull(); // don't advertise the framework

@@ -177,6 +177,12 @@ one-off pattern sources, referenced once for a specific technique and then done:
   session cookie + 12-hour server cap; ticked → the 30 d / 90 d policy, 7 d for admins). AlEemaan has the
   same, in its own green, plus the admin shell. Still to come in this series, each designed in the plan
   first: **0.5.B** nonce-based CSP, **0.5.C** password reset/change, **0.5.D** TOTP MFA.
+- **Phase 0.5.B (nonce-based script CSP) is BUILT AND VERIFIED** — branch `claude/csp-nonce`, stacked on the
+  0.5.A branch. `src/proxy.ts` mints a nonce per page request and sets the policy (`src/lib/security/csp.ts`);
+  `CSP_REPORT_ONLY=true` is the live-deployment valve; the API has a static `default-src 'none'` policy. **Rules
+  that follow:** no inline `<script>` and no `style=""`/`<style>` in our markup; every page stays dynamic; new
+  third-party origins are a CSP change, not a convenience. The `csp` test fixture fails any browser test that
+  triggers a violation. Record: `docs/development-history/phases/phase-0.5.B-csp.md`.
 - Phase 0.5.2 (tenant-trust boundary) and 0.5.3 (shared API infra) are designed, not built, and both
   depend on 0.5.1 landing first.
 - Phase 1 onward (Core SIS + Finance, Communication, LMS, Operations, Expansion) have schema sketches

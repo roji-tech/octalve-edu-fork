@@ -195,6 +195,20 @@ sampling a colour mid-transition; axe running before Next applied the page's `<t
 Not in this branch, by design: the app shell (arrives here with §0.5.2; built in AlEemaan now); "Forgot
 password?" (0.5.C); the artifact's search box and notification bell (nothing behind them).
 
+## Nonce-based script CSP build (2026-10-01) — built and verified, stacked again
+
+Design: plan §0.5.B (+ "As built"). Record: `docs/development-history/phases/phase-0.5.B-csp.md`. Branch
+`claude/csp-nonce` of the fork, **based on `claude/design-tokens-theme`** (merge order: auth → design language →
+this). `src/proxy.ts` mints a fresh 128-bit nonce per page request and sets a strict policy on request and
+response (`script-src 'self' 'nonce-…' 'strict-dynamic'`, no `unsafe-inline`/`unsafe-eval`; `upgrade-insecure-requests`
+only when `APP_URL` is https); the JSON API gets a static `default-src 'none'; frame-ancestors 'none'`;
+`CSP_REPORT_ONLY=true` is the valve for diagnosing a violation on a live deployment. A new auto test fixture
+fails any browser test during which the browser reports a violation, so the entire browser suite is a CSP test
+— it passed with zero violations, both themes, desktop, phone and https. 11 injected bugs all caught. Finding
+worth remembering: `'strict-dynamic'` trusts script created by trusted script, so the policy defends against
+**markup** injection (what XSS is); the first injection tests used `createElement("script")` and the "attack"
+ran — they now splice attacker markup into the real response.
+
 ## Next action
 
 **Hand §0.5.1 and then 0.5.A to the maintainer for review and merge** (PRs from
@@ -208,7 +222,7 @@ awaiting *that* repo's maintainer review/merge. From here on a change to the sha
 in both repos or logged as a divergence in both plan docs (§0.5.1.6 there, the shared-names table here).
 
 Then, in order: the rest of the Phase 0.5 addenda, each designed in the plan first and built in both repos
-— **0.5.B** the nonce-based script CSP, **0.5.C** password reset and change, **0.5.D** TOTP MFA (must
+— ~~**0.5.B** the nonce-based script CSP~~ (done), **0.5.C** password reset and change, **0.5.D** TOTP MFA (must
 precede Phase 1's Settings UI); then the tenant-trust-boundary resolver and `forTenant()` with its explicit
 RLS role setup (§0.5.2 — needs a real `app_user` Postgres role created first, and `withAuth`'s
 `roles`/`permissions` options and this repo's app shell arrive here); the shared API helpers (§0.5.3, and

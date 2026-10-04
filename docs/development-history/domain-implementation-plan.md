@@ -744,6 +744,20 @@ repos; both are already prepared for it (no inline `<script>`, theme via cookie,
 **Not in scope:** a CSP report endpoint, Trusted Types, SRI (no third-party scripts exist), and the public
 marketing sites (Phase 5 decides their own policy).
 
+**As built (2026-09-30/10-01)** — record: `phases/phase-0.5.B-csp.md`. `src/proxy.ts` mints the nonce and sets
+the policy on request and response; `lib/security/csp.ts` builds it (pure, unit-tested). Where the build refined
+the design: **(1)** the proxy's matcher excludes `/api` (Next's own guidance), so JSON responses get a *static*
+`default-src 'none'; frame-ancestors 'none'` from `next.config.ts` instead — same effect, no per-request work;
+static assets carry neither. **(2)** The strict style policy worked first time: Next emits no inline `<style>` and
+no `style=""` attributes, so `style-src 'self' 'nonce-…'` needed no fallback. **(3)** Nothing reads an `x-nonce`
+header, so none is set. **(4) A property worth knowing:** `'strict-dynamic'` trusts script *created by* trusted
+script, and DevTools-evaluated code is exempt — so the protection is against **markup injection** (a
+parser-inserted `<script>`, `onerror=`, `javascript:` link, injected `<base>`), which is what an XSS bug is; the
+first draft of the injection tests used `page.evaluate(createElement("script"))`, the "attack" ran, and the test
+was rewritten to splice the payload into the real server response instead. **(5) The auto-fixture works:** the
+whole browser suite (≈250 tests, both themes, desktop and phone, https) passes with **zero** policy violations —
+every flow is a CSP test.
+
 #### 0.5.C — Password reset and change (designed 2026-09-30, before any code)
 
 **Scope.** Forgotten-password recovery by email, and change-password for a signed-in person. Built in both

@@ -78,6 +78,7 @@ async function checkScreen(page: Page, what: string, isMobile: boolean) {
   for (const theme of ["dark", "light"]) {
     await page.evaluate((t) => void (document.documentElement.dataset.theme = t), theme);
     await settled(page);
+    await expect(page).toHaveTitle(/\S/); // a router.refresh() re-renders the <title> too; scan the settled page
     await expectAccessible(page, `${what} [${theme} theme]`);
     await expectNoHorizontalScroll(page, `${what} [${theme} theme]`);
   }
