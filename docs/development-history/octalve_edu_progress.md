@@ -171,10 +171,35 @@ did not do what it said), that a no-JavaScript submit of the sign-in form put th
 and that focus was lost after a failed sign-in — each fixed and pinned by a regression test. All 40
 deliberately injected bugs (mutation testing) turned the suite red.
 
+## Design language build (2026-09-30) — built and verified, stacked on the auth branch
+
+Design of record: `domain-implementation-plan.md` → "Phase 0.5 addenda" → **0.5.A**. Work log, findings,
+mutation record and screenshot review: `docs/development-history/phases/phase-0.5.A-design-language.md`.
+Branch `claude/design-tokens-theme` of the same fork, **based on `claude/auth-0.5.1-port`** (merge that
+first). Source of the look: the private design canvas "Octalve Edu & AlEemaan — UI Design".
+
+Built: the artifact's colours and layout as a semantic-token system (`globals.css`, with `brand.css` and
+`lib/brand.ts` as the only brand-specific files); Octalve's indigo brand; a light/dark theme rendered by the
+server from a `theme` cookie (no flash, no inline script — the future nonce CSP depends on that); the shared
+components re-skinned to tokens, plus `Card`, `CheckboxField`, `ThemeToggle`; the three existing screens in
+the new look; and a **real "Keep me signed in"** — unchecked (the default) gives a browser-session cookie
+and a 12-hour server-side cap, ticked gives the 30 d / 90 d policy (7 d for admins). The default session is
+therefore *shorter than the first build's* — deliberate, for shared school computers.
+
+Verified: 274 tests pass (5 skipped by design) — up from 234 — including axe WCAG 2.2 on every screen and
+state **in both themes**, the theme's server-rendering and keyboard behaviour, the brand's exact colours,
+and the remember-me pair over real HTTPS; plus clean `tsc`, ESLint and `next build`. All nine deliberately
+injected remember-me bugs turned the suite red. Two flaky *test* races were found and fixed on the way (axe
+sampling a colour mid-transition; axe running before Next applied the page's `<title>`).
+
+Not in this branch, by design: the app shell (arrives here with §0.5.2; built in AlEemaan now); "Forgot
+password?" (0.5.C); the artifact's search box and notification bell (nothing behind them).
+
 ## Next action
 
-**Hand §0.5.1 to the maintainer for review and merge** (PR from `claude/auth-0.5.1-port` on the fork
-into `octalve-core/octalve-edu`; nothing else in this repo depends on it being merged first).
+**Hand §0.5.1 and then 0.5.A to the maintainer for review and merge** (PRs from
+`claude/auth-0.5.1-port`, then `claude/design-tokens-theme`, on the fork into
+`octalve-core/octalve-edu`; the second is stacked on the first).
 
 **The back-port to AlEemaan is done and verified** — shared names, the hardening deltas, the 72-byte
 password policy, `method="post"`, the sign-in screens it lacked, and this test suite — on branch
@@ -182,9 +207,10 @@ password policy, `method="post"`, the sign-in screens it lacked, and this test s
 awaiting *that* repo's maintainer review/merge. From here on a change to the shared mechanism is made
 in both repos or logged as a divergence in both plan docs (§0.5.1.6 there, the shared-names table here).
 
-Then, in order: the tenant-trust-boundary resolver and `forTenant()` with its explicit RLS role setup
-(§0.5.2 — needs a real `app_user` Postgres role created first, and `withAuth`'s `roles`/`permissions`
-options arrive here); TOTP MFA (must precede Phase 1's Settings UI — built in both repos together); the
-shared API helpers (§0.5.3, and the Redis-backed rate limiter before any multi-instance SaaS
-deployment). Then that phase's negative-test verification gate — **run as the `app_user` role, not the
-migration owner** — before Phase 1 begins.
+Then, in order: the rest of the Phase 0.5 addenda, each designed in the plan first and built in both repos
+— **0.5.B** the nonce-based script CSP, **0.5.C** password reset and change, **0.5.D** TOTP MFA (must
+precede Phase 1's Settings UI); then the tenant-trust-boundary resolver and `forTenant()` with its explicit
+RLS role setup (§0.5.2 — needs a real `app_user` Postgres role created first, and `withAuth`'s
+`roles`/`permissions` options and this repo's app shell arrive here); the shared API helpers (§0.5.3, and
+the Redis-backed rate limiter before any multi-instance SaaS deployment). Then that phase's negative-test
+verification gate — **run as the `app_user` role, not the migration owner** — before Phase 1 begins.

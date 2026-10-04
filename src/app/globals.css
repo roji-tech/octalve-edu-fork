@@ -1,25 +1,166 @@
 @import "tailwindcss";
+@import "./brand.css";
 
-/* The product UI is dark-only for now (the setup wizard, sign-in and
-   dashboard share one visual language). color-scheme makes native controls
-   — scrollbars, autofill, form widgets — match instead of flashing light. */
-:root {
+/* ------------------------------------------------------------------------
+   Design tokens — the shared UI's whole palette lives here as CSS variables,
+   for both themes. Components never name a colour (no `slate-*`, no `blue-*`):
+   they use the semantic utilities below (`bg-canvas`, `bg-surface`, `text-fg`,
+   `border-line`, `bg-brand-strong`, …). Re-skinning = editing tokens; switching
+   theme = one attribute on <html>, set by the server from a cookie so the first
+   paint is already right (no flash, and no inline <script> — see 0.5.A / 0.5.B).
+
+   Values are the design artifact's, except where WCAG AA forced a change; each
+   such change is recorded in domain-implementation-plan.md §0.5.A.
+   ------------------------------------------------------------------------ */
+
+:root,
+:root[data-theme="dark"] {
   color-scheme: dark;
-  --background: #020617; /* slate-950 */
-  --foreground: #e2e8f0; /* slate-200 */
+
+  --canvas: #020617;
+  --surface: #0f172a;
+  --surface-2: #1e293b; /* hover / raised */
+  --field: #020617; /* input background (sits on --surface cards) */
+  --line: #1e293b;
+  --line-strong: #334155;
+
+  --fg: #f8fafc;
+  --fg-2: #cbd5e1;
+  --fg-muted: #94a3b8; /* the artifact's #64748b is 3.75:1 here — fails AA */
+
+  --danger-text: #fb7185; /* inline field errors */
+  --danger-fg: #ffe4e6;
+  --danger-icon: #fb7185;
+  --danger-bg: rgb(244 63 94 / 0.1);
+  --danger-line: rgb(244 63 94 / 0.3);
+  --warn-fg: #fef3c7;
+  --warn-icon: #fbbf24;
+  --warn-bg: rgb(245 158 11 / 0.1);
+  --warn-line: rgb(245 158 11 / 0.3);
+  --info-fg: #e0f2fe;
+  --info-icon: #38bdf8;
+  --info-bg: rgb(14 165 233 / 0.1);
+  --info-line: rgb(14 165 233 / 0.3);
+  --ok-fg: #d1fae5;
+  --ok-icon: #34d399;
+  --ok-bg: rgb(16 185 129 / 0.1);
+  --ok-line: rgb(16 185 129 / 0.3);
+
+  --shadow-card-v: 0 25px 50px -12px rgb(0 0 0 / 0.3);
+  --shadow-menu-v: 0 16px 40px rgb(0 0 0 / 0.35);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --canvas: #f8fafc;
+  --surface: #ffffff;
+  --surface-2: #f1f5f9;
+  --field: #f1f5f9;
+  --line: #e2e8f0;
+  --line-strong: #cbd5e1;
+
+  --fg: #0f172a;
+  --fg-2: #334155;
+  --fg-muted: #5b6b82; /* the artifact's #64748b is 4.34:1 on --field — fails AA */
+
+  --danger-text: #b91c1c;
+  --danger-fg: #991b1b;
+  --danger-icon: #dc2626;
+  --danger-bg: #fef2f2;
+  --danger-line: #fecaca;
+  --warn-fg: #92400e;
+  --warn-icon: #d97706;
+  --warn-bg: #fffbeb;
+  --warn-line: #fde68a;
+  --info-fg: #075985;
+  --info-icon: #0284c7;
+  --info-bg: #f0f9ff;
+  --info-line: #bae6fd;
+  --ok-fg: #166534;
+  --ok-icon: #16a34a;
+  --ok-bg: #f0fdf4;
+  --ok-line: #bbf7d0;
+
+  --shadow-card-v: 0 10px 30px -12px rgb(15 23 42 / 0.15);
+  --shadow-menu-v: 0 16px 40px rgb(15 23 42 / 0.15);
+}
+
+:root {
+  --ring: var(--brand-fg);
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-field: var(--field);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-fg: var(--fg);
+  --color-fg-2: var(--fg-2);
+  --color-fg-muted: var(--fg-muted);
+
+  --color-brand: var(--brand);
+  --color-brand-strong: var(--brand-strong);
+  --color-brand-strong-hover: var(--brand-strong-hover);
+  --color-brand-deep: var(--brand-deep);
+  --color-brand-fg: var(--brand-fg);
+  --color-brand-tint: var(--brand-tint);
+  --color-ring: var(--ring);
+
+  --color-danger-text: var(--danger-text);
+  --color-danger-fg: var(--danger-fg);
+  --color-danger-icon: var(--danger-icon);
+  --color-danger-bg: var(--danger-bg);
+  --color-danger-line: var(--danger-line);
+  --color-warn-fg: var(--warn-fg);
+  --color-warn-icon: var(--warn-icon);
+  --color-warn-bg: var(--warn-bg);
+  --color-warn-line: var(--warn-line);
+  --color-info-fg: var(--info-fg);
+  --color-info-icon: var(--info-icon);
+  --color-info-bg: var(--info-bg);
+  --color-info-line: var(--info-line);
+  --color-ok-fg: var(--ok-fg);
+  --color-ok-icon: var(--ok-icon);
+  --color-ok-bg: var(--ok-bg);
+  --color-ok-line: var(--ok-line);
+
+  --shadow-card: var(--shadow-card-v);
+  --shadow-menu: var(--shadow-menu-v);
+
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
+  background: var(--canvas);
+  color: var(--fg);
   font-family: var(--font-sans), system-ui, sans-serif;
+}
+
+/* The sign-in brand panel's faint dot-and-cross grid (the artifact draws it as an
+   SVG pattern at 12 % opacity). Pure CSS gradients: no image, so nothing for a
+   strict Content-Security-Policy to object to. */
+.brand-pattern {
+  background-image:
+    radial-gradient(circle at center, rgb(255 255 255 / 0.14) 1.5px, transparent 1.6px),
+    linear-gradient(
+      to right,
+      transparent calc(50% - 0.5px),
+      rgb(255 255 255 / 0.06) calc(50% - 0.5px),
+      rgb(255 255 255 / 0.06) calc(50% + 0.5px),
+      transparent calc(50% + 0.5px)
+    ),
+    linear-gradient(
+      to bottom,
+      transparent calc(50% - 0.5px),
+      rgb(255 255 255 / 0.06) calc(50% - 0.5px),
+      rgb(255 255 255 / 0.06) calc(50% + 0.5px),
+      transparent calc(50% + 0.5px)
+    );
+  background-size: 90px 90px;
 }
 
 /* Honour the OS "reduce motion" setting everywhere, not just where a

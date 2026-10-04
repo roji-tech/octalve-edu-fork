@@ -5,23 +5,23 @@ type Variant = "error" | "warning" | "info" | "success";
 
 const STYLES: Record<Variant, { box: string; icon: string; Icon: typeof InfoIcon }> = {
   error: {
-    box: "border-rose-500/30 bg-rose-500/10 text-rose-100",
-    icon: "text-rose-400",
+    box: "border-danger-line bg-danger-bg text-danger-fg",
+    icon: "text-danger-icon",
     Icon: AlertTriangleIcon,
   },
   warning: {
-    box: "border-amber-500/30 bg-amber-500/10 text-amber-100",
-    icon: "text-amber-400",
+    box: "border-warn-line bg-warn-bg text-warn-fg",
+    icon: "text-warn-icon",
     Icon: AlertTriangleIcon,
   },
   info: {
-    box: "border-sky-500/30 bg-sky-500/10 text-sky-100",
-    icon: "text-sky-400",
+    box: "border-info-line bg-info-bg text-info-fg",
+    icon: "text-info-icon",
     Icon: InfoIcon,
   },
   success: {
-    box: "border-emerald-500/30 bg-emerald-500/10 text-emerald-100",
-    icon: "text-emerald-400",
+    box: "border-ok-line bg-ok-bg text-ok-fg",
+    icon: "text-ok-icon",
     Icon: CheckCircleIcon,
   },
 };

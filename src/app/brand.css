@@ -1,0 +1,20 @@
+/* Octalve Edu's brand tokens — one of only TWO per-repo brand files (the other is
+   lib/brand.ts, the strings). Everything else in the UI is shared, code-identical,
+   with AlEemaan, and reads these variables through the Tailwind theme in globals.css.
+
+   Values are the design artifact's ("Octalve Edu & AlEemaan — UI Design"): indigo.
+   domain-implementation-plan.md §0.5.A records the contrast maths behind each one. */
+
+:root {
+  --brand: #4f46e5; /* logo mark, accents (non-text needs 3:1) */
+  --brand-strong: #4f46e5; /* filled buttons with WHITE text: 6.29:1 */
+  --brand-strong-hover: #4338ca; /* 7.9:1 */
+  --brand-deep: #3730a3; /* the sign-in brand panel (white text 9.93:1) */
+  --brand-fg: #a5b4fc; /* brand-coloured TEXT on dark surfaces (8.96:1 on --surface) */
+  --brand-tint: #1e1b4b; /* active nav / badge background on dark */
+}
+
+:root[data-theme="light"] {
+  --brand-fg: #4338ca; /* brand-coloured text on light surfaces (7.9:1 on white) */
+  --brand-tint: #eef2ff;
+}

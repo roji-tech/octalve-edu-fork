@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { AuthShell } from "@/components/auth/AuthShell";
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
 import { PasswordField } from "@/components/ui/PasswordField";
 import { TextField } from "@/components/ui/TextField";
 import { CheckCircleIcon } from "@/components/ui/icons";
@@ -97,34 +98,34 @@ export function SetupWizardForm({ requiresToken, insecureBaseUrl }: SetupWizardF
   if (createdAdminEmail) {
     return (
       <AuthShell>
-        <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 text-center shadow-2xl shadow-black/30 sm:p-8">
-          <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-400">
+        <Card className="text-center">
+          <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-ok-bg text-ok-icon">
             <CheckCircleIcon className="h-7 w-7" />
           </span>
-          <h1 className="mt-5 text-2xl font-bold tracking-tight text-white">Setup complete</h1>
-          <p className="mt-2 text-sm leading-relaxed text-slate-400">
+          <h1 className="mt-5 text-2xl font-bold tracking-tight text-fg">Setup complete</h1>
+          <p className="mt-2 text-sm leading-relaxed text-fg-muted">
             The administrator account for{" "}
-            <span className="font-medium text-white">{createdAdminEmail}</span> has been created.
-            This setup wizard is now permanently disabled.
+            <span className="font-medium text-fg">{createdAdminEmail}</span> has been created. This
+            setup wizard is now permanently disabled.
           </p>
           <Button className="mt-6 w-full" onClick={() => router.push("/login")} autoFocus>
             Continue to sign in
           </Button>
-        </div>
+        </Card>
       </AuthShell>
     );
   }
 
   return (
-    <AuthShell>
-      <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-2xl shadow-black/30 backdrop-blur sm:p-8">
-        <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase">
+    <AuthShell size="md">
+      <Card>
+        <p className="text-xs font-semibold tracking-wider text-brand-fg uppercase">
           First-run setup
         </p>
-        <h1 className="mt-1 text-2xl font-bold tracking-tight text-white">
+        <h1 className="mt-1 text-2xl font-bold tracking-tight text-fg">
           Initialize this instance
         </h1>
-        <p className="mt-1.5 text-sm leading-relaxed text-slate-400">
+        <p className="mt-1.5 text-sm leading-relaxed text-fg-muted">
           This runs once, on a fresh install. It creates your school and its first administrator
           account, then disables itself.
         </p>
@@ -186,7 +187,7 @@ export function SetupWizardForm({ requiresToken, insecureBaseUrl }: SetupWizardF
           />
 
           {requiresToken && (
-            <div className="rounded-xl border border-amber-500/20 bg-slate-950/70 p-4">
+            <div className="rounded-xl border border-warn-line bg-field p-4">
               <PasswordField
                 label="Deployment setup token"
                 name="setupToken"
@@ -234,14 +235,14 @@ export function SetupWizardForm({ requiresToken, insecureBaseUrl }: SetupWizardF
 
           <ul
             aria-label="Password requirements"
-            className="space-y-1.5 rounded-xl border border-slate-800/80 bg-slate-950/50 p-3 text-xs"
+            className="space-y-1.5 rounded-xl border border-line bg-field p-3 text-xs"
           >
             {[
               { met: hasMinLength, text: "At least 8 characters" },
               { met: hasLetter && hasNumber, text: "Contains both letters and numbers" },
               { met: passwordsMatch, text: "Passwords match" },
             ].map(({ met, text }) => (
-              <li key={text} className={met ? "text-emerald-400" : "text-slate-400"}>
+              <li key={text} className={met ? "text-ok-icon" : "text-fg-muted"}>
                 <span aria-hidden="true">{met ? "✓" : "○"}</span> {text}
                 <span className="sr-only">{met ? " — met" : " — not met yet"}</span>
               </li>
@@ -252,7 +253,7 @@ export function SetupWizardForm({ requiresToken, insecureBaseUrl }: SetupWizardF
             {isSubmitting ? "Setting up…" : "Complete setup"}
           </Button>
         </form>
-      </div>
+      </Card>
     </AuthShell>
   );
 }

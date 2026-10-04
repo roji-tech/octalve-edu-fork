@@ -137,6 +137,19 @@ one-off pattern sources, referenced once for a specific technique and then done:
    anything. Drive UI changes in a real browser and read the screenshots; the verification pass for 0.5.1
    found ten defects (lost keyboard focus, a password leaking into the URL on a no-JS submit, bcrypt's
    silent 72-byte truncation, low contrast, …) that reading the code had not.
+8. **UI is tokens, not colours.** Components name semantic tokens (`bg-surface`, `text-fg-muted`,
+   `border-line`, `bg-brand-strong`, `text-brand-fg`, …) and never palette classes (`slate-400`,
+   `indigo-600`). Exactly two files are brand-specific — `src/app/brand.css` (colours) and
+   `src/lib/brand.ts` (words) — and everything in `src/components/ui` and `src/components/auth` stays
+   **code-identical with AlEemaan's** (`drift.py`-style normalised comparison; a difference needs a
+   reason in the plan doc). Light/dark is a `theme` cookie read on the server (`<html data-theme>`), not
+   an inline script — the nonce-based CSP (plan §0.5.B) depends on there being none. New UI must pass
+   axe in **both** themes, be ≥ 44 px on phones, and be added to `responsive-and-a11y.spec.ts`. Design
+   and numbers: plan §0.5.A; work log: `docs/development-history/phases/phase-0.5.A-design-language.md`.
+   **Porting to/from AlEemaan: product-specific constants are not shared** — the cookie names in
+   `session.ts`, the brand files, the membership model's name. Copying a "shared" file wholesale once
+   carried this repo's cookie name into AlEemaan (58 tests failed at once — on its live school it would have
+   signed everyone out), and the normalised drift comparison had hidden it. After a port, read the *raw* diff.
 
 ## Current state, as of 2026-09-30 (verify against `octalve_edu_progress.md` — it may have moved since)
 
@@ -157,6 +170,13 @@ one-off pattern sources, referenced once for a specific technique and then done:
   before changing anything under `src/lib/auth`, `src/app/api/v1/auth`, `/login`, `/dashboard` or
   `/setup`, and run it before opening a PR. It needs a Postgres (`docker compose up -d db`), Chromium
   (`pnpm exec playwright install chromium`) and `openssl`.
+- **Phase 0.5.A (shared UI design language) is BUILT AND VERIFIED, stacked on the auth branch**: branch
+  `claude/design-tokens-theme` of the same fork (based on `claude/auth-0.5.1-port` — merge that first).
+  Design-artifact colours and layout as semantic tokens with an Octalve-indigo brand, a server-rendered
+  light/dark theme, the re-skinned shared components, and a *real* "Keep me signed in" (unchecked →
+  session cookie + 12-hour server cap; ticked → the 30 d / 90 d policy, 7 d for admins). AlEemaan has the
+  same, in its own green, plus the admin shell. Still to come in this series, each designed in the plan
+  first: **0.5.B** nonce-based CSP, **0.5.C** password reset/change, **0.5.D** TOTP MFA.
 - Phase 0.5.2 (tenant-trust boundary) and 0.5.3 (shared API infra) are designed, not built, and both
   depend on 0.5.1 landing first.
 - Phase 1 onward (Core SIS + Finance, Communication, LMS, Operations, Expansion) have schema sketches

@@ -1,6 +1,16 @@
 import { test, expect } from "../support/fixtures";
 import { Role, createUser, db, seedInstance, sha256Hex } from "../support/db";
-import { alerts, emailField, fillCredentials, passwordField, signInButton, signInThroughUi, trackLoginRequests } from "./helpers";
+import {
+  alerts,
+  emailField,
+  fillCredentials,
+  keepSignedInBox,
+  passwordField,
+  signInButton,
+  signInThroughUi,
+  signOut,
+  trackLoginRequests,
+} from "./helpers";
 
 test.beforeAll(async () => {
   await seedInstance();
@@ -114,7 +124,7 @@ test.describe("client-side validation", () => {
 test.describe("using only the keyboard", () => {
   test.skip(({ isMobile }) => isMobile, "tab order is a desktop concern");
 
-  test("the email field is focused on arrival, Tab moves email → password → show/hide → Sign in, Enter submits", async ({ page }) => {
+  test("the email field is focused on arrival, Tab moves email → password → show/hide → keep-signed-in → Sign in, Enter submits", async ({ page }) => {
     const user = await createUser({ role: Role.ADMIN });
     await page.goto("/login");
 
@@ -125,6 +135,16 @@ test.describe("using only the keyboard", () => {
     await page.keyboard.type(user.password);
     await page.keyboard.press("Tab");
     await expect(page.getByRole("button", { name: "Show password" })).toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect(keepSignedInBox(page)).toBeFocused();
+    // The drawn box (the input itself is invisible) shows a real focus ring…
+    const ring = await keepSignedInBox(page)
+      .locator("xpath=following-sibling::span[1]")
+      .evaluate((el) => ({ style: getComputedStyle(el).outlineStyle, width: getComputedStyle(el).outlineWidth }));
+    expect(ring).toEqual({ style: "solid", width: "2px" });
+    // …and Space ticks it.
+    await page.keyboard.press("Space");
+    await expect(keepSignedInBox(page)).toBeChecked();
     await page.keyboard.press("Tab");
     await expect(signInButton(page)).toBeFocused();
 
@@ -142,6 +162,74 @@ test.describe("using only the keyboard", () => {
     await fillCredentials(page, user.email, user.password);
     await passwordField(page).press("Enter");
     await expect(page).toHaveURL(/\/dashboard$/);
+  });
+});
+
+// "Keep me signed in on this device" (plan §0.5.A): unchecked by default → a browser-session cookie
+// and a 12-hour cap; ticked → a persistent cookie and the long policy.
+test.describe("keep me signed in on this device", () => {
+  const LABEL = "Keep me signed in on this device";
+
+  test("is unchecked by default, has a visible label, and its state is never stored client-side", async ({ page }) => {
+    await page.goto("/login");
+    await expect(page.getByText(LABEL, { exact: true })).toBeVisible();
+    await expect(keepSignedInBox(page)).not.toBeChecked();
+
+    await keepSignedInBox(page).check();
+    await expect(keepSignedInBox(page)).toBeChecked();
+    expect(await page.evaluate(() => localStorage.length + sessionStorage.length)).toBe(0);
+
+    await page.reload();
+    await expect(keepSignedInBox(page)).not.toBeChecked(); // a fresh visit starts from the safe default
+  });
+
+  test("the whole row is the target: clicking the label text ticks the box, and again unticks it", async ({ page }) => {
+    await page.goto("/login");
+    await page.getByText(LABEL, { exact: true }).click();
+    await expect(keepSignedInBox(page)).toBeChecked();
+    await page.getByText(LABEL, { exact: true }).click();
+    await expect(keepSignedInBox(page)).not.toBeChecked();
+  });
+
+  test("ticked: the request carries remember:true and the browser is given a PERSISTENT cookie", async ({ page, context }) => {
+    const user = await createUser({ role: Role.TEACHING_STAFF });
+    await page.goto("/login");
+    await fillCredentials(page, user.email, user.password);
+    await keepSignedInBox(page).check();
+    const request = page.waitForRequest((r) => r.url().endsWith("/api/v1/auth/login"));
+    await signInButton(page).click();
+
+    expect((await request).postDataJSON()).toMatchObject({ remember: true });
+    await expect(page).toHaveURL(/\/dashboard$/);
+    const cookie = (await context.cookies()).find((c) => c.name === SESSION_COOKIE);
+    expect(cookie!.expires).toBeGreaterThan(Date.now() / 1000 + 80 * 86_400); // ~90 days out
+  });
+
+  test("unticked (the default): the request carries remember:false and the cookie is a browser-session cookie", async ({ page, context }) => {
+    const user = await createUser({ role: Role.TEACHING_STAFF });
+    await page.goto("/login");
+    await fillCredentials(page, user.email, user.password);
+    const request = page.waitForRequest((r) => r.url().endsWith("/api/v1/auth/login"));
+    await signInButton(page).click();
+
+    expect((await request).postDataJSON()).toMatchObject({ remember: false });
+    await expect(page).toHaveURL(/\/dashboard$/);
+    const cookie = (await context.cookies()).find((c) => c.name === SESSION_COOKIE);
+    expect(cookie!.expires).toBe(-1); // Playwright's marker for a session cookie
+    const row = await db.session.findFirstOrThrow({ where: { userId: user.id } });
+    expect(row.absoluteExpires.getTime() - Date.now()).toBeLessThan(12 * 3_600_000 + 60_000);
+  });
+
+  test("a failed attempt keeps the choice the person made (only the password is cleared)", async ({ page }) => {
+    const user = await createUser();
+    await page.goto("/login");
+    await fillCredentials(page, user.email, "not-the-password-1");
+    await keepSignedInBox(page).check();
+    await signInButton(page).click();
+
+    await expect(alerts(page)).toContainText("incorrect");
+    await expect(passwordField(page)).toHaveValue("");
+    await expect(keepSignedInBox(page)).toBeChecked();
   });
 });
 
@@ -308,7 +396,7 @@ test.describe("staying signed in, and signing out", () => {
     await signInThroughUi(page, user);
     expect(await db.session.count({ where: { userId: user.id } })).toBe(1);
 
-    await page.getByRole("button", { name: "Sign out" }).click();
+    await signOut(page);
     await expect(page).toHaveURL(/\/login$/);
 
     expect(await db.session.count({ where: { userId: user.id } })).toBe(0);
@@ -332,7 +420,7 @@ test.describe("staying signed in, and signing out", () => {
 
     const other = await context.newPage();
     await other.goto("/dashboard");
-    await other.getByRole("button", { name: "Sign out" }).click();
+    await signOut(other);
     await expect(other).toHaveURL(/\/login$/);
 
     await page.goBack(); // whether restored from the back/forward cache or re-fetched…
@@ -376,7 +464,7 @@ test.describe("staying signed in, and signing out", () => {
     await other.goto("/dashboard");
     await expect(other.getByRole("heading", { name: /Welcome/ })).toBeVisible();
 
-    await page.getByRole("button", { name: "Sign out" }).click();
+    await signOut(page);
     await expect(page).toHaveURL(/\/login$/);
     await expect(other).toHaveURL(/\/login$/);
     await expect(other.getByRole("heading", { name: /Welcome, / })).toHaveCount(0);
@@ -404,7 +492,7 @@ test.describe("staying signed in, and signing out", () => {
   test("a signed-out visitor is sent to /login from /dashboard and /, and never sees protected content", async ({ page }) => {
     await page.goto("/dashboard");
     await expect(page).toHaveURL(/\/login$/);
-    await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Sign in to your dashboard" })).toBeVisible();
     await page.goto("/");
     await expect(page).toHaveURL(/\/login$/);
   });

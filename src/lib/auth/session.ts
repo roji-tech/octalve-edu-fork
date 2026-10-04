@@ -15,9 +15,17 @@ import { prisma } from "@/lib/db";
 // session is used. The ABSOLUTE caps never extend — a stolen session that an
 // attacker keeps warm still dies — and are shorter for anyone holding an ADMIN
 // membership, since that is the account worth stealing.
+//
+// Two modes, chosen at sign-in by the "Keep me signed in on this device" box:
+//  - remembered: the policy above (30d idle, 90d absolute) and a persistent cookie;
+//  - not remembered (the default): a browser-session cookie AND a hard 12-hour
+//    server-side cap. The cap is the real bound — browsers that "continue where
+//    you left off" restore session cookies across restarts, so "close the
+//    browser" alone can't be relied on to end a session on a shared computer.
 export const SESSION_MAX_AGE_SECONDS = 30 * 24 * 60 * 60; // idle: 30 days
 export const SESSION_ABSOLUTE_MAX_AGE_SECONDS = 90 * 24 * 60 * 60; // 90 days
 export const ADMIN_SESSION_ABSOLUTE_MAX_AGE_SECONDS = 7 * 24 * 60 * 60; // 7 days
+export const SESSION_ONLY_MAX_AGE_SECONDS = 12 * 60 * 60; // not remembered: 12 hours
 const MAX_SESSIONS_PER_USER = 10;
 /// Sliding the idle expiry costs a write; do it at most once per interval per
 /// session rather than on every request.
@@ -53,19 +61,28 @@ function hashToken(token: string): string {
 /// caller sets as the cookie value — only its SHA-256 hash is ever persisted.
 /// `expires` in the result is the ABSOLUTE expiry, i.e. the latest moment the
 /// session (and so its cookie) can be valid; idle expiry is enforced
-/// server-side, so the cookie itself never needs refreshing.
+/// server-side, so the cookie itself never needs refreshing. `persistent` says
+/// whether the cookie should carry that expiry (a remembered session) or be a
+/// browser-session cookie (the default) — pass `persistent ? expires : null` to
+/// `setSessionCookie`.
+///
+/// `remember` defaults to FALSE on purpose: a caller that forgets to say gets
+/// the short, least-privilege session, never the long-lived one. The applicable
+/// absolute cap is `min(mode cap, 7 days if admin)`.
 export async function createSession(
   userId: string,
   userAgent?: string | null,
-  opts: { admin?: boolean } = {},
-): Promise<{ token: string; expires: Date }> {
+  opts: { admin?: boolean; remember?: boolean } = {},
+): Promise<{ token: string; expires: Date; persistent: boolean }> {
   const token = crypto.randomBytes(32).toString("hex"); // 256-bit, server-generated, never client-supplied
   const tokenHash = hashToken(token);
+  const persistent = opts.remember === true;
 
   const now = Date.now();
+  const modeSeconds = persistent ? SESSION_ABSOLUTE_MAX_AGE_SECONDS : SESSION_ONLY_MAX_AGE_SECONDS;
   const absoluteSeconds = opts.admin
-    ? ADMIN_SESSION_ABSOLUTE_MAX_AGE_SECONDS
-    : SESSION_ABSOLUTE_MAX_AGE_SECONDS;
+    ? Math.min(modeSeconds, ADMIN_SESSION_ABSOLUTE_MAX_AGE_SECONDS)
+    : modeSeconds;
   const absoluteExpires = new Date(now + absoluteSeconds * 1000);
   const expires = new Date(
     Math.min(now + SESSION_MAX_AGE_SECONDS * 1000, absoluteExpires.getTime()),
@@ -104,7 +121,7 @@ export async function createSession(
     }
   });
 
-  return { token, expires: absoluteExpires };
+  return { token, expires: absoluteExpires, persistent };
 }
 
 /// Deletes the session matching a plaintext token (login rotation, logout).
@@ -175,8 +192,17 @@ async function resolveToken(token: string): Promise<ResolvedSession | null> {
   return { sessionId: session.id, userId: session.userId, user: session.user };
 }
 
-export function setSessionCookie(response: NextResponse, token: string, expires: Date): NextResponse {
-  response.cookies.set(SESSION_COOKIE_NAME, token, { ...COOKIE_OPTIONS, expires });
+/// `expires` null → a browser-session cookie (no Expires / Max-Age attribute): the
+/// "not remembered" mode. The server-side cap in createSession bounds it anyway.
+export function setSessionCookie(
+  response: NextResponse,
+  token: string,
+  expires: Date | null,
+): NextResponse {
+  response.cookies.set(SESSION_COOKIE_NAME, token, {
+    ...COOKIE_OPTIONS,
+    ...(expires ? { expires } : {}),
+  });
   return response;
 }
 

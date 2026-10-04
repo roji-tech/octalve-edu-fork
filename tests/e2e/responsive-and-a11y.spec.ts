@@ -52,9 +52,37 @@ async function expectComfortableTapTargets(page: Page, what: string, isMobile: b
   expect(tooSmall, `controls smaller than 44x44 CSS px on ${what}`).toEqual([]);
 }
 
+/// Colours *transition* (`transition-colors`) when the theme flips, and axe would sample the in-between
+/// values — once it measured #565c6a on #a8acb4, which is neither theme's colour. So wait for every
+/// running CSS transition to finish first. (Only transitions: an infinite animation such as the
+/// loading spinner never "finishes" and would hang this.)
+async function settled(page: Page) {
+  await page.evaluate(() =>
+    Promise.all(
+      document
+        .getAnimations()
+        .filter((animation) => animation instanceof CSSTransition)
+        .map((animation) => animation.finished.catch(() => undefined)),
+    ),
+  );
+}
+
+/// Both themes, every time: the light theme is the same DOM with different token values, so a
+/// contrast failure can hide in either. (Flipping `data-theme` directly is what the toggle
+/// does too; it needs no reload because the colours are CSS variables.)
 async function checkScreen(page: Page, what: string, isMobile: boolean) {
-  await expectAccessible(page, what);
-  await expectNoHorizontalScroll(page, what);
+  // Next.js applies a page's <title> a beat after a client-side navigation, and axe's `document-title`
+  // rule saw the gap once. Scan the settled page: wait until it has a title.
+  await expect(page).toHaveTitle(/\S/);
+  const initial = await page.evaluate(() => document.documentElement.dataset.theme ?? "dark");
+  for (const theme of ["dark", "light"]) {
+    await page.evaluate((t) => void (document.documentElement.dataset.theme = t), theme);
+    await settled(page);
+    await expectAccessible(page, `${what} [${theme} theme]`);
+    await expectNoHorizontalScroll(page, `${what} [${theme} theme]`);
+  }
+  await page.evaluate((t) => void (document.documentElement.dataset.theme = t), initial);
+  await settled(page);
   await expectComfortableTapTargets(page, what, isMobile);
 }
 

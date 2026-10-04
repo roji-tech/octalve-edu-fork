@@ -28,7 +28,7 @@ export function PasswordField({ id, ...props }: Omit<TextFieldProps, "type" | "t
           aria-label={visible ? "Hide password" : "Show password"}
           aria-pressed={visible}
           aria-controls={inputId}
-          className="flex h-11 w-11 items-center justify-center rounded-lg text-slate-400 transition-colors hover:text-white focus-visible:outline-2 focus-visible:outline-blue-400"
+          className="flex h-11 w-11 items-center justify-center rounded-lg text-fg-muted transition-colors hover:text-fg focus-visible:outline-2 focus-visible:outline-ring"
         >
           {visible ? <EyeOffIcon className="h-5 w-5" /> : <EyeIcon className="h-5 w-5" />}
         </button>

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
+import { CheckboxField } from "@/components/ui/CheckboxField";
 import { PasswordField } from "@/components/ui/PasswordField";
 import { TextField } from "@/components/ui/TextField";
 
@@ -20,6 +21,9 @@ export function LoginForm() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  // Unchecked by default (as the artifact draws it, and the safe choice on a shared computer);
+  // it is sent as `remember` and never stored client-side.
+  const [remember, setRemember] = useState(false);
   const [status, setStatus] = useState<Status>("idle");
   const [formError, setFormError] = useState<string | null>(null);
   const [emailError, setEmailError] = useState<string | null>(null);
@@ -81,7 +85,7 @@ export function LoginForm() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "same-origin",
-        body: JSON.stringify({ email: trimmedEmail, password }),
+        body: JSON.stringify({ email: trimmedEmail, password, remember }),
       });
 
       if (res.ok) {
@@ -118,32 +122,17 @@ export function LoginForm() {
   }
 
   return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-2xl shadow-black/30 backdrop-blur sm:p-8">
-      <h1 className="text-2xl font-bold tracking-tight text-white">Welcome back</h1>
-      <p className="mt-1.5 text-sm leading-relaxed text-slate-400">
-        Sign in to continue to your school workspace.
+    // The artifact draws the form directly on the page on desktop and in a card on phones.
+    <div className="rounded-2xl border border-line bg-surface p-6 shadow-card sm:p-7 lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none">
+      <h1 className="text-[22px] font-bold tracking-tight text-fg">Sign in to your dashboard</h1>
+      <p className="mt-1.5 text-sm leading-relaxed text-fg-muted">
+        Enter your credentials to continue.
       </p>
-
-      <div className="mt-6 space-y-4 empty:mt-0">
-        {formError && <Alert variant="error">{formError}</Alert>}
-        {status === "paused" && (
-          <Alert variant="warning" title="Sign-in is paused for a moment">
-            <span className="sr-only">Too many unsuccessful attempts. Please wait a moment and try again.</span>
-            <span aria-hidden="true">
-              Too many unsuccessful attempts. For your security, please wait {secondsLeft}s and try
-              again.
-            </span>
-          </Alert>
-        )}
-        {status === "success" && (
-          <Alert variant="success">Signed in. Taking you to your dashboard…</Alert>
-        )}
-      </div>
 
       {/* method="post": if the form is ever submitted natively (JavaScript failed to load, or the
           user hits Enter before hydration finishes) a default GET would put the password in the
           URL — browser history, proxy and server access logs. POST keeps it in the body. */}
-      <form method="post" onSubmit={handleSubmit} noValidate className="mt-6 space-y-5">
+      <form method="post" onSubmit={handleSubmit} noValidate className="mt-6 space-y-4">
         <TextField
           ref={emailRef}
           label="Email address"
@@ -180,9 +169,35 @@ export function LoginForm() {
           placeholder="Enter your password"
         />
 
+        <div className="space-y-4 empty:hidden">
+          {formError && <Alert variant="error">{formError}</Alert>}
+          {status === "paused" && (
+            <Alert variant="warning" title="Sign-in is paused for a moment">
+              <span className="sr-only">
+                Too many unsuccessful attempts. Please wait a moment and try again.
+              </span>
+              <span aria-hidden="true">
+                Too many unsuccessful attempts. For your security, please wait {secondsLeft}s and try
+                again.
+              </span>
+            </Alert>
+          )}
+          {status === "success" && (
+            <Alert variant="success">Signed in. Taking you to your dashboard…</Alert>
+          )}
+        </div>
+
+        <CheckboxField
+          name="remember"
+          label="Keep me signed in on this device"
+          checked={remember}
+          onChange={(e) => setRemember(e.target.checked)}
+          disabled={busy}
+        />
+
         <Button
           type="submit"
-          className="w-full"
+          className="mt-2 w-full"
           loading={status === "submitting"}
           disabled={status === "paused" || status === "success"}
         >
@@ -196,7 +211,7 @@ export function LoginForm() {
         </Button>
       </form>
 
-      <p className="mt-6 text-center text-xs leading-relaxed text-slate-400">
+      <p className="mt-6 text-center text-xs leading-relaxed text-fg-muted">
         Trouble signing in? Contact your school administrator.
       </p>
     </div>

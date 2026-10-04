@@ -24,13 +24,13 @@ export default async function DashboardPage() {
   const firstName = displayName.split(/\s+/)[0];
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-200">
+    <div className="min-h-screen bg-canvas text-fg-2">
       <SessionRevalidator />
       <AppHeader name={session.user.name} email={session.user.email} />
 
       <main className="mx-auto max-w-5xl px-4 py-10 sm:px-6 sm:py-14">
-        <h1 className="text-3xl font-bold tracking-tight text-white">Welcome, {firstName}</h1>
-        <p className="mt-2 text-base text-slate-400">
+        <h1 className="text-3xl font-bold tracking-tight text-fg">Welcome, {firstName}</h1>
+        <p className="mt-2 text-base text-fg-muted">
           {memberships.length > 0
             ? "Here are the schools you belong to."
             : "You're signed in, but you aren't a member of any school yet."}
@@ -41,12 +41,15 @@ export default async function DashboardPage() {
         </Alert>
 
         <section aria-labelledby="schools-heading" className="mt-10">
-          <h2 id="schools-heading" className="text-sm font-semibold tracking-wider text-slate-400 uppercase">
+          <h2
+            id="schools-heading"
+            className="text-sm font-semibold tracking-wider text-fg-muted uppercase"
+          >
             Your schools
           </h2>
 
           {memberships.length === 0 ? (
-            <p className="mt-4 rounded-2xl border border-dashed border-slate-800 p-8 text-center text-sm text-slate-400">
+            <p className="mt-4 rounded-2xl border border-dashed border-line-strong p-8 text-center text-sm text-fg-muted">
               Ask your school administrator to invite you.
             </p>
           ) : (
@@ -54,21 +57,21 @@ export default async function DashboardPage() {
               {memberships.map((m) => (
                 <li
                   key={`${m.tenantId}`}
-                  className="flex items-start gap-4 rounded-2xl border border-slate-800 bg-slate-900/60 p-5"
+                  className="flex items-start gap-4 rounded-2xl border border-line bg-surface p-5"
                 >
                   <span
                     aria-hidden="true"
-                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-600/15 text-blue-400"
+                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-tint text-brand-fg"
                   >
                     <GraduationCapIcon className="h-5 w-5" />
                   </span>
                   <div className="min-w-0">
-                    <p className="truncate font-semibold text-white">{m.tenantName}</p>
-                    <p className="mt-0.5 text-sm text-slate-400">
+                    <p className="truncate font-semibold text-fg">{m.tenantName}</p>
+                    <p className="mt-0.5 text-sm text-fg-muted">
                       {ROLE_LABELS[m.role]}
                       {m.campusName ? ` · ${m.campusName}` : ""}
                     </p>
-                    <p className="mt-2 font-mono text-xs text-slate-400">{m.tenantCode}</p>
+                    <p className="mt-2 font-mono text-xs text-fg-muted">{m.tenantCode}</p>
                   </div>
                 </li>
               ))}

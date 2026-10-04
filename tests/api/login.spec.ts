@@ -22,9 +22,9 @@ test.describe("POST /api/v1/auth/login — success", () => {
     expect(res.token).toMatch(/^[0-9a-f]{64}$/);
   });
 
-  test("cookie is HttpOnly, SameSite=Lax, Path=/, not Secure over http, no Domain; ~90d for a non-admin", async () => {
+  test("cookie is HttpOnly, SameSite=Lax, Path=/, not Secure over http, no Domain; ~90d for a remembered non-admin", async () => {
     const user = await createUser({ role: Role.TEACHING_STAFF });
-    const res = await loginAs(user);
+    const res = await loginAs(user, { remember: true });
     const cookie = sessionCookie(res)!;
 
     expect(cookie.attributes.get("httponly")).toBe(true);
@@ -36,9 +36,9 @@ test.describe("POST /api/v1/auth/login — success", () => {
     expect(Math.abs(expires - (Date.now() + 90 * DAY_MS))).toBeLessThan(2 * 60_000);
   });
 
-  test("an ADMIN anywhere gets the shorter ~7-day cookie", async () => {
+  test("an ADMIN anywhere gets the shorter ~7-day cookie, even when remembered", async () => {
     const admin = await createUser({ role: Role.ADMIN });
-    const cookie = sessionCookie(await loginAs(admin))!;
+    const cookie = sessionCookie(await loginAs(admin, { remember: true }))!;
     const expires = new Date(String(cookie.attributes.get("expires"))).getTime();
     expect(Math.abs(expires - (Date.now() + 7 * DAY_MS))).toBeLessThan(2 * 60_000);
   });
@@ -65,6 +65,84 @@ test.describe("POST /api/v1/auth/login — success", () => {
     const user = await createUser();
     await loginAs(user, { headers: { "user-agent": "OctalveTest/1.0" } });
     expect((await db.session.findFirstOrThrow({ where: { userId: user.id } })).userAgent).toBe("OctalveTest/1.0");
+  });
+});
+
+// "Keep me signed in on this device" (plan §0.5.A). Not remembered — the default — is a
+// browser-session cookie AND a hard 12-hour cap held by the SERVER, because a session cookie
+// alone can outlive "closing the browser" (session restore). Remembered is the long policy.
+test.describe("POST /api/v1/auth/login — remember me", () => {
+  const HOUR_MS = 60 * 60 * 1000;
+  const near = (actual: Date | number, expected: number) =>
+    Math.abs(new Date(actual).getTime() - expected) < 2 * 60_000;
+
+  test("by default (no `remember`): a session cookie with no Expires/Max-Age, and a 12-hour server cap", async () => {
+    const user = await createUser({ role: Role.TEACHING_STAFF });
+    const res = await loginAs(user);
+    const cookie = sessionCookie(res)!;
+
+    expect(cookie.attributes.has("expires")).toBe(false);
+    expect(cookie.attributes.has("max-age")).toBe(false);
+    // …but everything else about the cookie is unchanged.
+    expect(cookie.attributes.get("httponly")).toBe(true);
+    expect(String(cookie.attributes.get("samesite")).toLowerCase()).toBe("lax");
+    expect(cookie.attributes.get("path")).toBe("/");
+
+    const row = await db.session.findFirstOrThrow({ where: { userId: user.id } });
+    expect(near(row.absoluteExpires, Date.now() + 12 * HOUR_MS)).toBe(true);
+    expect(row.expires.getTime()).toBe(row.absoluteExpires.getTime()); // idle can never outlast the cap
+  });
+
+  test("`remember: false` is the same as leaving it out", async () => {
+    const user = await createUser();
+    const res = await loginAs(user, { remember: false });
+    expect(sessionCookie(res)!.attributes.has("expires")).toBe(false);
+    const row = await db.session.findFirstOrThrow({ where: { userId: user.id } });
+    expect(near(row.absoluteExpires, Date.now() + 12 * HOUR_MS)).toBe(true);
+  });
+
+  test("`remember: true`: a persistent cookie, 30-day idle and 90-day absolute in the database", async () => {
+    const user = await createUser({ role: Role.TEACHING_STAFF });
+    const res = await loginAs(user, { remember: true });
+    const cookie = sessionCookie(res)!;
+
+    expect(near(new Date(String(cookie.attributes.get("expires"))), Date.now() + 90 * DAY_MS)).toBe(true);
+    const row = await db.session.findFirstOrThrow({ where: { userId: user.id } });
+    expect(near(row.absoluteExpires, Date.now() + 90 * DAY_MS)).toBe(true);
+    expect(near(row.expires, Date.now() + 30 * DAY_MS)).toBe(true);
+  });
+
+  test("the admin cap composes: an admin who does not tick the box still gets 12 hours, one who does gets 7 days", async () => {
+    const admin = await createUser({ role: Role.ADMIN });
+
+    const plain = await loginAs(admin);
+    expect(sessionCookie(plain)!.attributes.has("expires")).toBe(false);
+    let row = await db.session.findFirstOrThrow({ where: { tokenHash: sha256Hex(plain.token!) } });
+    expect(near(row.absoluteExpires, Date.now() + 12 * HOUR_MS)).toBe(true);
+
+    const remembered = await loginAs(admin, { remember: true });
+    expect(near(new Date(String(sessionCookie(remembered)!.attributes.get("expires"))), Date.now() + 7 * DAY_MS)).toBe(true);
+    row = await db.session.findFirstOrThrow({ where: { tokenHash: sha256Hex(remembered.token!) } });
+    expect(near(row.absoluteExpires, Date.now() + 7 * DAY_MS)).toBe(true);
+  });
+
+  test("both kinds of session actually work", async () => {
+    const user = await createUser();
+    for (const remember of [false, true]) {
+      const { token } = await loginAs(user, { remember });
+      expect((await api("/api/v1/auth/me", { cookie: cookieHeader(token!) })).status).toBe(200);
+    }
+  });
+
+  test("`remember` is a STRICT boolean: anything else is the same 401 as any malformed body, and creates nothing", async () => {
+    const user = await createUser();
+    for (const remember of ["true", "yes", 1, 0, null, [], {}]) {
+      const res = await api(LOGIN, { body: { email: user.email, password: user.password, remember } });
+      expect(res.status, `remember=${JSON.stringify(remember)}`).toBe(401);
+      expect(res.json.error.code).toBe("INVALID_CREDENTIALS");
+      expect(sessionCookie(res)).toBeUndefined();
+    }
+    expect(await db.session.count({ where: { userId: user.id } })).toBe(0);
   });
 });
 

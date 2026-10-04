@@ -1,7 +1,15 @@
 import { test, expect } from "../support/fixtures";
 import { HTTPS_URL } from "../support/env";
 import { Role, createUser, db, resetDatabase, seedInstance } from "../support/db";
-import { alerts, emailField, fillCredentials, passwordField, signInButton } from "../e2e/helpers";
+import {
+  alerts,
+  emailField,
+  fillCredentials,
+  keepSignedInBox,
+  passwordField,
+  signInButton,
+  signOut,
+} from "../e2e/helpers";
 
 // The only environment where the session cookie's production shape can be
 // checked honestly: real TLS in front of a production build whose APP_URL is
@@ -25,6 +33,7 @@ test.describe("the __Host- session cookie over real HTTPS", () => {
     const user = await createUser({ role: Role.ADMIN });
     await page.goto("/login");
     await fillCredentials(page, user.email, user.password);
+    await keepSignedInBox(page).check(); // remembered → a persistent cookie
     await signInButton(page).click();
     await expect(page).toHaveURL(/\/dashboard$/);
     await expect(page.getByRole("heading", { name: /Welcome/ })).toBeVisible();
@@ -36,13 +45,36 @@ test.describe("the __Host- session cookie over real HTTPS", () => {
     expect(cookie!.sameSite).toBe("Lax");
     expect(cookie!.path).toBe("/");
     expect(cookie!.value).toMatch(/^[0-9a-f]{64}$/);
-    // ADMIN: ~7 days
+    // ADMIN, remembered: ~7 days
     expect(Math.abs(cookie!.expires * 1000 - (Date.now() + 7 * 86_400_000))).toBeLessThan(5 * 60_000);
 
     // The unprefixed (plain-HTTP) cookie name is NOT what this deployment uses.
     expect(await cookieNamed(context, PLAIN_COOKIE)).toBeUndefined();
     // Page JavaScript can't read it.
     expect(await page.evaluate(() => document.cookie)).not.toContain("octalve");
+  });
+
+  test("not remembered (the default): still a valid __Host- cookie, but a browser-session one — and the server holds the 12-hour cap", async ({ page, context }) => {
+    const user = await createUser({ role: Role.ADMIN });
+    await page.goto("/login");
+    await expect(keepSignedInBox(page)).not.toBeChecked();
+    await fillCredentials(page, user.email, user.password);
+    await signInButton(page).click();
+    await expect(page).toHaveURL(/\/dashboard$/);
+
+    const cookie = await cookieNamed(context, COOKIE);
+    expect(cookie, "Chromium must still accept it as a __Host- cookie").toBeDefined();
+    expect(cookie!.secure).toBe(true);
+    expect(cookie!.httpOnly).toBe(true);
+    expect(cookie!.expires).toBe(-1); // Playwright's marker for a session cookie
+
+    const row = await db.session.findFirstOrThrow({ where: { userId: user.id } });
+    expect(Math.abs(row.absoluteExpires.getTime() - (Date.now() + 12 * 3_600_000))).toBeLessThan(5 * 60_000);
+
+    // And signing out removes it just the same.
+    await signOut(page);
+    await expect(page).toHaveURL(/\/login$/);
+    expect(await cookieNamed(context, COOKIE)).toBeUndefined();
   });
 
   test("the cookie authenticates later requests (the dashboard renders signed in, /api/v1/auth/me answers)", async ({ page, request }) => {
@@ -70,7 +102,7 @@ test.describe("the __Host- session cookie over real HTTPS", () => {
     expect(await cookieNamed(context, COOKIE), "precondition: cookie set before logout").toBeDefined();
     expect(await db.session.count({ where: { userId: user.id } })).toBe(1);
 
-    await page.getByRole("button", { name: "Sign out" }).click();
+    await signOut(page);
     await expect(page).toHaveURL(/\/login$/);
 
     // The whole point: not "the server said it cleared it" — Chromium's jar no longer has it.
@@ -89,7 +121,7 @@ test.describe("the __Host- session cookie over real HTTPS", () => {
     await expect(page).toHaveURL(/\/dashboard$/);
 
     const logout = page.waitForResponse((res) => res.url().endsWith("/api/v1/auth/logout"));
-    await page.getByRole("button", { name: "Sign out" }).click();
+    await signOut(page);
     const headers = (await (await logout).headersArray()).filter((h) => h.name.toLowerCase() === "set-cookie");
     expect(headers).toHaveLength(1);
     const header = headers[0].value;

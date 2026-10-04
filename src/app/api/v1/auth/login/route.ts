@@ -23,6 +23,9 @@ const loginSchema = z.object({
   // rate-limit keys built from it below.
   email: z.string().trim().max(254).email().toLowerCase(),
   password: z.string().min(1).max(PASSWORD_MAX_LENGTH),
+  // "Keep me signed in on this device". A STRICT boolean, default false: anything
+  // else ("true", 1, null) fails validation like any other malformed body.
+  remember: z.boolean().default(false),
 });
 
 // Three layers (docs/auth-review-2026-09-29.md finding 14), each closing a gap
@@ -78,7 +81,7 @@ async function handleLogin(req: NextRequest): Promise<NextResponse> {
     // shouldn't be probeable — and the IP reservation above stays consumed.
     return fail(INVALID_CREDENTIALS_MESSAGE, 401, "INVALID_CREDENTIALS");
   }
-  const { email, password } = parsed.data;
+  const { email, password, remember } = parsed.data;
 
   const pairKey = `${ipKey}:${email}`;
   const accountKey = `login:account:${email}`;
@@ -117,15 +120,17 @@ async function handleLogin(req: NextRequest): Promise<NextResponse> {
       select: { id: true },
     }),
   );
-  const { token, expires } = await createSession(user.id, req.headers.get("user-agent"), {
+  const { token, expires, persistent } = await createSession(user.id, req.headers.get("user-agent"), {
     admin: holdsAdmin,
+    remember,
   });
 
   const response = ok({
     user: { id: user.id, name: user.name, email: user.email },
     accountThrottled, // surfaced so the UI can show a soft notice, never a hard block
   });
-  return setSessionCookie(response, token, expires);
+  // Not remembered → a browser-session cookie (and a 12-hour server-side cap).
+  return setSessionCookie(response, token, persistent ? expires : null);
 }
 
 export async function POST(req: NextRequest) {

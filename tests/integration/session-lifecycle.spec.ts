@@ -6,6 +6,7 @@ import {
   SESSION_ABSOLUTE_MAX_AGE_SECONDS,
   SESSION_COOKIE_NAME,
   SESSION_MAX_AGE_SECONDS,
+  SESSION_ONLY_MAX_AGE_SECONDS,
   clearSessionCookie,
   createSession,
   deleteSessionByToken,
@@ -68,24 +69,48 @@ test.describe("what is stored", () => {
   });
 });
 
+// Two modes (plan §0.5.A): remembered = the long policy + a persistent cookie; not remembered
+// (the DEFAULT — a caller that forgets to say gets the short session) = 12 hours, cap enforced here.
 test.describe("lifetimes", () => {
-  test("a normal user: 30-day idle window inside a 90-day absolute cap", async () => {
+  test("remembered, a normal user: 30-day idle window inside a 90-day absolute cap", async () => {
     const user = await createUser();
-    const { token, expires } = await createSession(user.id);
+    const { token, expires, persistent } = await createSession(user.id, null, { remember: true });
     const row = await rowFor(token);
     expect(within(row.expires, Date.now() + SESSION_MAX_AGE_SECONDS * 1000)).toBe(true);
     expect(within(row.absoluteExpires, Date.now() + SESSION_ABSOLUTE_MAX_AGE_SECONDS * 1000)).toBe(true);
     // The value handed back for the cookie is the ABSOLUTE expiry.
     expect(expires.getTime()).toBe(row.absoluteExpires.getTime());
+    expect(persistent).toBe(true);
   });
 
-  test("an admin gets the shorter 7-day absolute cap, and the idle window can't outlive it", async () => {
+  test("remembered, an admin: the shorter 7-day absolute cap, and the idle window can't outlive it", async () => {
     const user = await createUser();
-    const { token, expires } = await createSession(user.id, null, { admin: true });
+    const { token, expires, persistent } = await createSession(user.id, null, { admin: true, remember: true });
     const row = await rowFor(token);
     expect(within(row.absoluteExpires, Date.now() + ADMIN_SESSION_ABSOLUTE_MAX_AGE_SECONDS * 1000)).toBe(true);
     expect(row.expires.getTime()).toBeLessThanOrEqual(row.absoluteExpires.getTime());
     expect(expires.getTime()).toBe(row.absoluteExpires.getTime());
+    expect(persistent).toBe(true);
+  });
+
+  test("NOT remembered is the default: 12 hours, idle and absolute alike, and the cookie is not persistent", async () => {
+    const user = await createUser();
+    for (const opts of [undefined, {}, { remember: false }]) {
+      const { token, expires, persistent } = await createSession(user.id, null, opts);
+      const row = await rowFor(token);
+      expect(within(row.absoluteExpires, Date.now() + SESSION_ONLY_MAX_AGE_SECONDS * 1000)).toBe(true);
+      expect(row.expires.getTime()).toBe(row.absoluteExpires.getTime());
+      expect(expires.getTime()).toBe(row.absoluteExpires.getTime());
+      expect(persistent, JSON.stringify(opts)).toBe(false);
+    }
+  });
+
+  test("the admin cap composes with the mode: the SHORTER of 12 hours and 7 days wins", async () => {
+    const user = await createUser();
+    const { token } = await createSession(user.id, null, { admin: true });
+    const row = await rowFor(token);
+    expect(within(row.absoluteExpires, Date.now() + SESSION_ONLY_MAX_AGE_SECONDS * 1000)).toBe(true);
+    expect(SESSION_ONLY_MAX_AGE_SECONDS).toBeLessThan(ADMIN_SESSION_ABSOLUTE_MAX_AGE_SECONDS); // the premise
   });
 });
 
@@ -163,9 +188,9 @@ test.describe("sliding idle expiry", () => {
     expect(row.expires.getTime()).toBe(expires.getTime());
   });
 
-  test("stale enough: idle expiry slides forward to now + 30 days and lastUsedAt updates", async () => {
+  test("stale enough: idle expiry slides forward to now + 30 days and lastUsedAt updates (remembered)", async () => {
     const user = await createUser();
-    const { token } = await createSession(user.id);
+    const { token } = await createSession(user.id, null, { remember: true });
     const where = { tokenHash: sha256Hex(token) };
     await db.session.update({ where, data: { lastUsedAt: minutesAgo(10), expires: daysFromNow(1) } });
 
@@ -173,6 +198,18 @@ test.describe("sliding idle expiry", () => {
     const row = await db.session.findUniqueOrThrow({ where });
     expect(within(row.expires, Date.now() + SESSION_MAX_AGE_SECONDS * 1000)).toBe(true);
     expect(within(row.lastUsedAt, Date.now())).toBe(true);
+  });
+
+  test("a 12-hour (not remembered) session can be used but never slid past its 12 hours", async () => {
+    const user = await createUser();
+    const { token } = await createSession(user.id);
+    const where = { tokenHash: sha256Hex(token) };
+    await db.session.update({ where, data: { lastUsedAt: minutesAgo(10) } }); // stale enough to slide
+
+    expect(await resolve(token)).not.toBeNull();
+    const row = await db.session.findUniqueOrThrow({ where });
+    expect(row.expires.getTime()).toBeLessThanOrEqual(row.absoluteExpires.getTime());
+    expect(within(row.expires, Date.now() + SESSION_ONLY_MAX_AGE_SECONDS * 1000)).toBe(true); // NOT +30 days
   });
 
   test("sliding never extends past the absolute cap", async () => {
@@ -291,6 +328,19 @@ test.describe("cookie attributes (plain-HTTP deployment; the HTTPS shape is prov
     expect(cookie.attributes.has("secure")).toBe(false); // a Secure cookie over http would be silently dropped
     expect(cookie.attributes.has("domain")).toBe(false);
     expect(new Date(String(cookie.attributes.get("expires"))).getTime()).toBe(Math.floor(expires.getTime() / 1000) * 1000);
+  });
+
+  test("`expires: null` is a browser-session cookie: no Expires, no Max-Age, every other attribute unchanged", async () => {
+    const res = setSessionCookie(NextResponse.json({}), "abc123", null);
+    const cookie = parseSetCookie(res.headers.getSetCookie()[0]);
+
+    expect(cookie.value).toBe("abc123");
+    expect(cookie.attributes.has("expires")).toBe(false);
+    expect(cookie.attributes.has("max-age")).toBe(false);
+    expect(cookie.attributes.get("httponly")).toBe(true);
+    expect(String(cookie.attributes.get("samesite")).toLowerCase()).toBe("lax");
+    expect(cookie.attributes.get("path")).toBe("/");
+    expect(cookie.attributes.has("domain")).toBe(false);
   });
 
   test("the clearing cookie repeats the same attributes with an empty value and Max-Age=0", async () => {

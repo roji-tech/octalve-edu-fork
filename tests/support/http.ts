@@ -83,14 +83,20 @@ export function sessionCookie(res: ApiResponse, name = COOKIE_NAME): ParsedCooki
 
 export const cookieHeader = (token: string, name = COOKIE_NAME) => `${name}=${token}`;
 
+/// `remember` is sent only when given, so a bare `loginAs(user)` exercises the API's default
+/// (not remembered: a session cookie and a 12-hour server-side cap).
 export async function loginAs(
   user: { email: string; password: string },
-  opts: ApiOptions = {},
+  { remember, ...opts }: ApiOptions & { remember?: boolean } = {},
 ): Promise<ApiResponse & { token: string | null }> {
   const res = await api("/api/v1/auth/login", {
     ...opts,
     method: "POST",
-    body: { email: user.email, password: user.password },
+    body: {
+      email: user.email,
+      password: user.password,
+      ...(remember === undefined ? {} : { remember }),
+    },
   });
   const cookie = sessionCookie(res);
   return Object.assign(res, { token: cookie && cookie.value ? cookie.value : null });
