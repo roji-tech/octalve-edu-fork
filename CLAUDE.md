@@ -177,6 +177,20 @@ one-off pattern sources, referenced once for a specific technique and then done:
   session cookie + 12-hour server cap; ticked → the 30 d / 90 d policy, 7 d for admins). AlEemaan has the
   same, in its own green, plus the admin shell. Still to come in this series, each designed in the plan
   first: **0.5.B** nonce-based CSP, **0.5.C** password reset/change, **0.5.D** TOTP MFA.
+- **Phase 0.5.E (account self-service) is BUILT AND VERIFIED** — branch `claude/account-self-service`, stacked on the
+  dev-inbox branch. A signed-in person can edit their name, change their email (confirmed by a link to the **new**
+  address) and see / end the places they are signed in. **Rules that follow:** (1) the change-email request gives the
+  **same answer whatever the address is** (status, body, headers, timing) — the lookup, the token and every mail run in
+  `after()`, and an address that already has an account gets a notice instead of a link; (2) confirming an email change is
+  **one transaction** that sets the address *and* deletes every session, password-reset link, sign-in challenge and other
+  change request of that person — if you add another credential-like table keyed by user, it goes in that transaction;
+  (3) a page opened from an emailed link **must not act on arrival** (scanners open links) — the person clicks; (4) read a
+  one-time token from the URL fragment with `useFragmentToken()` (it copes with a second link opened in the same tab) —
+  don't re-implement it; (5) a session id that isn't the caller's answers **exactly like one that doesn't exist**, and no
+  IP address is stored for sessions — don't add one without a design; (6) names go through `checkName()` (no control or
+  bidi-override characters; ZWJ allowed); (7) the per-account request limit counts only *verified* requests — keep guess
+  limits and volume limits separate. *Invite & activate* and deactivation wait for the Users pages. Record:
+  `docs/development-history/phases/phase-0.5.E-account-self-service.md`.
 - **Phase 0.5.F (dev email inbox) is BUILT AND VERIFIED** — branch `claude/dev-email-inbox`, stacked on the
   TOTP branch. A fourth email transport, `inbox`, keeps the last 50 messages in process memory and an in-app
   widget (bottom-right launcher, unread badge, text bodies, clickable links) shows them — so reset links and
@@ -200,7 +214,7 @@ one-off pattern sources, referenced once for a specific technique and then done:
   (4) the enrolment secret lives in component state only, and the QR is drawn in the browser, never by an online
   service; (5) a password reset/change kills pending challenges but a reset **never** turns MFA off. Lost both
   factors: `pnpm mfa:reset -- <email>`. Record: `docs/development-history/phases/phase-0.5.D-totp-mfa.md`;
-  next: 0.5.E extras (planned in the plan doc), then the §0.5.2 work.
+  next: 0.5.E (self-service built — see above; invite/deactivate wait for the Users pages), then the §0.5.2 work.
 - **Phase 0.5.C (password reset and change) is BUILT AND VERIFIED** — branch `claude/password-reset`, stacked on
   the CSP branch. Forgot → emailed single-use link (token in the URL *fragment*, hashed at rest, 30 min) → reset
   deletes all the person's sessions; change-password re-verifies the current password and keeps only this

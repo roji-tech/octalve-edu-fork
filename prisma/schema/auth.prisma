@@ -25,12 +25,13 @@ model User {
   /// Nullable: an invited-but-not-yet-activated user has none (Phase 0.5 plan).
   passwordHash  String?
 
-  sessions         Session[]
-  resetTokens      PasswordResetToken[]
-  memberships      TenantMembership[]
-  mfaCredential    MfaCredential?
-  mfaRecoveryCodes MfaRecoveryCode[]
-  mfaChallenges    MfaChallenge[]
+  sessions          Session[]
+  resetTokens       PasswordResetToken[]
+  emailChangeTokens EmailChangeToken[]
+  memberships       TenantMembership[]
+  mfaCredential     MfaCredential?
+  mfaRecoveryCodes  MfaRecoveryCode[]
+  mfaChallenges     MfaChallenge[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -129,6 +130,24 @@ model MfaChallenge {
   attempts  Int      @default(0)
   expiresAt DateTime
   createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+/// A pending change of a person's email address (domain-implementation-plan.md §0.5.E). Same rules as the
+/// password-reset links: only a HASH of the token is stored (the plaintext exists only in the link mailed to the
+/// NEW address), it is single use (`usedAt`, claimed with a conditional update) and short-lived (1 hour). It
+/// carries the address it will switch to, which is why it is a table of its own. One live request per person.
+model EmailChangeToken {
+  id        String    @id @default(cuid())
+  tokenHash String    @unique
+  userId    String
+  newEmail  String
+  createdAt DateTime  @default(now())
+  expiresAt DateTime
+  usedAt    DateTime?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 

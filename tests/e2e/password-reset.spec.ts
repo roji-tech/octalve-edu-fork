@@ -1,6 +1,8 @@
 import { test, expect } from "../support/fixtures";
 import { Role, createUser, db, seedInstance } from "../support/db";
 import { linkFrom, waitForMail } from "../support/outbox";
+import { createResetToken } from "@/lib/auth/password-reset";
+import { verifyPassword } from "@/lib/auth/password";
 import { alerts, emailField, fillCredentials, signInButton, signInThroughUi } from "./helpers";
 
 // "I forgot my password" end to end, and changing it from the account page (plan §0.5.C).
@@ -66,6 +68,29 @@ test.describe("the whole journey", () => {
     await page.getByRole("button", { name: "Send reset link" }).click();
     await expect(page.getByRole("heading", { name: "Check your email" })).toBeVisible();
     await expect(page.getByText("If an account exists for")).toBeVisible();
+  });
+});
+
+test.describe("two reset links in one tab", () => {
+  test("opening a second link in the same tab (only the fragment changes) resets the SECOND person's password, not the first's", async ({ page }) => {
+    const first = await createUser({ role: Role.TEACHING_STAFF });
+    const second = await createUser({ role: Role.TEACHING_STAFF });
+    const firstToken = await createResetToken(first.id);
+    const secondToken = await createResetToken(second.id);
+
+    await page.goto(`/reset-password#token=${firstToken}`);
+    await expect(page.getByRole("heading", { name: "Choose a new password" })).toBeVisible();
+    await page.goto(`/reset-password#token=${secondToken}`);
+    await expect(page.getByRole("heading", { name: "Choose a new password" })).toBeVisible();
+    await newPassword(page).fill("second-persons-pass-1");
+    await confirmPassword(page).fill("second-persons-pass-1");
+    await page.getByRole("button", { name: "Set new password" }).click();
+    await expect(page.getByRole("heading", { name: "Password updated" })).toBeVisible();
+
+    const secondRow = await db.user.findUniqueOrThrow({ where: { id: second.id } });
+    expect(await verifyPassword("second-persons-pass-1", secondRow.passwordHash)).toBe(true);
+    const firstRow = await db.user.findUniqueOrThrow({ where: { id: first.id } });
+    expect(await verifyPassword(first.password, firstRow.passwordHash)).toBe(true); // untouched
   });
 });
 

@@ -1,6 +1,6 @@
 # Octalve Edu — Development Progress Tracker
 
-Last Updated: 2026-09-30
+Last Updated: 2026-10-05
 
 Companion to `docs/development-history/domain-implementation-plan.md` (the step-by-step build
 plan), `docs/development-history/phases/*.md` (one detailed doc per completed phase), and
@@ -247,21 +247,34 @@ the guide's `VERCEL_ENV` test would have been open on a self-hosted install). 62
 all caught** (two survived at first and drove two stronger tests). The Paystack half waits for Finance — the plan
 lists what must change in it first.
 
+## Account self-service build (2026-10-05) — built and verified, stacked again
+
+Design: plan §0.5.E ("Design for the self-service half" + "As built"). Record: `phases/phase-0.5.E-account-self-service.md`.
+Branch `claude/account-self-service`, **based on `claude/dev-email-inbox`**. A signed-in person can **edit their name**,
+**change their email address** (the current password is re-checked; a single-use, hashed, one-hour link goes to the *new*
+address, the old one is told; confirming switches the address in one transaction and signs the person out everywhere) and
+**see and end their active sessions** ("Chrome on Windows", this device first, no IP stored). The change-email request answers
+identically for a free and a taken address (the mail runs after the response; a taken address gets a notice, not a link),
+and the emailed page waits for a click instead of acting on arrival (mail scanners open links). Tests found four things worth
+remembering: a request limit spent before the password check made the password limit unreachable; two "Current password"
+labels on one page; a second emailed link opened in the same tab was ignored — **also on `/reset-password` since 0.5.C**
+(now one `useFragmentToken()` hook); and focus lost after an awaited save. 740 tests pass; **78 injected bugs, all caught**.
+*Invite & activate* and administrator deactivation wait for the Users pages (§0.5.2).
+
 ## Next action
 
-**The first four phases are open as stacked PRs on the fork** (`roji-tech/octalve-edu-fork` #1 auth → #2 0.5.A →
-#3 0.5.B → #4 0.5.C; each is based on the one before — merge in order). **0.5.D is [#5](https://github.com/roji-tech/octalve-edu-fork/pull/5)
-(`claude/totp-mfa`, based on 0.5.C); 0.5.F is pushed on `claude/dev-email-inbox` (based on 0.5.D).**
+**Phases 0.5.1 → 0.5.F are merged to `master`** (the stacked PRs #1–#5 were merged into their stack bases rather than `master`,
+so they were consolidated into #6, which landed). **0.5.E (self-service) is open as
+[#7](https://github.com/roji-tech/octalve-edu-fork/pull/7)** (base `master`, head `claude/account-self-service`).
 
 **The back-port to AlEemaan is done, verified and merged there** — shared names, the hardening deltas, the 72-byte
 password policy, `method="post"`, the sign-in screens it lacked and this test suite (`roji-tech/AlEemaan` #2), then
-its design language and shell (#3). Its #4 (0.5.B CSP) and #5 (0.5.C password reset) are open; its 0.5.D is pushed,
-no PR yet. From here on a change to the shared mechanism is made in both repos or logged as a divergence in both
+its design language and shell (#3). Its 0.5.B–0.5.F are merged; its 0.5.E is open as [#8](https://github.com/roji-tech/AlEemaan/pull/8). From here on a change to the shared mechanism is made in both repos or logged as a divergence in both
 plan docs (§0.5.1.6 there, the shared-names table here).
 
 Then, in order: the rest of the Phase 0.5 addenda, each designed in the plan first and built in both repos
 — ~~**0.5.B** the nonce-based script CSP~~, ~~**0.5.C** password reset and change~~, ~~**0.5.D** TOTP MFA~~ (all built,
-in review/stacked), ~~**0.5.F** the dev email inbox~~ (built), **0.5.E** the account-lifecycle extras (planned); then the tenant-trust-boundary resolver and `forTenant()` with its explicit
+in review/stacked), ~~**0.5.F** the dev email inbox~~ (built), ~~**0.5.E** account self-service~~ (built; invite & activate and deactivation come with the Users pages); then the tenant-trust-boundary resolver and `forTenant()` with its explicit
 RLS role setup (§0.5.2 — needs a real `app_user` Postgres role created first, and `withAuth`'s
 `roles`/`permissions` options and this repo's app shell arrive here); the shared API helpers (§0.5.3, and
 the Redis-backed rate limiter before any multi-instance SaaS deployment). Then that phase's negative-test

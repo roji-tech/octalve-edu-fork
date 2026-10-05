@@ -932,7 +932,7 @@ page.
 - Small fix on the way: the signed-in header's "Sign out" button wrapped onto two lines on narrow phones; it is
   now icon-only below `sm` (the accessible name is unchanged).
 
-#### 0.5.E — Account lifecycle extras (planned 2026-10-04; each designed here before it is built)
+#### 0.5.E — Account lifecycle extras (planned 2026-10-04; self-service half BUILT 2026-10-05 — invite/activate and deactivation wait for the Users pages)
 
 Prompted by the question "what else would a Django/Djoser-style auth give us?". Mapping and decisions:
 - **Built or designed already:** login/logout/current-user (0.5.1), password reset and change (0.5.C), two-step
@@ -948,6 +948,96 @@ Prompted by the question "what else would a Django/Djoser-style auth give us?". 
   others. Needs its own page.
 - **Account deletion:** for a school this is an administrator *deactivation* (history must survive), not
   self-service; designed with the Users pages.
+
+**Design for the self-service half (2026-10-05, written before any code).** Built now: *edit profile*, *change email
+with confirmation* and *active devices*. **Deferred, deliberately:** *invite & activate* and *deactivation* — both are
+administrator actions on other people and belong with the Users pages (they need a way to say who may invite whom,
+which is §0.5.2's tenant-scoped roles). Same design in both repos.
+- **Edit profile.** `PATCH /api/v1/account/profile { name }` behind `withAuth`: trimmed, inner whitespace collapsed,
+  1–100 characters, no control characters; 10 changes per account per 5 minutes; audit `PROFILE_UPDATED` with
+  before/after. The Profile card gets an Edit → Save/Cancel; the header and shell show the new name on refresh.
+- **Active devices.** `GET /api/v1/auth/sessions` (this person's unexpired sessions: when created, last used, a short
+  device description parsed from the stored user agent, `current`, and whether it was "kept signed in"), `POST
+  …/sessions/revoke { sessionId }` (only the caller's own; the current one is refused — that is sign-out; a session
+  that isn't theirs answers exactly like one that doesn't exist) and `POST …/sessions/revoke-others`. Rows are
+  fetched by the page after it loads (so relative times use the viewer's clock and zone — no hydration mismatch). A
+  revoked device finds out on its next request (the existing session revalidation sends it to sign-in). **No IP
+  address is stored or shown** — no column exists and none is added for this (it is personal data; "last used 5
+  minutes ago on Chrome / Windows" is enough to spot a stranger). Audit `SESSION_REVOKED` / `SESSIONS_REVOKED`.
+- **Change email with confirmation.** `POST /api/v1/auth/email-change/request { newEmail, password }`: the current
+  password is re-verified (5 wrong per account per 5 minutes, refunded on success), then — *whatever the address* —
+  the answer is the same generic "we've sent a link to the new address" (an authenticated user must not be able to
+  probe which addresses have accounts). If the address is free, a **single-use, hashed, 1-hour link in the URL
+  fragment** goes to the NEW address and a notice (masked new address) to the OLD one; if it is already in use, that
+  address gets a different notice ("someone asked to use this address; you already have an account here") and no
+  link. Limits: per account and per target address, so it can't be used to mail-bomb. One live request per person.
+  `POST …/email-change/confirm { token }` (public — the link is opened from a mail client, signed in or not):
+  claims the token with a conditional update and, **in one transaction**, sets the new email (lower-cased,
+  `emailVerified` now), deletes **every session** of the person, their pending password-reset links, MFA
+  challenges and other email-change requests (the email is the recovery channel — nothing issued for the old one
+  survives it); if the address was taken in the meantime the unique index refuses it and the answer is the same
+  generic "link can't be used". The OLD address is told it happened; audit `EMAIL_CHANGE_REQUESTED` /
+  `EMAIL_CHANGED` (before/after). New page `/confirm-email` (token read from the fragment and scrubbed,
+  `referrer: no-referrer`, like `/reset-password`).
+  *Deviation from the first sketch:* a **separate `EmailChangeToken` table** (it must carry the new address)
+  rather than a `purpose` column on `PasswordResetToken`; same hash-only / single-use / conditional-claim machinery.
+- **Tests (before the code).** unit: user-agent description, address masking. integration: the token lifecycle
+  (hash at rest, 1 hour, one live per person, **20 simultaneous confirms → exactly one**, single use, expiry), the
+  confirm transaction (email changed, all sessions / reset links / challenges / other requests gone, address taken
+  meanwhile → refused and nothing changed), sessions listing/revoking scoped to the owner. api: every route's auth,
+  CSRF and limits; generic answers for free / taken / own / malformed addresses (**identical bodies**); the right
+  mail to the right inbox (new: link; old: notice; taken: notice, no link); the old address can no longer sign in
+  and the new one can; revoking another person's session id answers like an unknown one. e2e: edit name; the whole
+  email change (request → "inbox" → link → signed out → sign in with the new address); two devices, revoke one and
+  watch it get signed out; revoke all others; axe in both themes on every state, phone tap targets.
+  Mutations: link not single-use / not expiring / not hashed; sessions kept after the change; reset links kept;
+  password not re-checked; the taken-address answer differing; notice to the old address missing; revoking someone
+  else's session; revoking the current session; listing expired sessions; no limits; the IP-free promise (no new
+  column).
+
+**As built — self-service half (2026-10-05).** Built as designed, in both repos, with the deviations and findings below
+(each was found by a test or a screenshot, not by inspection). Record: `phases/phase-0.5.E-account-self-service.md`.
+- **What exists.** Migration `20261006090000_email_change_tokens` (one new table, purely additive). `lib/auth/`:
+  `email-change.ts` (token + the confirm transaction), `session-devices.ts` (list / revoke one / revoke others),
+  `profile-policy.ts` (`checkName` — the one name rule, client-safe), `user-agent.ts` (`describeUserAgent` — "Chrome on
+  Windows" from a fixed list of patterns, only ever rendered as text), `mask-email.ts` (`a***@school.example` for the
+  notices). Routes: `PATCH /api/v1/account/profile`, `GET /api/v1/auth/sessions`, `POST …/sessions/revoke`,
+  `POST …/sessions/revoke-others`, `POST …/email-change/request`, `POST …/email-change/confirm`. UI: the account page now
+  has **Profile** (name editable in place), **Email address**, Password, Two-step verification and **Active sessions**
+  cards; a new public page `/confirm-email`. Four emails: the link (to the new address), a "change requested" notice and a
+  "changed" notice (both to the old address, new address masked), and a "someone tried to use your address" notice (to an
+  address that already has an account).
+- **The confirm page never acts on arrival.** The link opens a page that says what will happen and waits for a click:
+  mail clients and security scanners open links (some run scripts) to preview them, and a page that spent the
+  single-use token on load would be consumed before the person saw it. (Tested: no request is made until the button is
+  pressed.) Like `/reset-password`, the token comes from the URL fragment, is removed from the address bar at once, and
+  the page sends `referrer: no-referrer`.
+- **Deviation 1 — where the per-account request limit sits.** The design said "limits per account and per target
+  address". Written first, the account limit (3) was spent *before* the password was checked, so three typos locked the
+  person out and the 5-wrong-passwords limit could never trigger. Now: the password limit (5, refunded for anything but a
+  wrong password) comes first; the request limit (3 per 5 minutes) is counted only for a *verified* request, so it bounds
+  the mail one signed-in person can cause without being spent by guesses. Found while writing the API tests.
+- **Deviation 2 — the password field is labelled "Your password"**, not "Current password": the Password card on the same
+  page already has a field with that label, and two identically-labelled fields on one page confuse screen-reader users
+  and password managers. Found by a strict-mode locator clash in the first browser test.
+- **Finding — a second link in the same tab was ignored** (here and, since 0.5.C, on `/reset-password`): pasting a
+  link whose URL differs only in the `#fragment` is a same-document navigation, so the page kept the first link's state
+  (including "done"). The fragment reading is now one hook, `components/auth/useFragmentToken.ts`, that also listens
+  for `hashchange` and returns a `version`; both pages key their state on it, so every link starts clean (even the same
+  link opened again). Tested on both pages.
+- **Finding — focus after an awaited save.** Returning focus with a 0 ms timer loses to React's commit after an `await`
+  (it worked on Cancel, a click handler, and failed on Save). Focus now moves in an effect that runs after the commit;
+  the email panel does the same when it returns to its first state.
+- **Notes.** "Active" times are approximate — `lastUsedAt` is only written when it is more than 5 minutes stale
+  (existing behaviour, `TOUCH_INTERVAL_MS`). The change-email notice goes to the old address *before* the audit and the
+  token (all in `after()`), so a failure later still tells the person. Octalve's audit writes one row per school the person
+  belongs to and none for a person with no school (as since 0.5.C); AlEemaan writes one row. `withAuth` routes answer
+  `Cache-Control: private, no-store`, the public confirm route `no-store` (the tests assert both exactly).
+- **Not done, deliberately:** *invite & activate* and administrator *deactivation* (they act on other people and need the
+  Users pages / tenant-scoped roles of §0.5.2); a "new sign-in from an unrecognised device" notice; showing a device's IP
+  or location (none is stored); an administrator changing someone else's email; self-service account deletion (a school
+  deactivates, history must survive).
+- **Verification.** `pnpm test`: 740 passed, 5 skipped by design, 0 failed (it was 622); `tsc`, ESLint and `next build` clean; **78 injected bugs, all caught** (one equivalent mutant removed as dead code, one non-compiling mutation redone). Details in the phase record.
 
 ---
 

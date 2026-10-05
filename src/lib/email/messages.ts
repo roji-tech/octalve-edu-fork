@@ -3,6 +3,8 @@ import { brand } from "@/lib/brand";
 // Plain-text messages: accessible everywhere, nothing to track or render wrongly.
 
 import { RESET_LINK_MINUTES } from "@/lib/auth/reset-constants";
+import { EMAIL_CHANGE_LINK_MINUTES } from "@/lib/auth/email-change";
+import { maskEmail } from "@/lib/auth/mask-email";
 
 const appUrl = () => (process.env.APP_URL ?? "http://localhost:3000").replace(/\/+$/, "");
 
@@ -93,6 +95,67 @@ export function passwordChangedEmail(to: string) {
       `The password for your ${brand.name} account was just changed, and you were signed out of your other devices.`,
       ``,
       `If this was you, there is nothing to do. If it wasn't, reset your password straight away at ${appUrl()}/forgot-password and tell your school administrator.`,
+    ].join("\n"),
+  };
+}
+
+// --- Change email (plan §0.5.E) ------------------------------------------------------------------------------
+
+/// To the NEW address: following it proves the address is reachable. (Token in the URL fragment, like a reset.)
+export function emailChangeConfirmEmail(to: string, token: string) {
+  return {
+    to,
+    subject: `Confirm your new ${brand.name} email address`,
+    text: [
+      `Someone asked to use this address for a ${brand.name} account.`,
+      ``,
+      `To confirm it, open this link within ${EMAIL_CHANGE_LINK_MINUTES} minutes:`,
+      `${appUrl()}/confirm-email#token=${token}`,
+      ``,
+      `Confirming signs the account out of every device, and from then on you sign in with this address.`,
+      `If you didn't ask for this, ignore this message — nothing changes and the link stops working by itself.`,
+    ].join("\n"),
+  };
+}
+
+/// To the OLD address when a change is requested: they can stop it by changing their password.
+export function emailChangeRequestedNotice(to: string, newEmail: string) {
+  return {
+    to,
+    subject: `A change of email address was requested on your ${brand.name} account`,
+    text: [
+      `Someone who is signed in to your ${brand.name} account asked to change its email address to ${maskEmail(newEmail)}.`,
+      ``,
+      `Nothing changes until the link sent to that address is opened. This address keeps working until then.`,
+      ``,
+      `If this wasn't you, change your password straight away at ${appUrl()}/forgot-password and tell your school administrator.`,
+    ].join("\n"),
+  };
+}
+
+/// To the OLD address once it has happened.
+export function emailChangedNotice(to: string, newEmail: string) {
+  return {
+    to,
+    subject: `The email address on your ${brand.name} account was changed`,
+    text: [
+      `The email address on your ${brand.name} account was just changed to ${maskEmail(newEmail)}, and the account was signed out of every device.`,
+      ``,
+      `This address no longer signs in. If this wasn't you, contact your school administrator straight away.`,
+    ].join("\n"),
+  };
+}
+
+/// To an address that ALREADY has an account, when someone asks to use it for another account. (It is sent instead
+/// of the confirmation link; the requester is told the same thing whether or not this happened.)
+export function emailChangeTakenNotice(to: string) {
+  return {
+    to,
+    subject: `Someone tried to use your email address on ${brand.name}`,
+    text: [
+      `Someone asked to use this address for a different ${brand.name} account. Because this address already has an account, nothing was changed and no link was sent.`,
+      ``,
+      `If that was you, you can simply sign in at ${appUrl()}/login (or reset your password at ${appUrl()}/forgot-password). If it wasn't, you can ignore this message.`,
     ].join("\n"),
   };
 }

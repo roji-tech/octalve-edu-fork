@@ -2,7 +2,10 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth/session";
 import { AppHeader } from "@/components/auth/AppHeader";
+import { ChangeEmailPanel } from "@/components/auth/ChangeEmailPanel";
 import { ChangePasswordForm } from "@/components/auth/ChangePasswordForm";
+import { ProfileDetails } from "@/components/auth/ProfileDetails";
+import { SessionsPanel } from "@/components/auth/SessionsPanel";
 import { SessionRevalidator } from "@/components/auth/SessionRevalidator";
 import { TwoStepPanel } from "@/components/auth/TwoStepPanel";
 import { Card } from "@/components/ui/Card";
@@ -29,16 +32,15 @@ export default async function AccountPage() {
 
         <Card>
           <h2 className="text-lg font-semibold text-fg">Profile</h2>
-          <dl className="mt-4 grid gap-4 sm:grid-cols-2">
-            <div className="min-w-0">
-              <dt className="text-xs font-semibold tracking-wide text-fg-muted uppercase">Name</dt>
-              <dd className="mt-1 truncate text-sm text-fg">{name?.trim() || "—"}</dd>
-            </div>
-            <div className="min-w-0">
-              <dt className="text-xs font-semibold tracking-wide text-fg-muted uppercase">Email</dt>
-              <dd className="mt-1 truncate text-sm text-fg">{email ?? "—"}</dd>
-            </div>
-          </dl>
+          <ProfileDetails name={name} email={email} />
+        </Card>
+
+        <Card>
+          <h2 className="text-lg font-semibold text-fg">Email address</h2>
+          <p className="mt-1 text-sm text-fg-muted">
+            It&apos;s what you sign in with, and where password reset links go.
+          </p>
+          <ChangeEmailPanel email={email} />
         </Card>
 
         <Card>
@@ -59,6 +61,14 @@ export default async function AccountPage() {
             enabled={mfa.enabled}
             recoveryCodesRemaining={mfa.recoveryCodesRemaining}
           />
+        </Card>
+
+        <Card>
+          <h2 className="text-lg font-semibold text-fg">Active sessions</h2>
+          <p className="mt-1 text-sm text-fg-muted">
+            Where you&apos;re signed in. If you don&apos;t recognise one, sign it out and change your password.
+          </p>
+          <SessionsPanel />
         </Card>
       </main>
     </div>

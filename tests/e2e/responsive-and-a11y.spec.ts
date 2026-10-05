@@ -1,9 +1,10 @@
 import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
 import { test, expect } from "../support/fixtures";
-import { Role, codeFor, createUser, db, enableMfa, resetDatabase, seedInstance, uniqueIp } from "./../support/db";
+import { Role, codeFor, createUser, db, enableMfa, resetDatabase, seedInstance, uniqueEmail, uniqueIp } from "./../support/db";
 import { DEVTOOLS_URL, DEV_TOOLS_TEST_TOKEN } from "../support/env";
 import { linkFrom, waitForMail } from "../support/outbox";
+import { createEmailChangeToken } from "@/lib/auth/email-change";
 import { base32Decode } from "@/lib/auth/mfa/base32";
 import { alerts, codeField, fillCredentials, mfaHeading, passwordField, recoveryField, signInButton, signInThroughUi, verifyButton } from "./helpers";
 
@@ -345,6 +346,76 @@ test.describe("two-step verification screens", () => {
     await checkScreen(page, "/account two-step (turn off, errors)", isMobile);
     await page.getByRole("button", { name: "Use a recovery code instead" }).click();
     await checkScreen(page, "/account two-step (turn off, recovery code)", isMobile);
+  });
+});
+
+test.describe("account self-service screens (profile, email, sessions)", () => {
+  const IPHONE_UA =
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1";
+
+  test("/account: profile editor (idle, editing, error), email card (form, errors, sent), sessions (alone, with others)", async ({ page, isMobile, browser }) => {
+    const user = await createUser({ role: Role.ADMIN, name: "Amina Yusuf" });
+    await signInThroughUi(page, user);
+    await page.goto("/account");
+    await expect(page.getByRole("list", { name: "Signed-in devices" })).toBeVisible();
+    await checkScreen(page, "/account (profile + email + sessions, idle)", isMobile);
+
+    await page.getByRole("button", { name: /^Edit name/ }).click();
+    await checkScreen(page, "/account (editing the name)", isMobile);
+    await page.getByLabel("Name", { exact: true }).fill("   ");
+    await page.getByRole("button", { name: "Save" }).click();
+    await expect(page.getByText("Enter your name.")).toBeVisible();
+    await checkScreen(page, "/account (name error)", isMobile);
+    await page.getByLabel("Name", { exact: true }).fill("Amina Yusuf-Bello");
+    await page.getByRole("button", { name: "Save" }).click();
+    await expect(page.getByRole("status").filter({ hasText: "Name updated." })).toBeVisible();
+    await checkScreen(page, "/account (name saved)", isMobile);
+
+    await page.getByRole("button", { name: "Change email address" }).click();
+    await checkScreen(page, "/account (change email form)", isMobile);
+    await page.getByRole("button", { name: "Send confirmation link" }).click();
+    await expect(page.getByText("Enter the new email address.")).toBeVisible();
+    await checkScreen(page, "/account (change email, validation errors)", isMobile);
+    await page.getByLabel("New email address").fill(uniqueEmail("fresh"));
+    await page.getByLabel("Your password").fill("not-my-password-1");
+    await page.getByRole("button", { name: "Send confirmation link" }).click();
+    await expect(page.getByText("Your password is incorrect.")).toBeVisible();
+    await checkScreen(page, "/account (change email, wrong password)", isMobile);
+    await page.getByLabel("Your password").fill(user.password);
+    await page.getByRole("button", { name: "Send confirmation link" }).click();
+    await expect(page.getByRole("heading", { name: "Check your inbox" })).toBeVisible();
+    await checkScreen(page, "/account (change email, sent)", isMobile);
+
+    // Sessions with another device listed.
+    const other = await browser.newContext({ userAgent: IPHONE_UA, extraHTTPHeaders: { "x-real-ip": uniqueIp() } });
+    await signInThroughUi(await other.newPage(), user);
+    await page.reload();
+    await expect(page.getByTestId("session-row")).toHaveCount(2);
+    await checkScreen(page, "/account (sessions, two devices)", isMobile);
+    await page.getByRole("button", { name: "Sign out of all other devices" }).click();
+    await expect(page.getByRole("status").filter({ hasText: "Signed out of 1 other device." })).toBeVisible();
+    await checkScreen(page, "/account (sessions, signed others out)", isMobile);
+    await other.close();
+  });
+
+  test("/confirm-email: ready, changed, link can't be used, no token", async ({ page, isMobile }) => {
+    const user = await createUser({ role: Role.TEACHING_STAFF });
+    const token = await createEmailChangeToken(user.id, uniqueEmail("fresh"));
+    await page.goto(`/confirm-email#token=${token}`);
+    await expect(page.getByRole("button", { name: "Confirm email address" })).toBeVisible();
+    await checkScreen(page, "/confirm-email (ready)", isMobile);
+    await page.getByRole("button", { name: "Confirm email address" }).click();
+    await expect(page.getByRole("heading", { name: "Email address changed" })).toBeVisible();
+    await checkScreen(page, "/confirm-email (changed)", isMobile);
+
+    await page.goto(`/confirm-email#token=${token}`); // used already
+    await page.getByRole("button", { name: "Confirm email address" }).click();
+    await expect(page.getByRole("heading", { name: "This link can't be used" })).toBeVisible();
+    await checkScreen(page, "/confirm-email (link already used)", isMobile);
+
+    await page.goto("/confirm-email");
+    await expect(page.getByRole("heading", { name: "This link can't be used" })).toBeVisible();
+    await checkScreen(page, "/confirm-email (no token)", isMobile);
   });
 });
 

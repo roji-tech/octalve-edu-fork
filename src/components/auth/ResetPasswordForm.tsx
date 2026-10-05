@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
 import { PasswordField } from "@/components/ui/PasswordField";
 import { CheckCircleIcon } from "@/components/ui/icons";
+import { useFragmentToken } from "@/components/auth/useFragmentToken";
 import { checkNewPassword } from "@/lib/auth/password-policy";
 
 const LINK = "inline-flex min-h-11 items-center font-semibold text-brand-fg hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring rounded-md";
@@ -15,9 +16,14 @@ const LINK = "inline-flex min-h-11 items-center font-semibold text-brand-fg hove
 /// never sends to a server; it is read once and then removed from the address bar, so it is not left in
 /// history, a screenshot, or a shared screen.
 export function ResetPasswordForm() {
+  const { token, version } = useFragmentToken();
+  // keyed on the link: one opened in a tab that is already on this page starts from a clean slate
+  return <ResetPasswordBody key={version} token={token} />;
+}
+
+/// `token`: undefined = not read yet; "" = no token in the URL.
+function ResetPasswordBody({ token }: { token: string | undefined }) {
   const router = useRouter();
-  // undefined = not read yet; "" = no token in the URL
-  const [token, setToken] = useState<string | undefined>(undefined);
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [passwordError, setPasswordError] = useState<string | null>(null);
@@ -25,13 +31,6 @@ export function ResetPasswordForm() {
   const [linkDead, setLinkDead] = useState(false);
   const [pending, setPending] = useState(false);
   const [done, setDone] = useState(false);
-
-  useEffect(() => {
-    const found = /[#&]token=([^&]+)/.exec(window.location.hash)?.[1] ?? "";
-    if (window.location.hash) window.history.replaceState(null, "", window.location.pathname + window.location.search);
-    const timer = setTimeout(() => setToken(found), 0);
-    return () => clearTimeout(timer);
-  }, []);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
