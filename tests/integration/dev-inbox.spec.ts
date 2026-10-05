@@ -3,6 +3,7 @@ import { HTTP_PORT, HTTP_URL } from "../support/env";
 import { test, expect } from "@playwright/test";
 import { NextRequest } from "next/server";
 import { uniqueIp } from "../support/db";
+import { withEnv, type Vars } from "../support/with-env";
 import { getEmailTransport, sendEmailQuietly } from "@/lib/email/transport";
 import { resetEmail } from "@/lib/email/messages";
 import { clearDevEmails, getDevEmails } from "@/lib/dev/email-inbox";
@@ -10,26 +11,6 @@ import { DELETE, GET } from "@/app/api/v1/dev/email-inbox/route";
 
 // The `inbox` email transport and the routes behind the widget, called in-process with the environment set
 // per test (the servers under test are production-shaped; the staging-mode server has its own API/browser specs).
-
-type Vars = Record<string, string | undefined>;
-
-/// Runs `fn` with these environment variables, then puts every one back exactly as it was.
-async function withEnv<T>(vars: Vars, fn: () => Promise<T> | T): Promise<T> {
-  const saved: Vars = {};
-  for (const key of Object.keys(vars)) {
-    saved[key] = process.env[key];
-    if (vars[key] === undefined) delete process.env[key];
-    else process.env[key] = vars[key];
-  }
-  try {
-    return await fn();
-  } finally {
-    for (const [key, value] of Object.entries(saved)) {
-      if (value === undefined) delete process.env[key];
-      else process.env[key] = value;
-    }
-  }
-}
 
 const DEVELOPMENT: Vars = { APP_ENV: "development", DEV_TOOLS: "", DEV_TOOLS_TOKEN: "", EMAIL_TRANSPORT: undefined, RESEND_API_KEY: undefined };
 const STAGING: Vars = { APP_ENV: "staging", DEV_TOOLS: "true", DEV_TOOLS_TOKEN: "staging-secret-token", EMAIL_TRANSPORT: undefined, RESEND_API_KEY: undefined };

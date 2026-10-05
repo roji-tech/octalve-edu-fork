@@ -2,7 +2,7 @@ import { test, expect } from "../support/fixtures";
 import { Role, createUser, seedInstance } from "../support/db";
 import { HTTP_URL } from "../support/env";
 import { api } from "../support/http";
-import { emailField, fillCredentials, signInButton } from "./helpers";
+import { emailField, fillCredentials, signInButton, HOME_URL } from "./helpers";
 
 // The light/dark choice is a `theme` cookie the SERVER reads, so the first paint is right
 // (no flash) and no inline script is needed — which is what lets the CSP forbid them.
@@ -77,7 +77,7 @@ test.describe("the toggle", () => {
     await toggle(page, "light").click();
     await fillCredentials(page, user.email, user.password);
     await signInButton(page).click();
-    await expect(page).toHaveURL(/\/dashboard$/);
+    await expect(page).toHaveURL(HOME_URL);
     await expect(html(page)).toHaveAttribute("data-theme", "light");
     await expect(toggle(page, "dark")).toBeVisible(); // the header has one too
   });

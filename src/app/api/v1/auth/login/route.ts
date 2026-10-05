@@ -1,4 +1,4 @@
-import type { NextRequest, NextResponse } from "next/server";
+import { after, type NextRequest, type NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { ok, fail, noStore } from "@/lib/api/envelope";
@@ -13,6 +13,7 @@ import { verifyPassword, PASSWORD_MAX_LENGTH } from "@/lib/auth/password";
 import { completeSignIn } from "@/lib/auth/complete-sign-in";
 import { createChallenge } from "@/lib/auth/mfa/challenge";
 import { hasActiveMfa } from "@/lib/auth/mfa/service";
+import { auditPersonEvent } from "@/lib/auth/audit";
 
 const loginSchema = z.object({
   // 254 = the practical RFC 5321 maximum; also bounds the size of the
@@ -82,6 +83,18 @@ async function handleLogin(req: NextRequest): Promise<NextResponse> {
   const accountKey = `login:account:${email}`;
 
   if (!(await reserveAttempt(pairKey, LOGIN_PAIR_LIMIT))) {
+    // The person who OWNS this account is told (on their audit trail) that someone is guessing at it — once per window,
+    // so a flood of attempts cannot become a flood of audit rows, and only for an account that exists (unknown
+    // addresses are never recorded). It runs after the response: the answer is the same 429 for every address.
+    after(async () => {
+      try {
+        if (!(await reserveAttempt(`audit:login-blocked:${email}`, 1))) return;
+        const owner = await prisma.user.findUnique({ where: { email }, select: { id: true } });
+        if (owner) await auditPersonEvent(owner.id, "LOGIN_BLOCKED", { reason: "Too many failed sign-in attempts for this account from one address." });
+      } catch (error) {
+        console.error("[login] audit failed:", error instanceof Error ? error.message : error);
+      }
+    });
     return fail(RATE_LIMITED_MESSAGE, 429, "RATE_LIMITED");
   }
   const accountThrottled = !(await checkRateLimit(accountKey, LOGIN_ACCOUNT_SOFT_LIMIT));

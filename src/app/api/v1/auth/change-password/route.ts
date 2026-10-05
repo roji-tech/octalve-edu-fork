@@ -5,7 +5,7 @@ import { ok, fail } from "@/lib/api/envelope";
 import { withAuth } from "@/lib/auth/with-auth";
 import { reserveAttempt, refundAttempt } from "@/lib/auth/rate-limit";
 import { hashPassword, verifyPassword, PASSWORD_MAX_LENGTH } from "@/lib/auth/password";
-import { checkNewPassword } from "@/lib/auth/password-policy";
+import { checkNewPasswordOnServer } from "@/lib/auth/pwned-password";
 import { revokeOtherSessions } from "@/lib/auth/session";
 import { auditPersonEvent } from "@/lib/auth/audit";
 import { deleteUserChallenges } from "@/lib/auth/mfa/challenge";
@@ -47,7 +47,7 @@ export const POST = withAuth(async (req, auth) => {
     return fail("Your current password is incorrect.", 400, "INVALID_CURRENT_PASSWORD");
   }
 
-  const problem = checkNewPassword(newPassword);
+  const problem = await checkNewPasswordOnServer(newPassword);
   if (problem) {
     await refundAttempt(key); // they proved who they are; a weak new password isn't an attack
     return fail(problem, 400, "VALIDATION");

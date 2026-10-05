@@ -25,13 +25,15 @@ model User {
   /// Nullable: an invited-but-not-yet-activated user has none (Phase 0.5 plan).
   passwordHash  String?
 
-  sessions          Session[]
-  resetTokens       PasswordResetToken[]
-  emailChangeTokens EmailChangeToken[]
-  memberships       TenantMembership[]
-  mfaCredential     MfaCredential?
-  mfaRecoveryCodes  MfaRecoveryCode[]
-  mfaChallenges     MfaChallenge[]
+  sessions            Session[]
+  resetTokens         PasswordResetToken[]
+  emailChangeTokens   EmailChangeToken[]
+  memberships         TenantMembership[]
+  invitationsSent     Invitation[]         @relation("InvitationsSent")
+  invitationsAccepted Invitation[]         @relation("InvitationsAccepted")
+  mfaCredential       MfaCredential?
+  mfaRecoveryCodes    MfaRecoveryCode[]
+  mfaChallenges       MfaChallenge[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

@@ -5,7 +5,7 @@ import { ok, fail, noStore } from "@/lib/api/envelope";
 import { validateCSRF } from "@/lib/auth/csrf";
 import { reserveAttempt, refundAttempt, getClientIp } from "@/lib/auth/rate-limit";
 import { hashPassword } from "@/lib/auth/password";
-import { checkNewPassword } from "@/lib/auth/password-policy";
+import { checkNewPasswordOnServer } from "@/lib/auth/pwned-password";
 import { isLiveResetToken, resetPasswordWithToken } from "@/lib/auth/password-reset";
 import { auditPersonEvent } from "@/lib/auth/audit";
 import { clearSessionCookie } from "@/lib/auth/session";
@@ -46,7 +46,7 @@ async function handle(req: NextRequest) {
   const { token, password } = parsed.data;
 
   // Tell them about a weak password BEFORE spending the link, so they can fix it and retry.
-  const problem = checkNewPassword(password);
+  const problem = await checkNewPasswordOnServer(password);
   if (problem) {
     await refundAttempt(ipKey); // a typo isn't an attack
     return fail(problem, 400, "VALIDATION");

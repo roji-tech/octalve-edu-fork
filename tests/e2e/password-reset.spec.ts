@@ -3,7 +3,7 @@ import { Role, createUser, db, seedInstance } from "../support/db";
 import { linkFrom, waitForMail } from "../support/outbox";
 import { createResetToken } from "@/lib/auth/password-reset";
 import { verifyPassword } from "@/lib/auth/password";
-import { alerts, emailField, fillCredentials, signInButton, signInThroughUi } from "./helpers";
+import { alerts, emailField, fillCredentials, signInButton, signInThroughUi, HOME_URL } from "./helpers";
 
 // "I forgot my password" end to end, and changing it from the account page (plan §0.5.C).
 
@@ -59,7 +59,7 @@ test.describe("the whole journey", () => {
     await expect(alerts(page)).toContainText("incorrect");
     await fillCredentials(page, user.email, "my-new-password-42");
     await signInButton(page).click();
-    await expect(page).toHaveURL(/\/dashboard$/);
+    await expect(page).toHaveURL(HOME_URL);
   });
 
   test("an address with no account sees the very same confirmation (and no email is sent)", async ({ page }) => {
@@ -112,7 +112,7 @@ test.describe("the forgot-password form", () => {
   test("a signed-in person is sent to the dashboard instead", async ({ page }) => {
     await signInThroughUi(page, await createUser());
     await page.goto("/forgot-password");
-    await expect(page).toHaveURL(/\/dashboard$/);
+    await expect(page).toHaveURL(HOME_URL);
   });
 });
 

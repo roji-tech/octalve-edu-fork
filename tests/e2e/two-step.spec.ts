@@ -4,20 +4,7 @@ import type { Page } from "@playwright/test";
 import { test, expect } from "../support/fixtures";
 import { Role, codeFor, createUser, db, enableMfa, rewindMfa, seedInstance } from "../support/db";
 import { base32Decode } from "@/lib/auth/mfa/base32";
-import {
-  alerts,
-  codeField,
-  fillCredentials,
-  keepSignedInBox,
-  mfaHeading,
-  passwordField,
-  recoveryField,
-  signInButton,
-  signInThroughUi,
-  signInWithSecondFactor,
-  signOut,
-  verifyButton,
-} from "./helpers";
+import { alerts, codeField, fillCredentials, keepSignedInBox, mfaHeading, passwordField, recoveryField, signInButton, signInThroughUi, signInWithSecondFactor, signOut, verifyButton, HOME_URL } from "./helpers";
 
 // Two-step verification in a real browser (plan §0.5.D): turning it on, signing in with it, losing the
 // authenticator, turning it off. Codes are computed by the test from the secret the page shows — exactly what
@@ -224,7 +211,7 @@ test.describe("signing in — step 2", () => {
     await expect(passwordField(page)).toHaveCount(0); // the password step is gone, not hidden
     await page.keyboard.type(codeFor(secret));
     await page.keyboard.press("Enter");
-    await expect(page).toHaveURL(/\/dashboard$/);
+    await expect(page).toHaveURL(HOME_URL);
   });
 
   test("nothing about step 2 survives a reload or lands in storage or the URL: it starts again at the password", async ({ page }) => {
@@ -262,7 +249,7 @@ test.describe("signing in — step 2", () => {
 
     await codeField(page).fill(codeFor(secret));
     await verifyButton(page).click();
-    await expect(page).toHaveURL(/\/dashboard$/);
+    await expect(page).toHaveURL(HOME_URL);
   });
 
   test("a code that is the wrong shape is caught before any request is made", async ({ page }) => {
@@ -300,7 +287,7 @@ test.describe("signing in — step 2", () => {
     await expect(alerts(page2)).toContainText("isn't right, or it has already been used");
     await recoveryField(page2).fill(recoveryCodes[1]);
     await verifyButton(page2).click();
-    await expect(page2).toHaveURL(/\/dashboard$/);
+    await expect(page2).toHaveURL(HOME_URL);
     await second.close();
   });
 

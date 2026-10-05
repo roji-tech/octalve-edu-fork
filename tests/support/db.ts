@@ -94,6 +94,48 @@ export async function createUser(
   return { id: user.id, email, name, password: password ?? "", tenantId: opts.role ? tenant.id : null };
 }
 
+// --- More than one school (SaaS-mode tests) -------------------------------------------------------------------------
+
+export type TestTenant = { id: string; code: string; name: string; campuses: { id: string; name: string }[] };
+const createdTenantIds: string[] = [];
+
+/// A NEW school (with campuses) beside the default one. Tests that use it run against the SaaS-mode server — the
+/// Solo servers fail closed when a second school exists — and must call `removeCreatedTenants()` when done.
+export async function createTenant(opts: { name?: string; campuses?: string[] } = {}): Promise<TestTenant> {
+  const suffix = crypto.randomBytes(4).toString("hex");
+  const name = opts.name ?? `School ${suffix}`;
+  const tenant = await db.tenant.create({ data: { code: `s-${suffix}`, name } });
+  createdTenantIds.push(tenant.id);
+  const campuses = [];
+  for (const campusName of opts.campuses ?? ["Main campus"]) {
+    campuses.push(await db.campus.create({ data: { tenantId: tenant.id, name: campusName }, select: { id: true, name: true } }));
+  }
+  return { id: tenant.id, code: tenant.code, name, campuses };
+}
+
+/// Makes `userId` a member of `tenantId`.
+export async function addMembership(userId: string, tenantId: string, role: Role, campusId: string | null = null) {
+  return db.tenantMembership.create({ data: { userId, tenantId, role, campusId } });
+}
+
+/// Deactivates `userId`'s membership of `tenantId` (what an administrator does on the Users page): the row stays, but it
+/// is no longer a membership. `reactivateMembership` is the reverse.
+export async function deactivateMembership(userId: string, tenantId: string) {
+  return db.tenantMembership.update({ where: { userId_tenantId: { userId, tenantId } }, data: { deactivatedAt: new Date() } });
+}
+export async function reactivateMembership(userId: string, tenantId: string) {
+  return db.tenantMembership.update({ where: { userId_tenantId: { userId, tenantId } }, data: { deactivatedAt: null } });
+}
+
+/// Removes every school made by `createTenant` (their campuses, memberships and audit rows go with them), so the
+/// Solo servers see exactly one tenant again.
+export async function removeCreatedTenants(): Promise<void> {
+  const ids = createdTenantIds.splice(0);
+  if (ids.length === 0) return;
+  await db.auditLog.deleteMany({ where: { tenantId: { in: ids } } });
+  await db.tenant.deleteMany({ where: { id: { in: ids } } });
+}
+
 export type TestMfa = { secret: Buffer; recoveryCodes: string[] };
 
 /// Turns two-step verification ON for a user directly in the database — a confirmed credential and ten

@@ -1,12 +1,13 @@
 import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
 import { test, expect } from "../support/fixtures";
-import { Role, codeFor, createUser, db, enableMfa, resetDatabase, seedInstance, uniqueEmail, uniqueIp } from "./../support/db";
-import { DEVTOOLS_URL, DEV_TOOLS_TEST_TOKEN } from "../support/env";
+import { Role, codeFor, createUser, addMembership, createTenant, db, enableMfa, removeCreatedTenants, resetDatabase, seedInstance, uniqueEmail, uniqueIp } from "./../support/db";
+import { DEVTOOLS_URL, DEV_TOOLS_TEST_TOKEN, SAAS_URL } from "../support/env";
 import { linkFrom, waitForMail } from "../support/outbox";
 import { createEmailChangeToken } from "@/lib/auth/email-change";
+import { hashInvitationToken, newInvitationToken } from "@/lib/invitations/token";
 import { base32Decode } from "@/lib/auth/mfa/base32";
-import { alerts, codeField, fillCredentials, mfaHeading, passwordField, recoveryField, signInButton, signInThroughUi, verifyButton } from "./helpers";
+import { alerts, codeField, fillCredentials, mfaHeading, passwordField, recoveryField, signInButton, signInThroughUi, verifyButton, HOME_URL } from "./helpers";
 
 // Runs on the desktop AND the phone project (see playwright.config.ts).
 //  - axe-core, WCAG 2.2 A/AA rules, on every screen and on the STATES that
@@ -327,7 +328,7 @@ test.describe("two-step verification screens", () => {
     await startSignIn(page, user);
     await codeField(page).fill(codeFor(secret));
     await verifyButton(page).click();
-    await expect(page).toHaveURL(/\/dashboard$/);
+    await expect(page).toHaveURL(HOME_URL);
 
     await page.goto("/account");
     await expect(alerts(page)).toContainText("running low");
@@ -354,6 +355,7 @@ test.describe("account self-service screens (profile, email, sessions)", () => {
     "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1";
 
   test("/account: profile editor (idle, editing, error), email card (form, errors, sent), sessions (alone, with others)", async ({ page, isMobile, browser }) => {
+    test.slow(); // seven screens × both themes of axe: ~25 s on an idle machine, so it was always one busy moment from the 30 s default
     const user = await createUser({ role: Role.ADMIN, name: "Amina Yusuf" });
     await signInThroughUi(page, user);
     await page.goto("/account");
@@ -416,6 +418,194 @@ test.describe("account self-service screens (profile, email, sessions)", () => {
     await page.goto("/confirm-email");
     await expect(page.getByRole("heading", { name: "This link can't be used" })).toBeVisible();
     await checkScreen(page, "/confirm-email (no token)", isMobile);
+  });
+});
+
+test.describe("school pages: picker, workspace, no-access (SaaS-mode server)", () => {
+  test.use({ baseURL: SAAS_URL });
+  test.beforeAll(async () => {
+    await seedInstance();
+  });
+  test.afterAll(async () => {
+    await removeCreatedTenants();
+  });
+
+  test("picker, workspace (admin, staff, no campus) and the 403 view", async ({ page, isMobile }) => {
+    const a = await createTenant({ name: "Alpha School with a rather long name to prove it wraps", campuses: ["Alpha North", "Alpha South"] });
+    const b = await createTenant({ name: "Beta School", campuses: ["Beta Main"] });
+    const both = await createUser({ name: "Chidi Okafor" });
+    await addMembership(both.id, a.id, Role.ADMIN);
+    await addMembership(both.id, b.id, Role.TEACHING_STAFF, b.campuses[0].id);
+    await signInThroughUi(page, both);
+    await expect(page.getByRole("heading", { name: "Your schools" })).toBeVisible();
+    await checkScreen(page, "/dashboard (picker)", isMobile);
+
+    await page.getByRole("link", { name: /Alpha School/ }).click();
+    await expect(page.getByText("Alpha North")).toBeVisible();
+    await checkScreen(page, "/schools/[code] (admin)", isMobile);
+
+    await page.goto(`/schools/${b.code}`);
+    await expect(page.getByText("Beta Main")).toBeVisible();
+    await checkScreen(page, "/schools/[code] (staff, one campus)", isMobile);
+
+    const nocampus = await createUser();
+    await addMembership(nocampus.id, a.id, Role.PARENT, null);
+    await page.context().clearCookies();
+    await signInThroughUi(page, nocampus);
+    await expect(page.getByText("You haven’t been assigned to a campus yet.")).toBeVisible();
+    await checkScreen(page, "/schools/[code] (no campus)", isMobile);
+
+    await page.goto(`/schools/${b.code}`);
+    await expect(page.getByRole("heading", { name: "You don't have access to this school" })).toBeVisible();
+    await checkScreen(page, "/schools/[code] (403)", isMobile);
+  });
+});
+
+test.describe("app shell: the open states (SaaS-mode server)", () => {
+  test.use({ baseURL: SAAS_URL });
+  test.beforeAll(async () => {
+    await seedInstance();
+  });
+  test.afterAll(async () => {
+    await removeCreatedTenants();
+  });
+
+  // The shell around every signed-in screen is checked with each of its disclosures OPEN, in both themes (the closed shell
+  // is already part of every signed-in screen above). A long school name proves the sidebar, switcher and sheet truncate.
+  test("account menu, school switcher, More sheet, and the shell around the 403 view", async ({ page, isMobile }) => {
+    const a = await createTenant({ name: "Alpha School with a rather long name to prove it wraps", campuses: ["Alpha North"] });
+    const b = await createTenant({ name: "Beta Academy", campuses: ["Beta Main"] });
+    const both = await createUser({ name: "Chidi Okafor" });
+    await addMembership(both.id, a.id, Role.ADMIN);
+    await addMembership(both.id, b.id, Role.TEACHING_STAFF, b.campuses[0].id);
+    await signInThroughUi(page, both);
+    await page.goto(`/schools/${a.code}`);
+    await expect(page.getByText("Alpha North")).toBeVisible();
+
+    await page.getByRole("button", { name: /^Account menu for/ }).click();
+    await expect(page.getByRole("link", { name: "Profile" })).toBeVisible();
+    await checkScreen(page, "shell: account menu open", isMobile);
+    await page.keyboard.press("Escape");
+
+    if (isMobile) {
+      await page.getByRole("navigation", { name: "Main" }).getByRole("button", { name: "More" }).click();
+      await expect(page.getByRole("dialog").getByRole("button", { name: "Sign out" })).toBeVisible();
+      await checkScreen(page, "shell: More sheet open (several schools, administrator)", isMobile);
+      await page.keyboard.press("Escape");
+    } else {
+      await page.getByRole("button", { name: /School.*Alpha School/ }).click();
+      await expect(page.getByRole("link", { name: /Beta Academy/ })).toBeVisible();
+      await checkScreen(page, "shell: school switcher open", isMobile);
+      await page.keyboard.press("Escape");
+    }
+
+    await page.goto(`/schools/${b.code}`);
+    await expect(page.getByText("Beta Main")).toBeVisible();
+    await checkScreen(page, "shell: a teacher in the second school", isMobile);
+
+    const outsider = await createUser();
+    await addMembership(outsider.id, b.id, Role.ADMIN);
+    await page.context().clearCookies();
+    await signInThroughUi(page, outsider);
+    await page.goto(`/schools/${a.code}`);
+    await expect(page.getByRole("heading", { name: "You don't have access to this school" })).toBeVisible();
+    await checkScreen(page, "shell: 403 view inside the shell", isMobile);
+  });
+});
+
+test.describe("users and invitations (SaaS-mode server)", () => {
+  test.use({ baseURL: SAAS_URL });
+  test.beforeAll(async () => {
+    await seedInstance();
+  });
+  test.afterAll(async () => {
+    await removeCreatedTenants();
+  });
+
+  async function linkFor(school: { id: string }, email: string, opts: { expired?: boolean } = {}) {
+    const token = newInvitationToken();
+    await db.invitation.create({ data: { tenantId: school.id, email, role: Role.TEACHING_STAFF, tokenHash: hashInvitationToken(token), expiresAt: new Date(Date.now() + (opts.expired ? -60_000 : 3_600_000)) } });
+    return `/accept-invite#token=${token}`;
+  }
+
+  test("the Users page: people, a pending and an expired invitation, a search with no result, and each dialog open (with its errors)", async ({ page, isMobile }) => {
+    const school = await createTenant({ name: "Alpha School with a rather long name to prove it wraps", campuses: ["Alpha North", "Alpha South"] });
+    const boss = await createUser({ name: "Amina Yusuf with a rather long name to prove it wraps too" });
+    await addMembership(boss.id, school.id, Role.ADMIN);
+    const tola = await createUser({ name: "Tola Teacher" });
+    await addMembership(tola.id, school.id, Role.TEACHING_STAFF, school.campuses[0].id);
+    const gone = await createUser({ name: "Gone Parent" });
+    await addMembership(gone.id, school.id, Role.PARENT);
+    await db.tenantMembership.updateMany({ where: { userId: gone.id }, data: { deactivatedAt: new Date() } });
+    await db.invitation.create({ data: { tenantId: school.id, email: "waiting.for.an.answer@example.test", role: Role.STUDENT, campusId: school.campuses[1].id, tokenHash: "a".repeat(64), invitedById: boss.id, expiresAt: new Date(Date.now() + 5 * 86_400_000) } });
+    await db.invitation.create({ data: { tenantId: school.id, email: "too.late@example.test", role: Role.PARENT, tokenHash: "b".repeat(64), expiresAt: new Date(Date.now() - 3_600_000) } });
+    await signInThroughUi(page, boss);
+    await page.goto(`/schools/${school.code}/users`);
+    await expect(page.getByText("2 people")).toBeVisible();
+    await expect(page.getByText("waiting.for.an.answer@example.test")).toBeVisible();
+    await checkScreen(page, "/users (people and invitations)", isMobile);
+
+    await page.getByLabel("Status").selectOption("all");
+    await expect(page.getByText("3 people")).toBeVisible();
+    await checkScreen(page, "/users (everyone, incl. deactivated)", isMobile);
+
+    await page.getByLabel("Search").fill("zzz-nobody");
+    await expect(page.getByText("No one matches these filters.")).toBeVisible();
+    await checkScreen(page, "/users (empty result)", isMobile);
+    await page.getByRole("button", { name: "Clear filters" }).click();
+    await expect(page.getByText("2 people")).toBeVisible();
+
+    await page.getByRole("button", { name: "Invite someone" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "Send invitation" }).click();
+    await expect(page.getByRole("dialog").getByText("Enter an email address.")).toBeVisible();
+    await checkScreen(page, "/users (invite dialog with an error)", isMobile);
+    await page.keyboard.press("Escape");
+
+    await page.getByRole("button", { name: "Change role or campus for Tola Teacher" }).click();
+    await expect(page.getByRole("dialog").getByRole("heading", { name: "Change access for Tola Teacher" })).toBeVisible();
+    await checkScreen(page, "/users (edit dialog)", isMobile);
+    await page.keyboard.press("Escape");
+
+    await page.getByRole("button", { name: "Deactivate Tola Teacher" }).click();
+    await expect(page.getByRole("dialog").getByRole("heading", { name: "Deactivate Tola Teacher?" })).toBeVisible();
+    await checkScreen(page, "/users (deactivate confirmation)", isMobile);
+    await page.keyboard.press("Escape");
+
+    await page.getByRole("button", { name: "Revoke the invitation to too.late@example.test" }).click();
+    await expect(page.getByRole("status").filter({ hasText: "was revoked" })).toBeVisible();
+    await checkScreen(page, "/users (after an action: success notice)", isMobile);
+  });
+
+  test("the accept-invite page: the new-person form (idle and with errors), sign in first, join as the signed-in invitee, a different account, a dead link, and success", async ({ page, isMobile }) => {
+    const school = await createTenant({ name: "Alpha School with a rather long name to prove it wraps", campuses: [] });
+    await page.goto(await linkFor(school, "brand.new.person@example.test"));
+    await expect(page.getByRole("heading", { level: 1, name: /^Join Alpha School/ })).toBeVisible();
+    await checkScreen(page, "/accept-invite (new person)", isMobile);
+    await page.getByRole("button", { name: "Create account and join" }).click();
+    await expect(page.getByText("Enter your name.")).toBeVisible();
+    await checkScreen(page, "/accept-invite (new person, errors)", isMobile);
+
+    const owner = await createUser({ name: "Olu Owner" });
+    await page.goto(await linkFor(school, owner.email));
+    await expect(page.getByRole("heading", { level: 1, name: /^Sign in to join/ })).toBeVisible();
+    await checkScreen(page, "/accept-invite (sign in first)", isMobile);
+
+    await page.goto("/accept-invite");
+    await expect(page.getByRole("heading", { level: 1, name: "This link can't be used" })).toBeVisible();
+    await checkScreen(page, "/accept-invite (dead link)", isMobile);
+
+    await signInThroughUi(page, owner);
+    await page.goto(await linkFor(school, uniqueEmail("someone-else-entirely")));
+    await expect(page.getByRole("heading", { level: 1, name: "This invitation is for a different account" })).toBeVisible();
+    await checkScreen(page, "/accept-invite (signed in as someone else)", isMobile);
+
+    await db.invitation.updateMany({ where: { tenantId: school.id, email: owner.email }, data: { revokedAt: new Date() } }); // one LIVE invitation per address
+    await page.goto(await linkFor(school, owner.email));
+    await expect(page.getByRole("button", { name: /^Join Alpha School/ })).toBeVisible();
+    await checkScreen(page, "/accept-invite (join as the signed-in invitee)", isMobile);
+    await page.getByRole("button", { name: /^Join Alpha School/ }).click();
+    await expect(page.getByRole("heading", { level: 1, name: "You're in" })).toBeVisible();
+    await checkScreen(page, "/accept-invite (success)", isMobile);
   });
 });
 

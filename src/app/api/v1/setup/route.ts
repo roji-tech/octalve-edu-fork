@@ -8,7 +8,10 @@ import { validateCSRF } from "@/lib/auth/csrf";
 import { reserveAttempt, refundAttempt, getClientIp } from "@/lib/auth/rate-limit";
 import { hashPassword } from "@/lib/auth/password";
 import { checkNewPassword } from "@/lib/auth/password-policy";
+import { isBreachedPassword, BREACHED_MESSAGE } from "@/lib/auth/pwned-password";
 import { slugifyTenantCode, isValidTenantCode } from "@/lib/tenant/validate-code";
+import { setTenantContext } from "@/lib/tenant/for-tenant";
+import { trustedTenantId } from "@/lib/tenant/verified-tenant";
 
 // Solo-only (PRD §4's "one-time setup wizard" onboarding row). SaaS tenants
 // are created by the future self-serve signup flow, not this — so the whole
@@ -100,6 +103,11 @@ export async function POST(req: NextRequest) {
 
   const { schoolName, email, password, name, setupToken } = parsed.data;
 
+  // The first administrator's password is the most valuable one on the install.
+  if (await isBreachedPassword(password)) {
+    return fail(BREACHED_MESSAGE, 400, "VALIDATION");
+  }
+
   const expectedToken = process.env.SETUP_TOKEN;
   if (expectedToken) {
     const providedToken = req.headers.get("x-setup-token") || setupToken || "";
@@ -163,6 +171,10 @@ export async function POST(req: NextRequest) {
       const admin = await tx.user.create({
         data: { email, name, passwordHash },
       });
+
+      // The tenant was minted a few lines up by this very transaction, so its id is as verified as an id can be;
+      // everything tenant-scoped below (the membership, the audit row) is written inside its context.
+      await setTenantContext(tx, trustedTenantId(tenant.id));
 
       await tx.tenantMembership.create({
         data: { userId: admin.id, tenantId: tenant.id, role: Role.ADMIN },

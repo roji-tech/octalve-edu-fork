@@ -45,3 +45,9 @@ next-env.d.ts
 /test-results/
 /playwright-report/
 /tests/.tmp/
+
+# test lanes (scripts/lanes.mjs)
+/lane-run.log
+/.lane-stamp.json
+/.lane-timings.json
+/lane-report-*.json

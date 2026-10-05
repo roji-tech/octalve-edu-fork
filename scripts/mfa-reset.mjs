@@ -33,26 +33,32 @@ try {
     console.error(`No account with the email ${email}.`);
     process.exitCode = 1;
   } else {
-    const memberships = await prisma.tenantMembership.findMany({
-      where: { userId: user.id },
-      select: { tenantId: true },
+    // Memberships and the audit log are row-level-secured: a person's own memberships are read through the user
+    // context (`app.user_id`), and each audit row is written inside that school's tenant context (`app.tenant_id`).
+    // Plain `set_config(…, true)` calls — this script imports nothing from the app, on purpose.
+    const memberships = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT set_config('app.user_id', ${user.id}::text, true)`;
+      return tx.tenantMembership.findMany({ where: { userId: user.id }, select: { tenantId: true } });
     });
     const result = await prisma.$transaction(async (tx) => {
       const credentials = await tx.mfaCredential.deleteMany({ where: { userId: user.id } });
       const codes = await tx.mfaRecoveryCode.deleteMany({ where: { userId: user.id } });
       await tx.mfaChallenge.deleteMany({ where: { userId: user.id } });
       const sessions = await tx.session.deleteMany({ where: { userId: user.id } });
-      if (credentials.count > 0 && memberships.length > 0) {
-        await tx.auditLog.createMany({
-          data: memberships.map((m) => ({
-            tenantId: m.tenantId,
-            actorUserId: user.id,
-            action: "MFA_RESET",
-            targetType: "User",
-            targetId: user.id,
-            reason: "Operator reset (pnpm mfa:reset)",
-          })),
-        });
+      if (credentials.count > 0) {
+        for (const m of memberships) {
+          await tx.$queryRaw`SELECT set_config('app.tenant_id', ${m.tenantId}::text, true)`;
+          await tx.auditLog.create({
+            data: {
+              tenantId: m.tenantId,
+              actorUserId: user.id,
+              action: "MFA_RESET",
+              targetType: "User",
+              targetId: user.id,
+              reason: "Operator reset (pnpm mfa:reset)",
+            },
+          });
+        }
       }
       return { had: credentials.count > 0, sessions: sessions.count, codes: codes.count };
     });

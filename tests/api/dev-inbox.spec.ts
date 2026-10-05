@@ -96,12 +96,13 @@ test.describe("the staging-mode server", () => {
   });
 
   test("an unknown address puts nothing in the inbox (the same no-oracle rule as ever)", async () => {
-    const before = ((await inbox()).json.data.emails as Mail[]).length;
     const ghost = uniqueEmail("ghost");
     expect((await forgot(ghost)).status).toBe(200);
     await new Promise((r) => setTimeout(r, 1500));
     expect(await mailTo(ghost)).toEqual([]);
-    expect(((await inbox()).json.data.emails as Mail[]).length).toBe(before);
+    // Nothing in the inbox is addressed to the unknown address. (Not "the total did not change": mail that an EARLIER test caused is sent
+    // after its response and can land in this window on a busy machine — a count would blame this request for it.)
+    expect(((await inbox()).json.data.emails as Mail[]).filter((m) => m.to === ghost)).toEqual([]);
   });
 
   test("newest first", async () => {

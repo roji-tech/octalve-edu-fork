@@ -38,7 +38,6 @@ test.describe("GET /api/v1/auth/me", () => {
         tenantCode: expect.any(String),
         tenantName: "Bright Future Academy",
         campusId: null,
-        campusName: null,
         role: "ADMIN",
       },
     ]);

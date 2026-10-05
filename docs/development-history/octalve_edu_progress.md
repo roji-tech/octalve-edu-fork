@@ -261,21 +261,53 @@ labels on one page; a second emailed link opened in the same tab was ignored —
 (now one `useFragmentToken()` hook); and focus lost after an awaited save. 740 tests pass; **78 injected bugs, all caught**.
 *Invite & activate* and administrator deactivation wait for the Users pages (§0.5.2).
 
+## Tenant trust boundary — application layer (2026-10-05) — built and verified; RLS in the next section
+
+Design: plan §0.5.2 + "Build design" + "As built — application layer". Record: `phases/phase-0.5.2-tenant-boundary.md`; map:
+`roadmap-breakdown.md`. Branch `claude/tenant-trust-boundary`, **based on `claude/account-self-service`**. The URL's school code is only a
+lookup key: `resolveTenant` finds the signed-in person's own membership (one 403 for unknown / malformed / not-a-member), the branded
+`VerifiedTenantId` is the only thing tenant data access accepts, `forTenant` runs one transaction with a transaction-local context, and
+`withAuth(…, { tenant: true, roles })` checks the role **in that school**. `/dashboard` is now the front door (one school → in, several →
+picker). 811 tests pass; 25 injected bugs caught or equivalent. (The database half is built — next section.)
+
+## Row-level security (2026-10-05) — built and verified
+
+Design: plan §0.5.2 "Build design" items 1–12 + "As built — row-level security". Record: `phases/phase-0.5.2-tenant-boundary.md`. Branch `claude/tenant-rls` (stacked on the tenant-boundary branch).
+The `app_user` role was created with the maintainer's approval; **the app and the whole test suite now connect as it** (the table owner is `DIRECT_URL`, for migrations only). A migration enables and **forces**
+RLS with `USING` + `WITH CHECK` on `Campus`, `AuditLog` (append-only, two independent locks) and `TenantMembership` (read: tenant **or** own user; write: tenant only); `assertRlsEnforced()` makes a production process
+refuse a bypassing role; a **catalog guard** fails the build when a table with a `tenantId` lacks forced RLS or a policy; a **sixth test server** connected as the owner proves the refusal is wired in. **932 tests pass as `app_user`; 44 injected bugs — 43 caught, 1 equivalent** (nine survived the first pass and drove stronger tests; the lesson: test a policy's `WITH CHECK` with statements that return nothing). Detail in the phase record.
+
+## The app shell (2026-10-05) — built and verified
+
+Design: plan "The app shell, and the Users pages with invitations" + "As built — the shell". Record: `phases/phase-0.5.2H-app-shell.md`. Branch `claude/app-shell-users` (stacked on `claude/tenant-rls`).
+AlEemaan's shell ported and made **school-aware**: every signed-in page now lives in `src/app/(app)/` inside a sidebar / top bar / phone tab bar + More sheet; the navigation follows the school the path is in (from the
+person's own memberships, display only — the pages still guard themselves), with a school switcher for people in several schools; Users and Settings are visible "Soon" entries. 26 injected bugs: 24 caught, 1 at build time,
+1 equivalent. Full suite counts are in the phase record.
+
+## Shared API infrastructure (2026-10-05) — built and verified
+
+Design: plan §0.5.3 + "Build design" + "As built". Record: `phases/phase-0.5.3-api-infrastructure.md`. Same branch (`claude/tenant-trust-boundary`).
+Strict pagination (offset and cursor) and validation helpers, the first real tenant routes (campuses: paginated, ADMIN-only create, audited in the same
+transaction), CSRF hardening (`Sec-Fetch-Site`; `X-Forwarded-Host` no longer trusted by default), a **Redis rate-limit store** behind the same interface
+(atomic Lua, memory fallback with a circuit breaker; one conformance suite for both stores), sign-in audit events (device kind, never an IP) and a
+fail-open **breached-password check** (k-anonymity). 896 tests pass; 44 injected bugs all caught (three survived first and drove stronger tests).
+The plan's gate — the negative tests **as `app_user`** — is met by the RLS work above.
+
 ## Next action
 
 **Phases 0.5.1 → 0.5.F are merged to `master`** (the stacked PRs #1–#5 were merged into their stack bases rather than `master`,
 so they were consolidated into #6, which landed). **0.5.E (self-service) is open as
-[#7](https://github.com/roji-tech/octalve-edu-fork/pull/7)** (base `master`, head `claude/account-self-service`).
+[#7](https://github.com/roji-tech/octalve-edu-fork/pull/7)**; **0.5.2 (application layer) and 0.5.3 are pushed on `claude/tenant-trust-boundary`** (based on 0.5.E) and **0.5.2's row-level security on `claude/tenant-rls`** (based on that), no PRs yet.
 
 **The back-port to AlEemaan is done, verified and merged there** — shared names, the hardening deltas, the 72-byte
 password policy, `method="post"`, the sign-in screens it lacked and this test suite (`roji-tech/AlEemaan` #2), then
 its design language and shell (#3). Its 0.5.B–0.5.F are merged; its 0.5.E is open as [#8](https://github.com/roji-tech/AlEemaan/pull/8). From here on a change to the shared mechanism is made in both repos or logged as a divergence in both
 plan docs (§0.5.1.6 there, the shared-names table here).
 
-Then, in order: the rest of the Phase 0.5 addenda, each designed in the plan first and built in both repos
-— ~~**0.5.B** the nonce-based script CSP~~, ~~**0.5.C** password reset and change~~, ~~**0.5.D** TOTP MFA~~ (all built,
-in review/stacked), ~~**0.5.F** the dev email inbox~~ (built), ~~**0.5.E** account self-service~~ (built; invite & activate and deactivation come with the Users pages); then the tenant-trust-boundary resolver and `forTenant()` with its explicit
-RLS role setup (§0.5.2 — needs a real `app_user` Postgres role created first, and `withAuth`'s
-`roles`/`permissions` options and this repo's app shell arrive here); the shared API helpers (§0.5.3, and
-the Redis-backed rate limiter before any multi-instance SaaS deployment). Then that phase's negative-test
-verification gate — **run as the `app_user` role, not the migration owner** — before Phase 1 begins.
+Then, in order: ~~the Phase 0.5 addenda~~ (0.5.B–0.5.F, all built), ~~the tenant-trust-boundary resolver and `forTenant()`~~ and ~~its explicit RLS role setup~~ (§0.5.2 — built, verified as `app_user`),
+~~the shared API helpers and the Redis-backed rate limiter~~ (§0.5.3 — built), ~~this repo's app shell (§0.5.2-H)~~ (built, verified); **now: the Users pages with invitations (§0.5.4) — built and WIP-committed, but its mutation pass,
+a complete green run and its docs are outstanding**; then **Phase 1** (`roadmap-breakdown.md`) — every new table with its RLS policy in the same migration.
+
+**Hand-over (this session):** development has been handed to a **local Claude Code session**, which owns *all* remaining work in the order set out in
+[`handoff/TAKEOVER.md`](handoff/TAKEOVER.md) (baseline → finish 0.5.4 → lanes verification → Phase 1 slice 1 → AlEemaan port). The reviewer session pushes nothing meanwhile and will review the local session's
+`handoff/takeover-report.md` and diff when the maintainer says so. The 0.5.4 mutation set (122 mutations) and a serial runner are in `handoff/tools/`.

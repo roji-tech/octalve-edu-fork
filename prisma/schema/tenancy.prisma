@@ -11,6 +11,7 @@ model Tenant {
 
   campuses    Campus[]
   memberships TenantMembership[]
+  invitations Invitation[]
 }
 
 /// A branch/campus under one tenant (PRD §7) — distinct from multi-tenancy:
@@ -23,7 +24,10 @@ model Campus {
 
   tenant      Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   memberships TenantMembership[]
+  invitations Invitation[]
 
+  /// A school cannot have two campuses of the same name (compared exactly, after the API trims it).
+  @@unique([tenantId, name])
   @@index([tenantId])
 }
 
@@ -50,8 +54,43 @@ model TenantMembership {
   tenant Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   campus Campus? @relation(fields: [campusId], references: [id], onDelete: SetNull)
 
+  /// Set when an administrator deactivates the person IN THIS SCHOOL. The row stays (history, reactivation) but it is no
+  /// longer a membership: every reader treats a deactivated one as absent — the resolver, the person's school list, the
+  /// sign-in admin check, the audit fan-out.
+  deactivatedAt DateTime?
+
   createdAt DateTime @default(now())
 
   @@unique([userId, tenantId])
   @@index([tenantId])
+}
+
+/// An invitation to join a school (plan §0.5.4). The link carries a 256-bit random token in the URL FRAGMENT; only its
+/// SHA-256 hash is stored here — a leaked database yields no usable link. Single-use (acceptedAt), revocable (revokedAt),
+/// expiring (expiresAt). Tenant-scoped like every table with a tenantId: row-level security in the same migration, plus ONE
+/// extra read path — by the token's hash — because the invitee is not a member of anything yet when they open the link.
+model Invitation {
+  id       String  @id @default(cuid())
+  tenantId String
+  /// Lower-cased. The invitation is for whoever controls this address; opening the link is the proof.
+  email    String
+  role     Role
+  campusId String?
+
+  tokenHash String @unique
+
+  invitedById  String?
+  acceptedById String?
+  createdAt    DateTime  @default(now())
+  expiresAt    DateTime
+  acceptedAt   DateTime?
+  revokedAt    DateTime?
+
+  tenant     Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  campus     Campus? @relation(fields: [campusId], references: [id], onDelete: SetNull)
+  invitedBy  User?   @relation("InvitationsSent", fields: [invitedById], references: [id], onDelete: SetNull)
+  acceptedBy User?   @relation("InvitationsAccepted", fields: [acceptedById], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, email])
+  @@index([tenantId, createdAt])
 }

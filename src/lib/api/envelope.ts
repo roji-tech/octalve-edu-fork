@@ -11,9 +11,12 @@ export function ok<T>(
   return NextResponse.json({ data, meta, error: null }, { status });
 }
 
-export function fail(message: string, status: number, code?: string) {
+/// One field-level problem, for a 400 the client can show next to the right input.
+export type ErrorDetail = { path: string; message: string };
+
+export function fail(message: string, status: number, code?: string, details?: ErrorDetail[]) {
   return NextResponse.json(
-    { data: null, meta: {}, error: { code: code ?? String(status), message } },
+    { data: null, meta: {}, error: { code: code ?? String(status), message, ...(details && details.length > 0 ? { details } : {}) } },
     { status },
   );
 }

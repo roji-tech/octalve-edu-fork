@@ -36,12 +36,16 @@ export function Alert({
   children,
   className = "",
   id,
+  announce = true,
 }: {
   variant: Variant;
   title?: string;
   children?: ReactNode;
   className?: string;
   id?: string;
+  /// `false` for an alert that sits INSIDE a live region the caller already owns (a persistent `role="status"` container whose
+  /// content changes): a second role on the content would make some screen readers announce it twice.
+  announce?: boolean;
 }) {
   const { box, icon, Icon } = STYLES[variant];
   const assertive = variant === "error" || variant === "warning";
@@ -49,7 +53,7 @@ export function Alert({
   return (
     <div
       id={id}
-      role={assertive ? "alert" : "status"}
+      role={announce ? (assertive ? "alert" : "status") : undefined}
       className={`flex gap-3 rounded-xl border p-4 text-sm leading-relaxed ${box} ${className}`}
     >
       <Icon className={`mt-0.5 h-5 w-5 shrink-0 ${icon}`} />

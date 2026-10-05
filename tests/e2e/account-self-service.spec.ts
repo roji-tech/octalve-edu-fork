@@ -3,7 +3,7 @@ import { test, expect } from "../support/fixtures";
 import { Role, createUser, db, seedInstance, uniqueEmail, uniqueIp } from "../support/db";
 import { linkFrom, mailAfterGrace, waitForMail } from "../support/outbox";
 import { createEmailChangeToken } from "@/lib/auth/email-change";
-import { alerts, fillCredentials, signInButton, signInThroughUi } from "./helpers";
+import { alerts, fillCredentials, signInButton, signInThroughUi, HOME_URL } from "./helpers";
 
 // Self-service on the account page, in a real browser (plan §0.5.E): edit your name, change your email address
 // (the link goes to the NEW address), and see / end the devices you're signed in on.
@@ -19,7 +19,7 @@ const FIREFOX_UA = "Mozilla/5.0 (X11; Linux x86_64; rv:127.0) Gecko/20100101 Fir
 // --- Name ---------------------------------------------------------------------------------------------------
 
 test.describe("edit your name", () => {
-  test("Edit → type → Save: shown at once, persisted, the header follows, focus returns to Edit", async ({ page, isMobile }) => {
+  test("Edit → type → Save: shown at once, persisted, the header follows, focus returns to Edit", async ({ page }) => {
     const user = await createUser({ role: Role.TEACHING_STAFF, name: "Old Name" });
     await signInThroughUi(page, user);
     await page.goto("/account");
@@ -35,7 +35,8 @@ test.describe("edit your name", () => {
     await expect(page.getByRole("status").filter({ hasText: "Name updated." })).toBeVisible();
     await expect(page.getByTestId("profile-name")).toHaveText("Ọlámidé Adéṣànyà"); // trimmed and collapsed, as stored
     await expect(page.getByRole("button", { name: /^Edit name/ })).toBeFocused();
-    if (!isMobile) await expect(page.getByRole("banner").getByText("Ọlámidé Adéṣànyà")).toBeVisible(); // router.refresh()
+    // router.refresh(): the shell's account menu (in the top bar at every width) now names the new name.
+    await expect(page.getByRole("banner").getByRole("button", { name: "Account menu for Ọlámidé Adéṣànyà" })).toBeVisible();
     expect((await db.user.findUniqueOrThrow({ where: { id: user.id } })).name).toBe("Ọlámidé Adéṣànyà");
 
     await page.reload();
@@ -154,7 +155,7 @@ test.describe("change your email address", () => {
     await expect(alerts(page)).toContainText("incorrect");
     await fillCredentials(page, newEmail, user.password);
     await signInButton(page).click();
-    await expect(page).toHaveURL(/\/dashboard$/);
+    await expect(page).toHaveURL(HOME_URL);
   });
 
   test("the success screen links to sign-in", async ({ page }) => {
@@ -310,7 +311,7 @@ test.describe("active sessions", () => {
     await phone.page.reload();
     await expect(phone.page).toHaveURL(/\/login$/); // that device is out…
     await laptop.page.reload();
-    await expect(laptop.page).toHaveURL(/\/account$|\/dashboard$/); // …the other is not
+    await expect(laptop.page).toHaveURL(/\/account$|\/dashboard$|\/schools\/[a-z0-9-]+$/); // …the other is not
     await phone.context.close();
     await laptop.context.close();
   });

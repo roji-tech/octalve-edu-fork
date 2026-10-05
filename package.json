@@ -20,7 +20,10 @@
     "test:unit": "playwright test --project=unit",
     "test:api": "playwright test --project=api",
     "test:e2e": "playwright test --project=e2e-desktop --project=e2e-mobile",
-    "test:https": "playwright test --project=https"
+    "test:https": "playwright test --project=https",
+    "db:roles": "node scripts/db-roles.mjs",
+    "lanes:sync": "node scripts/lanes.mjs sync",
+    "test:lanes": "node scripts/lanes.mjs test"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
@@ -32,6 +35,7 @@
   "dependencies": {
     "@prisma/client": "6.19.3",
     "bcryptjs": "^3.0.3",
+    "ioredis": "^6.0.0",
     "next": "16.3.6",
     "qrcode": "1.5.4",
     "react": "19.2.8",

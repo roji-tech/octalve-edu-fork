@@ -22,6 +22,11 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  // `forbidden()` / `forbidden.tsx`: a real HTTP 403 for "you are signed in but this school is not yours"
+  // (domain-implementation-plan.md §0.5.2). Still flagged experimental in Next 16; the only thing it gates is the
+  // status code and the view of that one response — the authorization decision itself is ours, in
+  // lib/tenant/page-tenant.ts, not Next's.
+  experimental: { authInterrupts: true },
   async headers() {
     return [
       { source: "/:path*", headers: securityHeaders },

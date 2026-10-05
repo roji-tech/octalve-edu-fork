@@ -21,7 +21,13 @@ generator client {
   provider = "prisma-client-js"
 }
 
+// Two connection strings, two roles (domain-implementation-plan.md §0.5.2, "Two database roles"):
+//   DATABASE_URL — the RUNTIME role `app_user`: LOGIN, NOSUPERUSER, NOBYPASSRLS, DML only, no DDL. Row-level
+//                  security applies to it, which is the whole point. The running app and the test servers use it.
+//   DIRECT_URL   — the MIGRATOR: the role that owns the tables and runs `prisma migrate` (Prisma uses `directUrl`
+//                  for the CLI and never for the client). Never the runtime role.
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }

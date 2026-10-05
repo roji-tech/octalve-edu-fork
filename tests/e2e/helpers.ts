@@ -1,6 +1,10 @@
 import type { Page } from "@playwright/test";
 import { expect } from "../support/fixtures";
 
+/// Where a signed-in person lands: the front door sends someone with exactly one school straight into it
+/// (`/schools/<code>`), and everyone else stays on `/dashboard` (a picker, or "ask your administrator").
+export const HOME_URL = /\/(dashboard|schools\/[a-z0-9-]+)$/;
+
 /// Alerts in the page's <main>. Next.js also renders its own (empty)
 /// `<next-route-announcer role="alert">` outside <main>, so a bare
 /// getByRole("alert") is ambiguous.
@@ -31,7 +35,7 @@ export async function signInThroughUi(
   await fillCredentials(page, user.email, user.password);
   if (opts.remember) await keepSignedInBox(page).check();
   await signInButton(page).click();
-  await expect(page).toHaveURL(/\/dashboard$/);
+  await expect(page).toHaveURL(HOME_URL);
 }
 
 /// Signs out through whatever this repo's signed-in screens offer: a "Sign out" button in the header
@@ -70,7 +74,7 @@ export async function signInWithSecondFactor(
     await codeField(page).fill(factor.code);
   }
   await verifyButton(page).click();
-  await expect(page).toHaveURL(/\/dashboard$/);
+  await expect(page).toHaveURL(HOME_URL);
 }
 
 /// Requests the page makes to the login API, for "did it send anything?" checks.

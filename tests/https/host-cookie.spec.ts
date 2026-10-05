@@ -1,15 +1,7 @@
 import { test, expect } from "../support/fixtures";
 import { HTTPS_URL } from "../support/env";
 import { Role, createUser, db, resetDatabase, seedInstance } from "../support/db";
-import {
-  alerts,
-  emailField,
-  fillCredentials,
-  keepSignedInBox,
-  passwordField,
-  signInButton,
-  signOut,
-} from "../e2e/helpers";
+import { alerts, emailField, fillCredentials, keepSignedInBox, passwordField, signInButton, signOut, HOME_URL } from "../e2e/helpers";
 
 // The only environment where the session cookie's production shape can be
 // checked honestly: real TLS in front of a production build whose APP_URL is
@@ -35,7 +27,7 @@ test.describe("the __Host- session cookie over real HTTPS", () => {
     await fillCredentials(page, user.email, user.password);
     await keepSignedInBox(page).check(); // remembered → a persistent cookie
     await signInButton(page).click();
-    await expect(page).toHaveURL(/\/dashboard$/);
+    await expect(page).toHaveURL(HOME_URL);
     await expect(page.getByRole("heading", { name: /Welcome/ })).toBeVisible();
 
     const cookie = await cookieNamed(context, COOKIE);
@@ -60,7 +52,7 @@ test.describe("the __Host- session cookie over real HTTPS", () => {
     await expect(keepSignedInBox(page)).not.toBeChecked();
     await fillCredentials(page, user.email, user.password);
     await signInButton(page).click();
-    await expect(page).toHaveURL(/\/dashboard$/);
+    await expect(page).toHaveURL(HOME_URL);
 
     const cookie = await cookieNamed(context, COOKIE);
     expect(cookie, "Chromium must still accept it as a __Host- cookie").toBeDefined();
@@ -98,7 +90,7 @@ test.describe("the __Host- session cookie over real HTTPS", () => {
     await page.goto("/login");
     await fillCredentials(page, user.email, user.password);
     await signInButton(page).click();
-    await expect(page).toHaveURL(/\/dashboard$/);
+    await expect(page).toHaveURL(HOME_URL);
     expect(await cookieNamed(context, COOKIE), "precondition: cookie set before logout").toBeDefined();
     expect(await db.session.count({ where: { userId: user.id } })).toBe(1);
 
@@ -118,7 +110,7 @@ test.describe("the __Host- session cookie over real HTTPS", () => {
     await page.goto("/login");
     await fillCredentials(page, user.email, user.password);
     await signInButton(page).click();
-    await expect(page).toHaveURL(/\/dashboard$/);
+    await expect(page).toHaveURL(HOME_URL);
 
     const logout = page.waitForResponse((res) => res.url().endsWith("/api/v1/auth/logout"));
     await signOut(page);
@@ -137,7 +129,7 @@ test.describe("the __Host- session cookie over real HTTPS", () => {
     await page.goto("/login");
     await fillCredentials(page, user.email, user.password);
     await signInButton(page).click();
-    await expect(page).toHaveURL(/\/dashboard$/);
+    await expect(page).toHaveURL(HOME_URL);
 
     await db.session.deleteMany({ where: { userId: user.id } });
     await page.reload();
@@ -145,7 +137,7 @@ test.describe("the __Host- session cookie over real HTTPS", () => {
     // …and signing in again replaces whatever stale cookie the browser still holds.
     await fillCredentials(page, user.email, user.password);
     await signInButton(page).click();
-    await expect(page).toHaveURL(/\/dashboard$/);
+    await expect(page).toHaveURL(HOME_URL);
     expect(await cookieNamed(context, COOKIE)).toBeDefined();
   });
 
