@@ -229,6 +229,20 @@ test.describe("activating, closing, archiving (decision 10)", () => {
     expect(await actions(two.id)).toEqual(["SESSION_CREATED", "SESSION_ACTIVATED"]);
   });
 
+  test("a refusal discovered AFTER the old session was closed rolls the close back: activating a CLOSED session with closeCurrent leaves the active one active", async () => {
+    const one = await session("2026/2027");
+    const two = await session("2027/2028", y2027);
+    const three = await session("2028/2029", { startDate: "2028-09-01", endDate: "2029-07-31" });
+    await activateSession(admin(), boss.id, one.id, { closeCurrent: false });
+    await activateSession(admin(), boss.id, two.id, { closeCurrent: true }); // one is now CLOSED, two ACTIVE
+    await activateSession(admin(), boss.id, three.id, { closeCurrent: true }); // two CLOSED, three ACTIVE
+    const refused = await activateSession(admin(), boss.id, one.id, { closeCurrent: true }); // one is CLOSED, not PLANNED
+    expect(refused).toMatchObject({ ok: false, reason: "WRONG_STATE" });
+    expect((await db.academicSession.findUniqueOrThrow({ where: { id: three.id } })).status).toBe("ACTIVE"); // NOT closed by the failed attempt
+    expect((await db.academicSession.findUniqueOrThrow({ where: { id: one.id } })).status).toBe("CLOSED");
+    expect(await actions(three.id)).toEqual(["SESSION_CREATED", "SESSION_ACTIVATED"]); // no stray SESSION_CLOSED
+  });
+
   test("the scopes are independent: a campus can run its own active session beside the school-wide one — but not two of its own", async () => {
     const wide = await session("School-wide");
     const northOwn = await session("North calendar", y2026, north());

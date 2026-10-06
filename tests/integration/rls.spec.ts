@@ -813,6 +813,99 @@ test.describe("ClassGroup, ClassArm, Subject, SubjectOffering: tenant-scoped (Ph
   });
 });
 
+test.describe("AssessmentScheme, AssessmentComponent, GradeScale, GradeBand: tenant-scoped (Phase 1.1c/d)", () => {
+  let schemeA: { id: string };
+  let schemeB: { id: string };
+  let scaleA: { id: string };
+  let scaleB: { id: string };
+  test.beforeAll(async () => {
+    schemeA = await db.assessmentScheme.create({ data: { tenantId: a.id, name: "RLS scheme A", examMax: 60 } });
+    schemeB = await db.assessmentScheme.create({ data: { tenantId: b.id, name: "RLS scheme B", examMax: 60 } });
+    await db.assessmentComponent.create({ data: { tenantId: a.id, schemeId: schemeA.id, name: "CA", maxScore: 40, sortOrder: 0 } });
+    await db.assessmentComponent.create({ data: { tenantId: b.id, schemeId: schemeB.id, name: "CA", maxScore: 40, sortOrder: 0 } });
+    scaleA = await db.gradeScale.create({ data: { tenantId: a.id, name: "RLS scale A" } });
+    scaleB = await db.gradeScale.create({ data: { tenantId: b.id, name: "RLS scale B" } });
+    await db.gradeBand.create({
+      data: { tenantId: a.id, scaleId: scaleA.id, minScore: 0, maxScore: 100, letter: "P", remark: "Pass", sortOrder: 0 },
+    });
+    await db.gradeBand.create({
+      data: { tenantId: b.id, scaleId: scaleB.id, minScore: 0, maxScore: 100, letter: "P", remark: "Pass", sortOrder: 0 },
+    });
+  });
+
+  test("no context = no rows; a tenant reads ITS rows in all four tables and never another's", async () => {
+    expect(await prisma.assessmentScheme.findMany()).toEqual([]);
+    expect(await prisma.assessmentComponent.findMany()).toEqual([]);
+    expect(await prisma.gradeScale.findMany()).toEqual([]);
+    expect(await prisma.gradeBand.findMany()).toEqual([]);
+    for (const read of [
+      (tx: Parameters<Parameters<typeof asTenant>[1]>[0]) => tx.assessmentScheme.findMany(),
+      (tx: Parameters<Parameters<typeof asTenant>[1]>[0]) => tx.assessmentComponent.findMany(),
+      (tx: Parameters<Parameters<typeof asTenant>[1]>[0]) => tx.gradeScale.findMany(),
+      (tx: Parameters<Parameters<typeof asTenant>[1]>[0]) => tx.gradeBand.findMany(),
+    ]) {
+      const rows = await asTenant<{ tenantId: string }[]>(a, read);
+      expect(rows.length).toBeGreaterThan(0);
+      expect(rows.every((r) => r.tenantId === a.id)).toBe(true);
+    }
+    expect(await asTenant(a, (tx) => tx.assessmentScheme.findUnique({ where: { id: schemeB.id } }))).toBeNull();
+    expect(await asTenant(a, (tx) => tx.gradeScale.findUnique({ where: { id: scaleB.id } }))).toBeNull();
+  });
+
+  test("WITH CHECK: A's context cannot create rows for B in any of the four tables, nor MOVE its own to B (statements that read nothing)", async () => {
+    await expect(
+      asTenant(a, (tx) => tx.assessmentScheme.createMany({ data: [{ tenantId: b.id, name: "smuggled", examMax: 60 }] })),
+    ).rejects.toThrow(violation);
+    await expect(
+      asTenant(a, (tx) =>
+        tx.assessmentComponent.createMany({ data: [{ tenantId: b.id, schemeId: schemeB.id, name: "X", maxScore: 5, sortOrder: 1 }] }),
+      ),
+    ).rejects.toThrow(violation);
+    await expect(asTenant(a, (tx) => tx.gradeScale.createMany({ data: [{ tenantId: b.id, name: "smuggled" }] }))).rejects.toThrow(
+      violation,
+    );
+    await expect(
+      asTenant(a, (tx) =>
+        tx.gradeBand.createMany({
+          data: [{ tenantId: b.id, scaleId: scaleB.id, minScore: 0, maxScore: 50, letter: "Z", remark: "Z", sortOrder: 1 }],
+        }),
+      ),
+    ).rejects.toThrow(violation);
+    for (const table of ["AssessmentScheme", "AssessmentComponent", "GradeScale", "GradeBand"]) {
+      await expect(
+        asTenant(a, (tx) => tx.$executeRawUnsafe(`UPDATE "${table}" SET "tenantId" = $1`, b.id)),
+        table,
+      ).rejects.toThrow(violation);
+    }
+    expect(await db.assessmentScheme.count({ where: { tenantId: b.id } })).toBe(1);
+    expect(await db.gradeBand.count({ where: { tenantId: b.id } })).toBe(1);
+  });
+
+  test("A cannot UPDATE or DELETE B's rows; it cannot DELETE its own scheme or scale (no DELETE policy) — but CAN replace its own components and bands (the two delete policies)", async () => {
+    expect(
+      (
+        await asTenant<{ count: number }>(a, (tx) =>
+          tx.assessmentScheme.updateMany({ where: { tenantId: b.id }, data: { name: "hijacked" } }),
+        )
+      ).count,
+    ).toBe(0);
+    expect((await asTenant<{ count: number }>(a, (tx) => tx.assessmentComponent.deleteMany({ where: { tenantId: b.id } }))).count).toBe(0);
+    expect((await asTenant<{ count: number }>(a, (tx) => tx.gradeBand.deleteMany({ where: { tenantId: b.id } }))).count).toBe(0);
+    expect((await asTenant<{ count: number }>(a, (tx) => tx.assessmentScheme.deleteMany())).count).toBe(0);
+    expect((await asTenant<{ count: number }>(a, (tx) => tx.gradeScale.deleteMany())).count).toBe(0);
+    expect((await db.assessmentScheme.findUniqueOrThrow({ where: { id: schemeB.id } })).name).toBe("RLS scheme B");
+    expect((await asTenant<{ count: number }>(a, (tx) => tx.assessmentComponent.deleteMany())).count).toBe(1); // its own
+    expect((await asTenant<{ count: number }>(a, (tx) => tx.gradeBand.deleteMany())).count).toBe(1); // its own
+    expect(await db.assessmentComponent.count({ where: { tenantId: b.id } })).toBe(1);
+    expect(await db.gradeBand.count({ where: { tenantId: b.id } })).toBe(1);
+  });
+
+  test("the user and invitation contexts read none of it", async () => {
+    expect(await forUser(userBoth.id).transaction((tx) => tx.assessmentScheme.findMany())).toEqual([]);
+    expect(await forInvitation(hashOf(a.code)).transaction((tx) => tx.gradeScale.findMany())).toEqual([]);
+  });
+});
+
 test.describe("catalog guard", () => {
   // Tables with NO tenantId column — by design, and each for a stated reason. A NEW table must either carry a tenantId
   // (and then the test below demands forced RLS and a policy) or be added here on purpose, in review.
@@ -840,10 +933,14 @@ test.describe("catalog guard", () => {
     expect(rows.map((r) => r.relname).sort()).toEqual([
       "AcademicPeriod",
       "AcademicSession",
+      "AssessmentComponent",
+      "AssessmentScheme",
       "AuditLog",
       "Campus",
       "ClassArm",
       "ClassGroup",
+      "GradeBand",
+      "GradeScale",
       "Invitation",
       "SchoolSettings",
       "Subject",

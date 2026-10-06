@@ -146,6 +146,26 @@ export const refuse = (reason: AcademicFailure, detail?: Record<string, unknown>
   ...(detail ? { detail } : {}),
 });
 
+/// A refusal found AFTER a write in the same transaction. Returning it would COMMIT the writes made before it (half a change), so this throws — the
+/// transaction rolls back — and `rollingBack` turns the throw back into the refusal for the caller. Prefer checking BEFORE writing; use this for what
+/// only a conditional write can tell (a lost race).
+class Refusal extends Error {
+  constructor(readonly result: ReturnType<typeof refuse>) {
+    super(result.reason);
+  }
+}
+export const refuseAndRollBack = (reason: AcademicFailure, detail?: Record<string, unknown>): never => {
+  throw new Refusal(refuse(reason, detail));
+};
+export async function rollingBack<T>(run: () => Promise<T>): Promise<T | ReturnType<typeof refuse>> {
+  try {
+    return await run();
+  } catch (error) {
+    if (error instanceof Refusal) return error.result;
+    throw error;
+  }
+}
+
 /// The scope key a session belongs to: "" for school-wide, else the campus id. One lock per (school, scope) serialises every
 /// check-then-write on that scope's calendar.
 const scopeKey = (campusId: string | null) => campusId ?? "";
@@ -374,46 +394,48 @@ export async function activateSession(
   options: { closeCurrent: boolean },
 ): Promise<AcademicResult<{ session: SessionView; closed: { id: string; label: string } | null }>> {
   const { tenantId } = tenant;
-  return tenant.run(async (tx) => {
-    const target = await findVisible(tx, tenant, id);
-    if (!target) return refuse("NOT_FOUND");
-    if (target.archivedAt) return refuse("ARCHIVED");
-    await lockScope(tx, tenantId, target.campusId);
-    const active = await tx.academicSession.findFirst({
-      where: { tenantId, campusId: target.campusId, status: "ACTIVE", archivedAt: null, id: { not: id } },
-      select: { id: true, label: true },
-    });
-    if (active && !options.closeCurrent) return refuse("SESSION_ALREADY_ACTIVE", { sessionId: active.id, label: active.label });
-
-    let closed: { id: string; label: string } | null = null;
-    if (active) {
-      const done = await tx.academicSession.updateMany({
-        where: { id: active.id, tenantId, status: "ACTIVE" },
-        data: { status: "CLOSED" },
+  return rollingBack(() =>
+    tenant.run(async (tx) => {
+      const target = await findVisible(tx, tenant, id);
+      if (!target) return refuse("NOT_FOUND");
+      if (target.archivedAt) return refuse("ARCHIVED");
+      await lockScope(tx, tenantId, target.campusId);
+      const active = await tx.academicSession.findFirst({
+        where: { tenantId, campusId: target.campusId, status: "ACTIVE", archivedAt: null, id: { not: id } },
+        select: { id: true, label: true },
       });
-      if (done.count !== 1) return refuse("WRONG_STATE");
-      await tx.academicPeriod.updateMany({ where: { tenantId, sessionId: active.id, isCurrent: true }, data: { isCurrent: false } });
-      await audit(tx, tenantId, actorUserId, "SESSION_CLOSED", active.id, { status: "ACTIVE" }, { status: "CLOSED", closedToOpen: id });
-      closed = active;
-    }
-    // The conditional update decides: it changes exactly one row only if the session is still PLANNED and live.
-    const claimed = await tx.academicSession.updateMany({
-      where: { id, tenantId, status: "PLANNED", archivedAt: null },
-      data: { status: "ACTIVE" },
-    });
-    if (claimed.count !== 1) return refuse("WRONG_STATE");
-    await audit(
-      tx,
-      tenantId,
-      actorUserId,
-      "SESSION_ACTIVATED",
-      id,
-      { status: "PLANNED" },
-      { status: "ACTIVE", ...(closed ? { closed: closed.id } : {}) },
-    );
-    const row = await tx.academicSession.findUniqueOrThrow({ where: { id }, include: SESSION_INCLUDE });
-    return { ok: true, session: toSessionView(row), closed };
-  });
+      if (active && !options.closeCurrent) return refuse("SESSION_ALREADY_ACTIVE", { sessionId: active.id, label: active.label });
+
+      let closed: { id: string; label: string } | null = null;
+      if (active) {
+        const done = await tx.academicSession.updateMany({
+          where: { id: active.id, tenantId, status: "ACTIVE" },
+          data: { status: "CLOSED" },
+        });
+        if (done.count !== 1) return refuseAndRollBack("WRONG_STATE");
+        await tx.academicPeriod.updateMany({ where: { tenantId, sessionId: active.id, isCurrent: true }, data: { isCurrent: false } });
+        await audit(tx, tenantId, actorUserId, "SESSION_CLOSED", active.id, { status: "ACTIVE" }, { status: "CLOSED", closedToOpen: id });
+        closed = active;
+      }
+      // The conditional update decides: it changes exactly one row only if the session is still PLANNED and live.
+      const claimed = await tx.academicSession.updateMany({
+        where: { id, tenantId, status: "PLANNED", archivedAt: null },
+        data: { status: "ACTIVE" },
+      });
+      if (claimed.count !== 1) return refuseAndRollBack("WRONG_STATE");
+      await audit(
+        tx,
+        tenantId,
+        actorUserId,
+        "SESSION_ACTIVATED",
+        id,
+        { status: "PLANNED" },
+        { status: "ACTIVE", ...(closed ? { closed: closed.id } : {}) },
+      );
+      const row = await tx.academicSession.findUniqueOrThrow({ where: { id }, include: SESSION_INCLUDE });
+      return { ok: true, session: toSessionView(row), closed };
+    }),
+  );
 }
 
 export async function closeSession(tenant: TenantCtx, actorUserId: string, id: string): Promise<AcademicResult<{ session: SessionView }>> {
@@ -706,29 +728,42 @@ export async function setCurrentPeriod(
   periodId: string,
 ): Promise<AcademicResult<{ period: PeriodView; changed: boolean }>> {
   const { tenantId } = tenant;
-  return tenant.run(async (tx) => {
-    const current = await tx.academicPeriod.findFirst({ where: { id: periodId, tenantId } });
-    if (!current) return refuse("NOT_FOUND");
-    const session = await findVisible(tx, tenant, current.sessionId);
-    if (!session) return refuse("NOT_FOUND");
-    if (current.archivedAt || session.archivedAt) return refuse("ARCHIVED");
-    if (session.status !== "ACTIVE") return refuse("SESSION_NOT_ACTIVE");
-    await lockSession(tx, tenantId, current.sessionId);
-    if (current.isCurrent) return { ok: true, period: toPeriodView(current), changed: false };
-    const previous = await tx.academicPeriod.findFirst({
-      where: { tenantId, sessionId: current.sessionId, isCurrent: true, archivedAt: null },
-      select: { id: true },
-    });
-    await tx.academicPeriod.updateMany({ where: { tenantId, sessionId: current.sessionId, isCurrent: true }, data: { isCurrent: false } });
-    const moved = await tx.academicPeriod.updateMany({
-      where: { id: periodId, tenantId, archivedAt: null, isCurrent: false },
-      data: { isCurrent: true },
-    });
-    if (moved.count !== 1) return refuse("WRONG_STATE");
-    await auditPeriod(tx, tenantId, actorUserId, "PERIOD_SET_CURRENT", periodId, { current: previous?.id ?? null }, { current: periodId });
-    const row = await tx.academicPeriod.findUniqueOrThrow({ where: { id: periodId } });
-    return { ok: true, period: toPeriodView(row), changed: true };
-  });
+  return rollingBack(() =>
+    tenant.run(async (tx) => {
+      const current = await tx.academicPeriod.findFirst({ where: { id: periodId, tenantId } });
+      if (!current) return refuse("NOT_FOUND");
+      const session = await findVisible(tx, tenant, current.sessionId);
+      if (!session) return refuse("NOT_FOUND");
+      if (current.archivedAt || session.archivedAt) return refuse("ARCHIVED");
+      if (session.status !== "ACTIVE") return refuse("SESSION_NOT_ACTIVE");
+      await lockSession(tx, tenantId, current.sessionId);
+      if (current.isCurrent) return { ok: true, period: toPeriodView(current), changed: false };
+      const previous = await tx.academicPeriod.findFirst({
+        where: { tenantId, sessionId: current.sessionId, isCurrent: true, archivedAt: null },
+        select: { id: true },
+      });
+      await tx.academicPeriod.updateMany({
+        where: { tenantId, sessionId: current.sessionId, isCurrent: true },
+        data: { isCurrent: false },
+      });
+      const moved = await tx.academicPeriod.updateMany({
+        where: { id: periodId, tenantId, archivedAt: null, isCurrent: false },
+        data: { isCurrent: true },
+      });
+      if (moved.count !== 1) return refuseAndRollBack("WRONG_STATE");
+      await auditPeriod(
+        tx,
+        tenantId,
+        actorUserId,
+        "PERIOD_SET_CURRENT",
+        periodId,
+        { current: previous?.id ?? null },
+        { current: periodId },
+      );
+      const row = await tx.academicPeriod.findUniqueOrThrow({ where: { id: periodId } });
+      return { ok: true, period: toPeriodView(row), changed: true };
+    }),
+  );
 }
 
 export async function archivePeriod(

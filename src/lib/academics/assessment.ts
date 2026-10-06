@@ -263,11 +263,12 @@ export async function newSchemeVersion(
     });
     if (!parsed.ok) return refuse("SCHEME_INVALID", parsed.detail);
     await lockSchemes(tx, tenantId);
-    // the predecessor leaves the "live" set FIRST, so the one-live-per-scope and unique-name indexes admit its successor
-    const archived = await tx.assessmentScheme.updateMany({ where: { id, tenantId, archivedAt: null }, data: { archivedAt: new Date() } });
-    if (archived.count !== 1) return refuse("WRONG_STATE");
+    // checked BEFORE the first write: a refusal after it would commit the predecessor's archiving without a successor
     if (name !== old.name && (await tx.assessmentScheme.findFirst({ where: { tenantId, name, archivedAt: null }, select: { id: true } })))
       return refuse("NAME_TAKEN");
+    // the predecessor leaves the "live" set FIRST, so the one-live-per-scope and unique-name indexes admit its successor
+    const archived = await tx.assessmentScheme.updateMany({ where: { id, tenantId, archivedAt: null }, data: { archivedAt: new Date() } });
+    if (archived.count !== 1) return refuse("WRONG_STATE"); // nothing was written yet
     const created = await tx.assessmentScheme.create({
       data: {
         tenantId,

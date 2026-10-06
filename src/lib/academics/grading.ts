@@ -3,7 +3,7 @@ import type { Tx } from "@/lib/tenant/for-tenant";
 import type { TenantAuthContext } from "@/lib/auth/with-auth";
 import { cleanName } from "@/lib/academics/rules";
 import { checkBands, gradeFor, type BandInput, type ScaleProblem } from "@/lib/academics/scoring";
-import { auditAcademic, refuse, type AcademicResult } from "@/lib/academics/sessions";
+import { auditAcademic, refuse, refuseAndRollBack, rollingBack, type AcademicResult } from "@/lib/academics/sessions";
 
 // Grade scales as data (plan "Build design — Phase 1.0 and 1.1", decision 15): bands of score → letter → remark, contiguous from 0 to 100 with no gap
 // and no overlap for ANY decimal score, versioned like assessment schemes (edited in place while unlocked; locked by `lockScale` when a result first
@@ -223,14 +223,15 @@ export async function newScaleVersion(
     const parsed = parseBands(changes.bands ?? before.bands);
     if (!parsed.ok) return refuse("BANDS_INVALID", parsed.detail);
     await lockScales(tx, tenantId);
+    // checked BEFORE the first write: a refusal after it would commit the predecessor's archiving without a successor
+    if (name !== old.name && (await tx.gradeScale.findFirst({ where: { tenantId, name, archivedAt: null }, select: { id: true } })))
+      return refuse("NAME_TAKEN");
     // the predecessor leaves the live set first (and gives up the default flag), so the unique indexes admit its successor
     const archived = await tx.gradeScale.updateMany({
       where: { id, tenantId, archivedAt: null },
       data: { archivedAt: new Date(), isDefault: false },
     });
-    if (archived.count !== 1) return refuse("WRONG_STATE");
-    if (name !== old.name && (await tx.gradeScale.findFirst({ where: { tenantId, name, archivedAt: null }, select: { id: true } })))
-      return refuse("NAME_TAKEN");
+    if (archived.count !== 1) return refuse("WRONG_STATE"); // nothing was written yet
     const created = await tx.gradeScale.create({
       data: { tenantId, name, isDefault: old.isDefault, version: old.version + 1, supersedesId: id },
     });
@@ -271,28 +272,33 @@ export async function makeDefaultScale(
   id: string,
 ): Promise<AcademicResult<{ scale: ScaleView; changed: boolean }>> {
   const { tenantId } = tenant;
-  return tenant.run(async (tx) => {
-    const current = await findScale(tx, tenantId, id);
-    if (!current) return refuse("NOT_FOUND");
-    if (current.archivedAt) return refuse("ARCHIVED");
-    if (current.isDefault) return { ok: true, scale: toScale(current), changed: false };
-    await lockScales(tx, tenantId);
-    const previous = await tx.gradeScale.findFirst({ where: { tenantId, isDefault: true, archivedAt: null }, select: { id: true } });
-    await tx.gradeScale.updateMany({ where: { tenantId, isDefault: true }, data: { isDefault: false } });
-    const done = await tx.gradeScale.updateMany({ where: { id, tenantId, archivedAt: null, isDefault: false }, data: { isDefault: true } });
-    if (done.count !== 1) return refuse("WRONG_STATE");
-    await auditAcademic(
-      tx,
-      tenantId,
-      actorUserId,
-      "GradeScale",
-      "GRADE_SCALE_DEFAULT_CHANGED",
-      id,
-      { defaultId: previous?.id ?? null },
-      { defaultId: id },
-    );
-    return { ok: true, scale: toScale((await findScale(tx, tenantId, id))!), changed: true };
-  });
+  return rollingBack(() =>
+    tenant.run(async (tx) => {
+      const current = await findScale(tx, tenantId, id);
+      if (!current) return refuse("NOT_FOUND");
+      if (current.archivedAt) return refuse("ARCHIVED");
+      if (current.isDefault) return { ok: true, scale: toScale(current), changed: false };
+      await lockScales(tx, tenantId);
+      const previous = await tx.gradeScale.findFirst({ where: { tenantId, isDefault: true, archivedAt: null }, select: { id: true } });
+      await tx.gradeScale.updateMany({ where: { tenantId, isDefault: true }, data: { isDefault: false } });
+      const done = await tx.gradeScale.updateMany({
+        where: { id, tenantId, archivedAt: null, isDefault: false },
+        data: { isDefault: true },
+      });
+      if (done.count !== 1) return refuseAndRollBack("WRONG_STATE");
+      await auditAcademic(
+        tx,
+        tenantId,
+        actorUserId,
+        "GradeScale",
+        "GRADE_SCALE_DEFAULT_CHANGED",
+        id,
+        { defaultId: previous?.id ?? null },
+        { defaultId: id },
+      );
+      return { ok: true, scale: toScale((await findScale(tx, tenantId, id))!), changed: true };
+    }),
+  );
 }
 
 /// Archives a scale — refused for the DEFAULT one (make another the default first), so the school is never left without one by accident.
