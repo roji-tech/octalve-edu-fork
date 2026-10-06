@@ -734,6 +734,85 @@ test.describe("AcademicSession and AcademicPeriod: tenant-scoped, never deletabl
   });
 });
 
+test.describe("ClassGroup, ClassArm, Subject, SubjectOffering: tenant-scoped (Phase 1.1b)", () => {
+  let groupA: { id: string };
+  let groupB: { id: string };
+  let subjectA: { id: string };
+  let subjectB: { id: string };
+  test.beforeAll(async () => {
+    groupA = await db.classGroup.create({ data: { tenantId: a.id, name: "RLS group A" } });
+    groupB = await db.classGroup.create({ data: { tenantId: b.id, name: "RLS group B" } });
+    subjectA = await db.subject.create({ data: { tenantId: a.id, name: "RLS subject A" } });
+    subjectB = await db.subject.create({ data: { tenantId: b.id, name: "RLS subject B" } });
+    await db.classArm.create({ data: { tenantId: a.id, classGroupId: groupA.id, name: "A" } });
+    await db.classArm.create({ data: { tenantId: b.id, classGroupId: groupB.id, name: "A" } });
+    await db.subjectOffering.create({ data: { tenantId: a.id, classGroupId: groupA.id, subjectId: subjectA.id } });
+    await db.subjectOffering.create({ data: { tenantId: b.id, classGroupId: groupB.id, subjectId: subjectB.id } });
+  });
+
+  test("no context = no rows; a tenant reads ITS rows in all four tables and never another's", async () => {
+    expect(await prisma.classGroup.findMany()).toEqual([]);
+    expect(await prisma.classArm.findMany()).toEqual([]);
+    expect(await prisma.subject.findMany()).toEqual([]);
+    expect(await prisma.subjectOffering.findMany()).toEqual([]);
+    for (const read of [
+      (tx: Parameters<Parameters<typeof asTenant>[1]>[0]) => tx.classGroup.findMany(),
+      (tx: Parameters<Parameters<typeof asTenant>[1]>[0]) => tx.classArm.findMany(),
+      (tx: Parameters<Parameters<typeof asTenant>[1]>[0]) => tx.subject.findMany(),
+      (tx: Parameters<Parameters<typeof asTenant>[1]>[0]) => tx.subjectOffering.findMany(),
+    ]) {
+      const rows = await asTenant<{ tenantId: string }[]>(a, read);
+      expect(rows.length).toBeGreaterThan(0);
+      expect(rows.every((r) => r.tenantId === a.id)).toBe(true);
+    }
+    expect(await asTenant(a, (tx) => tx.classGroup.findUnique({ where: { id: groupB.id } }))).toBeNull();
+    expect(await asTenant(a, (tx) => tx.subject.findUnique({ where: { id: subjectB.id } }))).toBeNull();
+  });
+
+  test("WITH CHECK: A's context cannot create rows for B in any of the four tables, nor MOVE its own to B (statements that read nothing)", async () => {
+    await expect(asTenant(a, (tx) => tx.classGroup.createMany({ data: [{ tenantId: b.id, name: "smuggled" }] }))).rejects.toThrow(
+      violation,
+    );
+    await expect(
+      asTenant(a, (tx) => tx.classArm.createMany({ data: [{ tenantId: b.id, classGroupId: groupB.id, name: "smuggled" }] })),
+    ).rejects.toThrow(violation);
+    await expect(asTenant(a, (tx) => tx.subject.createMany({ data: [{ tenantId: b.id, name: "smuggled" }] }))).rejects.toThrow(violation);
+    await expect(
+      asTenant(a, (tx) => tx.subjectOffering.createMany({ data: [{ tenantId: b.id, classGroupId: groupB.id, subjectId: subjectB.id }] })),
+    ).rejects.toThrow(violation);
+    for (const table of ["ClassGroup", "ClassArm", "Subject"]) {
+      await expect(
+        asTenant(a, (tx) => tx.$executeRawUnsafe(`UPDATE "${table}" SET "tenantId" = $1`, b.id)),
+        table,
+      ).rejects.toThrow(violation);
+    }
+    // an offering has NO UPDATE policy at all (it is added or removed, never edited): the statement finds no row it may touch
+    expect(await asTenant<number>(a, (tx) => tx.$executeRawUnsafe(`UPDATE "SubjectOffering" SET "tenantId" = $1`, b.id))).toBe(0);
+    expect(await db.classGroup.count({ where: { tenantId: b.id } })).toBe(1);
+    expect(await db.subjectOffering.count({ where: { tenantId: b.id } })).toBe(1);
+  });
+
+  test("A cannot UPDATE or DELETE B's rows; it cannot DELETE its own group, arm or subject (no DELETE policy) — but it CAN remove its own offering (the one delete policy)", async () => {
+    expect(
+      (await asTenant<{ count: number }>(a, (tx) => tx.classGroup.updateMany({ where: { tenantId: b.id }, data: { name: "hijacked" } })))
+        .count,
+    ).toBe(0);
+    expect((await asTenant<{ count: number }>(a, (tx) => tx.subjectOffering.deleteMany({ where: { tenantId: b.id } }))).count).toBe(0);
+    expect((await asTenant<{ count: number }>(a, (tx) => tx.classArm.deleteMany())).count).toBe(0);
+    expect((await asTenant<{ count: number }>(a, (tx) => tx.classGroup.deleteMany())).count).toBe(0);
+    expect((await asTenant<{ count: number }>(a, (tx) => tx.subject.deleteMany())).count).toBe(0);
+    expect((await db.classGroup.findUniqueOrThrow({ where: { id: groupB.id } })).name).toBe("RLS group B");
+    expect((await asTenant<{ count: number }>(a, (tx) => tx.subjectOffering.deleteMany())).count).toBe(1); // its own offering
+    expect(await db.subjectOffering.count({ where: { tenantId: b.id } })).toBe(1);
+    await db.subjectOffering.create({ data: { tenantId: a.id, classGroupId: groupA.id, subjectId: subjectA.id } }); // restore
+  });
+
+  test("the user and invitation contexts read none of it", async () => {
+    expect(await forUser(userBoth.id).transaction((tx) => tx.classGroup.findMany())).toEqual([]);
+    expect(await forInvitation(hashOf(a.code)).transaction((tx) => tx.subject.findMany())).toEqual([]);
+  });
+});
+
 test.describe("catalog guard", () => {
   // Tables with NO tenantId column — by design, and each for a stated reason. A NEW table must either carry a tenantId
   // (and then the test below demands forced RLS and a policy) or be added here on purpose, in review.
@@ -763,8 +842,12 @@ test.describe("catalog guard", () => {
       "AcademicSession",
       "AuditLog",
       "Campus",
+      "ClassArm",
+      "ClassGroup",
       "Invitation",
       "SchoolSettings",
+      "Subject",
+      "SubjectOffering",
       "TenantMembership",
     ]); // update this list WITH the migration
     for (const row of rows) {

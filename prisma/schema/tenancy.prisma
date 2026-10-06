@@ -26,6 +26,10 @@ model Tenant {
   settings    SchoolSettings?
   sessions    AcademicSession[]
   periods     AcademicPeriod[]
+  classGroups ClassGroup[]
+  classArms   ClassArm[]
+  subjects    Subject[]
+  offerings   SubjectOffering[]
 }
 
 /// A branch/campus under one tenant (PRD §7) — distinct from multi-tenancy:
@@ -40,6 +44,7 @@ model Campus {
   memberships TenantMembership[]
   invitations Invitation[]
   sessions    AcademicSession[]
+  classGroups ClassGroup[]
 
   /// A school cannot have two campuses of the same name (compared exactly, after the API trims it).
   @@unique([tenantId, name])

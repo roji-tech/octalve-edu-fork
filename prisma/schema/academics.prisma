@@ -66,3 +66,79 @@ model AcademicPeriod {
   @@unique([tenantId, id])
   @@index([tenantId, sessionId])
 }
+
+// --- Classes, arms and subjects (Phase 1.1, family B; decision 13) ---
+
+/// A class group ("JSS1", "Year 10", "Cohort A"). campusId null = offered on every campus; admin-configurable on every campus.
+model ClassGroup {
+  id         String    @id @default(cuid())
+  tenantId   String
+  campusId   String?
+  name       String
+  /// The progression order promotion will use (1.4). Not unique: two groups may share a rung (parallel streams).
+  sortOrder  Int       @default(0)
+  archivedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @default(now()) @updatedAt
+
+  tenant    Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  campus    Campus?           @relation(fields: [tenantId, campusId], references: [tenantId, id], onDelete: NoAction)
+  arms      ClassArm[]
+  offerings SubjectOffering[]
+
+  @@unique([tenantId, id])
+  @@index([tenantId])
+}
+
+/// An arm of a class group ("A", "B"). Capacity lives on the arm, not the group ("JSS1 is full" is not a real statement; "JSS1-A is full" is).
+model ClassArm {
+  id           String    @id @default(cuid())
+  tenantId     String
+  classGroupId String
+  name         String
+  /// null = uncapped. Display-only in the MVP (nothing automates on it yet).
+  capacity     Int?
+  archivedAt   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @default(now()) @updatedAt
+
+  tenant     Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  classGroup ClassGroup @relation(fields: [tenantId, classGroupId], references: [tenantId, id], onDelete: NoAction)
+
+  @@unique([tenantId, id])
+  @@index([tenantId, classGroupId])
+}
+
+model Subject {
+  id         String    @id @default(cuid())
+  tenantId   String
+  name       String
+  /// Upper-cased; unique per school among live subjects when present.
+  code       String?
+  archivedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @default(now()) @updatedAt
+
+  tenant    Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  offerings SubjectOffering[]
+
+  @@unique([tenantId, id])
+  @@index([tenantId])
+}
+
+/// "This class group studies this subject." Removing one is a real DELETE in this slice because nothing references it yet; the day a later
+/// phase adds a foreign key to it, a test fails and forces archive-on-reference (see tests/integration/academic-structure.spec.ts).
+model SubjectOffering {
+  id           String   @id @default(cuid())
+  tenantId     String
+  classGroupId String
+  subjectId    String
+  createdAt    DateTime @default(now())
+
+  tenant     Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  classGroup ClassGroup @relation(fields: [tenantId, classGroupId], references: [tenantId, id], onDelete: NoAction)
+  subject    Subject    @relation(fields: [tenantId, subjectId], references: [tenantId, id], onDelete: NoAction)
+
+  @@unique([classGroupId, subjectId])
+  @@index([tenantId])
+}

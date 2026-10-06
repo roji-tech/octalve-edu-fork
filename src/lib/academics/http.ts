@@ -82,6 +82,40 @@ export function academicFailure(reason: AcademicFailure, detail?: Record<string,
       return fail("A session can have at most twelve terms.", 409, "TOO_MANY_PERIODS");
     case "ALREADY_COPIED":
       return fail("This session has already been copied forward.", 409, "ALREADY_COPIED");
+    case "INVALID_NAME":
+      return fail("Give it a name (not blank, not too long).", 400, "VALIDATION", [
+        { path: "body.name", message: "Give it a name (not blank, not too long)." },
+      ]);
+    case "INVALID_CAPACITY":
+      return fail("Capacity must be a whole number from 1 to 1000, or left empty.", 400, "VALIDATION", [
+        { path: "body.capacity", message: "A whole number from 1 to 1000, or empty for no limit." },
+      ]);
+    case "INVALID_SORT_ORDER":
+      return fail("The order must be a whole number from 0 to 999.", 400, "VALIDATION", [
+        { path: "body.sortOrder", message: "A whole number from 0 to 999." },
+      ]);
+    case "INVALID_CODE":
+      return fail("A subject code is 1 to 12 letters or digits.", 400, "VALIDATION", [
+        { path: "body.code", message: "1 to 12 letters or digits, no spaces." },
+      ]);
+    case "NAME_TAKEN":
+      return fail("That name is already used here.", 409, "NAME_TAKEN", [
+        { path: "body.name", message: "That name is already used here." },
+      ]);
+    case "CODE_TAKEN":
+      return fail("That code is already used by another subject.", 409, "CODE_TAKEN", [
+        { path: "body.code", message: "That code is already used by another subject." },
+      ]);
+    case "HAS_ACTIVE_ARMS":
+      return fail("This class still has arms. Archive its arms first.", 409, "HAS_ACTIVE_ARMS");
+    case "SUBJECT_IN_USE":
+      return fail("A class still studies this subject. Remove it from those classes first.", 409, "SUBJECT_IN_USE");
+    case "UNKNOWN_SUBJECT":
+      return fail("Some of those subjects do not exist here.", 400, "VALIDATION", [
+        { path: "body.subjectIds", message: "Choose from this school's subjects." },
+      ]);
+    case "TOO_MANY_ARMS":
+      return fail("A class can have at most 26 arms.", 409, "TOO_MANY_ARMS");
     case "SESSION_NOT_ACTIVE":
       return fail("Only a term of the active session can be the current one.", 409, "SESSION_NOT_ACTIVE");
   }

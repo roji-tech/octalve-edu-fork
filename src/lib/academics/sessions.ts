@@ -88,7 +88,7 @@ const toPeriodView = (row: AcademicPeriod): PeriodView => ({
 });
 
 /// Which sessions this member may see (decision 7): an ADMIN sees every campus; anyone else sees the school-wide ones and their own campus's.
-function visibleTo(tenant: TenantCtx): Prisma.AcademicSessionWhereInput {
+export function visibleTo(tenant: TenantCtx): Prisma.AcademicSessionWhereInput {
   if (tenant.role === "ADMIN") return {};
   return { OR: [{ campusId: null }, ...(tenant.campusId ? [{ campusId: tenant.campusId }] : [])] };
 }
@@ -112,10 +112,24 @@ export type AcademicFailure =
   | "TOO_MANY_PERIODS"
   | "ORDINAL_TAKEN"
   | "ALREADY_COPIED"
-  | "SESSION_NOT_ACTIVE";
+  | "SESSION_NOT_ACTIVE"
+  // --- classes, arms and subjects (family B) ---
+  | "INVALID_NAME"
+  | "INVALID_CAPACITY"
+  | "INVALID_SORT_ORDER"
+  | "INVALID_CODE"
+  | "NAME_TAKEN"
+  | "CODE_TAKEN"
+  /// A class group cannot be archived while it still has live arms: archive the arms first (nothing is archived silently).
+  | "HAS_ACTIVE_ARMS"
+  /// A subject cannot be archived while a live class group still studies it.
+  | "SUBJECT_IN_USE"
+  /// The offering list named a subject that does not exist in this school (or is archived).
+  | "UNKNOWN_SUBJECT"
+  | "TOO_MANY_ARMS";
 
 export type AcademicResult<T> = ({ ok: true } & T) | { ok: false; reason: AcademicFailure; detail?: Record<string, unknown> };
-const refuse = (reason: AcademicFailure, detail?: Record<string, unknown>) => ({
+export const refuse = (reason: AcademicFailure, detail?: Record<string, unknown>) => ({
   ok: false as const,
   reason,
   ...(detail ? { detail } : {}),
@@ -131,10 +145,12 @@ async function lockSession(tx: Tx, tenantId: string, sessionId: string) {
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`academic-period:${tenantId}:${sessionId}`}::text))`;
 }
 
-const audit = (
+/// One audit row for ANY academic entity, written in the caller's transaction (the other services use this too).
+export const auditAcademic = (
   tx: Tx,
   tenantId: string,
   actorUserId: string,
+  targetType: string,
   action: string,
   targetId: string,
   beforeValue?: Prisma.InputJsonValue,
@@ -145,12 +161,21 @@ const audit = (
       tenantId,
       actorUserId,
       action,
-      targetType: "AcademicSession",
+      targetType,
       targetId,
       ...(beforeValue ? { beforeValue } : {}),
       ...(afterValue ? { afterValue } : {}),
     },
   });
+const audit = (
+  tx: Tx,
+  tenantId: string,
+  actorUserId: string,
+  action: string,
+  targetId: string,
+  beforeValue?: Prisma.InputJsonValue,
+  afterValue?: Prisma.InputJsonValue,
+) => auditAcademic(tx, tenantId, actorUserId, "AcademicSession", action, targetId, beforeValue, afterValue);
 const auditPeriod = (
   tx: Tx,
   tenantId: string,
@@ -172,7 +197,7 @@ const auditPeriod = (
     },
   });
 
-const findVisible = (tx: Tx, tenant: TenantCtx, id: string) =>
+export const findVisible = (tx: Tx, tenant: TenantCtx, id: string) =>
   tx.academicSession.findFirst({ where: { id, tenantId: tenant.tenantId, ...visibleTo(tenant) }, include: SESSION_INCLUDE });
 
 const rangeOf = (row: Pick<AcademicSession, "startDate" | "endDate">) => ({ start: toIsoDate(row.startDate), end: toIsoDate(row.endDate) });
