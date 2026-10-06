@@ -31,7 +31,9 @@ export function Dialog({
       // `autoFocus` does not fire in a dialog that opens after it mounted, and the platform's default is the first focusable thing — the
       // Close button. Focus the control the content marked (`data-initial-focus`, e.g. Cancel on a destructive confirmation) or else its
       // first form field, so a keyboard or screen-reader user lands where they will type.
-      const target = dialog.querySelector<HTMLElement>("[data-initial-focus]") ?? dialog.querySelector<HTMLElement>("input:not([type=hidden]), select, textarea");
+      const target =
+        dialog.querySelector<HTMLElement>("[data-initial-focus]") ??
+        dialog.querySelector<HTMLElement>("input:not([type=hidden]), select, textarea");
       target?.focus();
     }
     if (!open && dialog.open) dialog.close();

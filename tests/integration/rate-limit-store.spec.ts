@@ -5,8 +5,15 @@ import { test, expect } from "@playwright/test";
 import { TEST_REDIS_URL } from "../support/env";
 import { withEnv } from "../support/with-env";
 import {
-  checkRateLimit, connectRedis, createMemoryStore, createRedisStore, createResilientStore, refundAttempt,
-  reserveAttempt, resetRateLimitStoreForTests, type RateLimitStore,
+  checkRateLimit,
+  connectRedis,
+  createMemoryStore,
+  createRedisStore,
+  createResilientStore,
+  refundAttempt,
+  reserveAttempt,
+  resetRateLimitStoreForTests,
+  type RateLimitStore,
 } from "@/lib/auth/rate-limit";
 
 // One conformance suite for BOTH stores (plan §0.5.3, D): the Redis store must behave exactly like the memory store,
@@ -113,7 +120,12 @@ for (const [name, make] of stores) {
 
     test("odd identifiers are just keys (colons, unicode, spaces, very long)", async () => {
       const store = make();
-      for (const id of [`a:b:c:${crypto.randomUUID()}`, `ünï-${crypto.randomUUID()}-名前`, `with space ${crypto.randomUUID()}`, "x".repeat(2000) + crypto.randomUUID()]) {
+      for (const id of [
+        `a:b:c:${crypto.randomUUID()}`,
+        `ünï-${crypto.randomUUID()}-名前`,
+        `with space ${crypto.randomUUID()}`,
+        "x".repeat(2000) + crypto.randomUUID(),
+      ]) {
         expect(await store.reserve(id, 1)).toBe(true);
         expect(await store.reserve(id, 1)).toBe(false);
       }

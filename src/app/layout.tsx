@@ -30,11 +30,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
   const theme = parseTheme((await cookies()).get(THEME_COOKIE)?.value);
 
   return (
-    <html
-      lang="en"
-      data-theme={theme}
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-    >
+    <html lang="en" data-theme={theme} className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col">
         <ThemeProvider initialTheme={theme}>{children}</ThemeProvider>
         {/* Development affordances (lib/dev-tools.ts): rendered only where the server says so — never in production. */}

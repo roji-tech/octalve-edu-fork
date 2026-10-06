@@ -21,8 +21,7 @@ import { parseSetCookie } from "../support/http";
 const DAY = 24 * 60 * 60 * 1000;
 const minutesAgo = (m: number) => new Date(Date.now() - m * 60 * 1000);
 const daysFromNow = (d: number) => new Date(Date.now() + d * DAY);
-const within = (actual: Date, expectedMs: number, toleranceMs = 60_000) =>
-  Math.abs(actual.getTime() - expectedMs) <= toleranceMs;
+const within = (actual: Date, expectedMs: number, toleranceMs = 60_000) => Math.abs(actual.getTime() - expectedMs) <= toleranceMs;
 
 const requestWith = (token?: string) =>
   new NextRequest(`${HTTP_URL}/anything`, {

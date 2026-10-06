@@ -15,8 +15,7 @@ const TOKEN = { "x-dev-tools-token": DEV_TOOLS_TEST_TOKEN };
 const dev = (path: string, opts: ApiOptions = {}) => api(path, { baseUrl: DEVTOOLS_URL, ...opts });
 const inbox = (opts: ApiOptions = {}) => dev(INBOX, { headers: TOKEN, ...opts });
 type Mail = { id: string; to: string; subject: string; text: string; sentAt: string };
-const mailTo = async (to: string): Promise<Mail[]> =>
-  ((await inbox()).json.data.emails as Mail[]).filter((m) => m.to === to);
+const mailTo = async (to: string): Promise<Mail[]> => ((await inbox()).json.data.emails as Mail[]).filter((m) => m.to === to);
 const waitForInbox = async (to: string, count = 1) => {
   await expect.poll(async () => (await mailTo(to)).length, { timeout: 10_000 }).toBeGreaterThanOrEqual(count);
   return mailTo(to);
@@ -130,6 +129,6 @@ test.describe("the staging-mode server", () => {
     const cleared = await dev(INBOX, { method: "DELETE", headers: TOKEN });
     expect(cleared.status).toBe(200);
     expect(await mailTo(user.email)).toEqual([]);
-    expect(((await inbox()).json.data.emails as Mail[])).toEqual([]);
+    expect((await inbox()).json.data.emails as Mail[]).toEqual([]);
   });
 });

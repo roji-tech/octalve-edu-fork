@@ -3,12 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { ok, fail, noStore } from "@/lib/api/envelope";
 import { validateCSRF } from "@/lib/auth/csrf";
-import {
-  reserveAttempt,
-  refundAttempt,
-  checkRateLimit,
-  getClientIp,
-} from "@/lib/auth/rate-limit";
+import { reserveAttempt, refundAttempt, checkRateLimit, getClientIp } from "@/lib/auth/rate-limit";
 import { verifyPassword, PASSWORD_MAX_LENGTH } from "@/lib/auth/password";
 import { completeSignIn } from "@/lib/auth/complete-sign-in";
 import { createChallenge } from "@/lib/auth/mfa/challenge";
@@ -90,7 +85,10 @@ async function handleLogin(req: NextRequest): Promise<NextResponse> {
       try {
         if (!(await reserveAttempt(`audit:login-blocked:${email}`, 1))) return;
         const owner = await prisma.user.findUnique({ where: { email }, select: { id: true } });
-        if (owner) await auditPersonEvent(owner.id, "LOGIN_BLOCKED", { reason: "Too many failed sign-in attempts for this account from one address." });
+        if (owner)
+          await auditPersonEvent(owner.id, "LOGIN_BLOCKED", {
+            reason: "Too many failed sign-in attempts for this account from one address.",
+          });
       } catch (error) {
         console.error("[login] audit failed:", error instanceof Error ? error.message : error);
       }

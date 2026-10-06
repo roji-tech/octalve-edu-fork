@@ -80,7 +80,10 @@ export function MobileNav({ name, email }: { name: string | null; email: string 
       >
         <div className="mt-auto max-h-[85dvh] overflow-y-auto rounded-t-3xl border border-b-0 border-line bg-surface px-4 pt-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-menu">
           <div className="flex items-start gap-3">
-            <span aria-hidden="true" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-brand-strong text-sm font-bold text-white">
+            <span
+              aria-hidden="true"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-brand-strong text-sm font-bold text-white"
+            >
               {initialsOf(name, email)}
             </span>
             <div className="min-w-0 flex-1">

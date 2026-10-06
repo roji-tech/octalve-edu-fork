@@ -26,11 +26,7 @@ export async function fillCredentials(page: Page, email: string, password: strin
 
 /// `remember: true` ticks "Keep me signed in" first (a persistent cookie + the long policy);
 /// the default leaves it as the screen does — unchecked (a session cookie + a 12-hour cap).
-export async function signInThroughUi(
-  page: Page,
-  user: { email: string; password: string },
-  opts: { remember?: boolean } = {},
-) {
+export async function signInThroughUi(page: Page, user: { email: string; password: string }, opts: { remember?: boolean } = {}) {
   await page.goto("/login");
   await fillCredentials(page, user.email, user.password);
   if (opts.remember) await keepSignedInBox(page).check();

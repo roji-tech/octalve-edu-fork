@@ -39,7 +39,9 @@ const FORBIDDEN: ResolveResult = { ok: false, status: 403, code: "FORBIDDEN" };
 async function soloTenant(): Promise<{ id: string; code: string; name: string } | "misconfigured"> {
   const rows = await prisma.tenant.findMany({ take: 2, select: { id: true, code: true, name: true } });
   if (rows.length !== 1) {
-    console.error(`[TENANT_MISCONFIGURED] DEPLOYMENT_MODE=solo but the database holds ${rows.length === 0 ? "no" : "more than one"} tenant`);
+    console.error(
+      `[TENANT_MISCONFIGURED] DEPLOYMENT_MODE=solo but the database holds ${rows.length === 0 ? "no" : "more than one"} tenant`,
+    );
     return "misconfigured";
   }
   return rows[0];

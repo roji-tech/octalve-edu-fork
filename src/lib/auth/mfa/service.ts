@@ -56,9 +56,7 @@ export async function beginEnrolment(
   return { secret: base32Encode(secret), otpauthUrl: otpauthUrl({ ...opts, secret }) };
 }
 
-export type ConfirmResult =
-  | { ok: true; recoveryCodes: string[] }
-  | { ok: false; reason: "not-enrolling" | "invalid-code" };
+export type ConfirmResult = { ok: true; recoveryCodes: string[] } | { ok: false; reason: "not-enrolling" | "invalid-code" };
 
 /// Finishes an enrolment: the person proves they can produce a code from the secret they were shown.
 /// On success the credential becomes active (recording the step the code was for, so it can't be used
@@ -116,10 +114,7 @@ export async function spendRecoveryCode(userId: string, code: string): Promise<b
 }
 
 /// Verifies whichever second factor was given; says which one it was.
-export async function verifySecondFactor(
-  userId: string,
-  factor: SecondFactor,
-): Promise<"totp" | "recovery" | null> {
+export async function verifySecondFactor(userId: string, factor: SecondFactor): Promise<"totp" | "recovery" | null> {
   if ("code" in factor) return (await verifyTotpForUser(userId, factor.code)) ? "totp" : null;
   return (await spendRecoveryCode(userId, factor.recoveryCode)) ? "recovery" : null;
 }

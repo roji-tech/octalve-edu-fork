@@ -37,10 +37,14 @@ try {
   const exists = (await prisma.$queryRaw`SELECT 1 FROM pg_roles WHERE rolname = ${role}`).length > 0;
   if (!exists) {
     try {
-      await prisma.$executeRawUnsafe(`CREATE ROLE ${role} LOGIN PASSWORD '${password.replace(/'/g, "''")}' NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE`);
+      await prisma.$executeRawUnsafe(
+        `CREATE ROLE ${role} LOGIN PASSWORD '${password.replace(/'/g, "''")}' NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE`,
+      );
       console.log(`Created role ${role}.`);
     } catch (error) {
-      console.error(`Could not create the role (${error.message}).\nAs a superuser, run:\n\n  CREATE ROLE ${role} LOGIN PASSWORD '<password>' NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE;\n\nthen run this again.`);
+      console.error(
+        `Could not create the role (${error.message}).\nAs a superuser, run:\n\n  CREATE ROLE ${role} LOGIN PASSWORD '<password>' NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE;\n\nthen run this again.`,
+      );
       process.exit(1);
     }
   }

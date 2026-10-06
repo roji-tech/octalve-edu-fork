@@ -74,7 +74,9 @@ test.describe("X-Forwarded-Host", () => {
   test("is used when the operator says a proxy sets it", async () => {
     await withEnv({ TRUST_FORWARDED_HOST: "true" }, () => {
       // Behind a proxy: the app sees its own internal Host, the browser's Origin is the public one.
-      expect(validateCSRF(req({ host: "127.0.0.1:3101", "x-forwarded-host": "school.example", origin: "https://school.example" }))).toBe(true);
+      expect(validateCSRF(req({ host: "127.0.0.1:3101", "x-forwarded-host": "school.example", origin: "https://school.example" }))).toBe(
+        true,
+      );
       expect(validateCSRF(req({ host: "127.0.0.1:3101", "x-forwarded-host": "school.example", origin: EVIL }))).toBe(false);
       expect(validateCSRF(req({ host: "app.test:3000", origin: SELF }))).toBe(true); // no forwarded header → Host
     });

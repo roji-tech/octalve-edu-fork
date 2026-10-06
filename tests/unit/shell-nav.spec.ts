@@ -24,7 +24,10 @@ test.describe("navFor", () => {
 
   test("everyone else sees Overview only — decided by the role IN THAT SCHOOL", () => {
     for (const role of ["TEACHING_STAFF", "NON_TEACHING_STAFF", "STUDENT", "PARENT"] as const) {
-      expect(navFor({ ...admin, role }).map((i) => i.label), role).toEqual(["Overview"]);
+      expect(
+        navFor({ ...admin, role }).map((i) => i.label),
+        role,
+      ).toEqual(["Overview"]);
     }
     // The same person is an admin in one school and a teacher in another: each school's nav follows its own role.
     expect(navFor(teacher).map((i) => i.label)).toEqual(["Overview"]);

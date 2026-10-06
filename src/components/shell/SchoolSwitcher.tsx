@@ -47,7 +47,10 @@ export function SchoolSwitcher() {
       </button>
 
       {open && (
-        <ul id={panelId} className="absolute inset-x-3 top-full z-30 mt-1 max-h-80 overflow-y-auto rounded-2xl border border-line bg-surface p-1.5 shadow-menu">
+        <ul
+          id={panelId}
+          className="absolute inset-x-3 top-full z-30 mt-1 max-h-80 overflow-y-auto rounded-2xl border border-line bg-surface p-1.5 shadow-menu"
+        >
           {schools.map((s) => (
             <li key={s.code}>
               <Link

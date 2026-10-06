@@ -29,25 +29,40 @@ const createSchema = z.object({
     ),
 });
 
-export const GET = withAuth(async (req, auth: TenantAuthContext) => {
-  const { tenant } = auth;
-  const page = parseOffsetPagination(req.nextUrl.searchParams);
-  if (!page.ok) return fail("Some of the query parameters are not valid.", 400, "VALIDATION", page.issues.map((i) => ({ ...i, path: `query.${i.path}` })));
+export const GET = withAuth(
+  async (req, auth: TenantAuthContext) => {
+    const { tenant } = auth;
+    const page = parseOffsetPagination(req.nextUrl.searchParams);
+    if (!page.ok)
+      return fail(
+        "Some of the query parameters are not valid.",
+        400,
+        "VALIDATION",
+        page.issues.map((i) => ({ ...i, path: `query.${i.path}` })),
+      );
 
-  // An ADMIN is tenant-wide; everyone else sees only their own campus (and none if they have not been assigned one).
-  // The tenant is named explicitly AND the query runs in the tenant context — RLS is the net, not the plan.
-  const where: Prisma.CampusWhereInput = {
-    tenantId: tenant.tenantId,
-    ...(tenant.role === "ADMIN" ? {} : { id: tenant.campusId ?? "none" }),
-  };
-  const [total, campuses] = await tenant.run((tx) =>
-    Promise.all([
-      tx.campus.count({ where }),
-      tx.campus.findMany({ where, select: { id: true, name: true }, orderBy: [{ name: "asc" }, { id: "asc" }], skip: page.skip, take: page.take }),
-    ]),
-  );
-  return ok({ campuses }, offsetMeta({ page: page.page, limit: page.limit, total }));
-}, { tenant: true });
+    // An ADMIN is tenant-wide; everyone else sees only their own campus (and none if they have not been assigned one).
+    // The tenant is named explicitly AND the query runs in the tenant context — RLS is the net, not the plan.
+    const where: Prisma.CampusWhereInput = {
+      tenantId: tenant.tenantId,
+      ...(tenant.role === "ADMIN" ? {} : { id: tenant.campusId ?? "none" }),
+    };
+    const [total, campuses] = await tenant.run((tx) =>
+      Promise.all([
+        tx.campus.count({ where }),
+        tx.campus.findMany({
+          where,
+          select: { id: true, name: true },
+          orderBy: [{ name: "asc" }, { id: "asc" }],
+          skip: page.skip,
+          take: page.take,
+        }),
+      ]),
+    );
+    return ok({ campuses }, offsetMeta({ page: page.page, limit: page.limit, total }));
+  },
+  { tenant: true },
+);
 
 export const POST = withAuth(
   validate({ body: createSchema }, async (_req, auth: TenantAuthContext, _ctx: unknown, { body }) => {
@@ -60,14 +75,23 @@ export const POST = withAuth(
         const created = await tx.campus.create({ data: { tenantId: tenant.tenantId, name: body.name }, select: { id: true, name: true } });
         // Audited in the same transaction: a campus never exists without its audit row, nor the row without the campus.
         await tx.auditLog.create({
-          data: { tenantId: tenant.tenantId, actorUserId: auth.userId, action: "CAMPUS_CREATED", targetType: "Campus", targetId: created.id, afterValue: { name: created.name } },
+          data: {
+            tenantId: tenant.tenantId,
+            actorUserId: auth.userId,
+            action: "CAMPUS_CREATED",
+            targetType: "Campus",
+            targetId: created.id,
+            afterValue: { name: created.name },
+          },
         });
         return created;
       });
       return ok({ campus }, {}, 201);
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-        return fail("This school already has a campus with that name.", 409, "DUPLICATE", [{ path: "body.name", message: "This school already has a campus with that name." }]);
+        return fail("This school already has a campus with that name.", 409, "DUPLICATE", [
+          { path: "body.name", message: "This school already has a campus with that name." },
+        ]);
       }
       throw error;
     }

@@ -23,7 +23,9 @@ export async function readOutbox(): Promise<SentEmail[]> {
       try {
         return JSON.parse(line) as SentEmail;
       } catch {
-        throw new Error(`${EMAIL_FILE} is corrupt (entry ${i + 1} is not JSON: ${JSON.stringify(line.slice(0, 40))}…). Delete it and re-run.`);
+        throw new Error(
+          `${EMAIL_FILE} is corrupt (entry ${i + 1} is not JSON: ${JSON.stringify(line.slice(0, 40))}…). Delete it and re-run.`,
+        );
       }
     });
 }

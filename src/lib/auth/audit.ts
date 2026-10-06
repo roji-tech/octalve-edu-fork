@@ -13,8 +13,8 @@ export type AuditDetails = { before?: unknown; after?: unknown; reason?: string 
 /// the id comes from the person's own membership rows, read through the user context, which is the proof
 /// `trustedTenantId` needs.
 export async function auditPersonEvent(userId: string, action: string, details: AuditDetails = {}): Promise<void> {
-  const memberships = await forUser(userId).transaction((tx) =>
-    tx.tenantMembership.findMany({ where: { userId, deactivatedAt: null }, select: { tenantId: true } }), // not a school they were removed from
+  const memberships = await forUser(userId).transaction(
+    (tx) => tx.tenantMembership.findMany({ where: { userId, deactivatedAt: null }, select: { tenantId: true } }), // not a school they were removed from
   );
   for (const m of memberships) {
     await forTenant(trustedTenantId(m.tenantId)).transaction((tx) =>

@@ -22,8 +22,7 @@ async function withInjectedMarkup(page: import("@playwright/test").Page, payload
     await route.fulfill({ response, body: html });
   });
 }
-const pwned = (page: import("@playwright/test").Page) =>
-  page.evaluate(() => (window as unknown as Record<string, unknown>).__pwned);
+const pwned = (page: import("@playwright/test").Page) => page.evaluate(() => (window as unknown as Record<string, unknown>).__pwned);
 
 test.describe("the policy blocks what an XSS bug would inject", () => {
   test("an injected inline <script> does not run, and the browser reports it", async ({ page, csp }) => {
@@ -75,7 +74,10 @@ test.describe("the policy blocks what an XSS bug would inject", () => {
 });
 
 test.describe("and the app itself is unaffected", () => {
-  test("hydration works (the nonced framework scripts ran): the theme toggle responds and there are no violations", async ({ page, csp }) => {
+  test("hydration works (the nonced framework scripts ran): the theme toggle responds and there are no violations", async ({
+    page,
+    csp,
+  }) => {
     await page.goto("/login");
     await page.getByRole("button", { name: "Switch to light theme" }).click();
     await expect(page.locator("html")).toHaveAttribute("data-theme", "light");

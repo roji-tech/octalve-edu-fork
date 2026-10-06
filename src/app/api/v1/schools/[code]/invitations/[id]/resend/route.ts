@@ -32,7 +32,14 @@ export const POST = withAuth(
       try {
         if (!(await reserveAttempt(`invite:mail:${invitation.email}`, MAIL_PER_ADDRESS))) return;
         await sendEmailQuietly(
-          invitationEmail({ to: invitation.email, token, schoolName: tenant.tenantName, roleLabel: ROLE_LABELS[invitation.role], inviterName: auth.user.name, days: INVITATION_TTL_DAYS }),
+          invitationEmail({
+            to: invitation.email,
+            token,
+            schoolName: tenant.tenantName,
+            roleLabel: ROLE_LABELS[invitation.role],
+            inviterName: auth.user.name,
+            days: INVITATION_TTL_DAYS,
+          }),
         );
       } catch (error) {
         console.error("[invitations] mail failed:", error instanceof Error ? error.message : error);

@@ -3,7 +3,18 @@ import fs from "node:fs";
 import path from "node:path";
 import { test, expect } from "@playwright/test";
 import { SAAS_URL } from "../support/env";
-import { Role, addMembership, createTenant, createUser, db, deactivateMembership, removeCreatedTenants, seedInstance, type TestTenant, type TestUser } from "../support/db";
+import {
+  Role,
+  addMembership,
+  createTenant,
+  createUser,
+  db,
+  deactivateMembership,
+  removeCreatedTenants,
+  seedInstance,
+  type TestTenant,
+  type TestUser,
+} from "../support/db";
 import { api, cookieHeader, loginAs } from "../support/http";
 
 // The tenant trust boundary over real HTTP (domain-implementation-plan.md §0.5.2). Several schools share one
@@ -58,7 +69,8 @@ test.afterAll(async () => {
   await removeCreatedTenants();
 });
 
-const school = (code: string, who: string, extra: object = {}) => api(`/api/v1/schools/${code}`, { ...SAAS, cookie: cookies[who], ...extra });
+const school = (code: string, who: string, extra: object = {}) =>
+  api(`/api/v1/schools/${code}`, { ...SAAS, cookie: cookies[who], ...extra });
 
 test.describe("GET /api/v1/schools/[code]", () => {
   test("an ADMIN sees their school's role and EVERY campus of it — and nothing of the other school", async () => {
@@ -69,7 +81,10 @@ test.describe("GET /api/v1/schools/[code]", () => {
       school: { code: a.code, name: "Alpha School" },
       role: "ADMIN",
       campusId: null,
-      campuses: [{ id: a.campuses[0].id, name: "Alpha North" }, { id: a.campuses[1].id, name: "Alpha South" }],
+      campuses: [
+        { id: a.campuses[0].id, name: "Alpha North" },
+        { id: a.campuses[1].id, name: "Alpha South" },
+      ],
     });
     expect(res.text).not.toContain("Beta");
     expect(res.text).not.toContain(b.code);
@@ -97,7 +112,13 @@ test.describe("GET /api/v1/schools/[code]", () => {
   });
 
   test("changing [code] to another school's code is a 403 — for an admin, a teacher and a person with no school at all", async () => {
-    for (const [who, code] of [["adminA", b.code], ["teacherA", b.code], ["adminB", a.code], ["outsider", a.code], ["outsider", b.code]] as const) {
+    for (const [who, code] of [
+      ["adminA", b.code],
+      ["teacherA", b.code],
+      ["adminB", a.code],
+      ["outsider", a.code],
+      ["outsider", b.code],
+    ] as const) {
       const res = await school(code, who);
       expect(res.status, `${who} → ${code}`).toBe(403);
       expect(res.json).toEqual(NO_ACCESS);
@@ -196,7 +217,8 @@ test.describe("EVERY tenant route enforces the boundary", () => {
       for (const route of routes.filter((r) => r.methods.includes(method))) {
         const url = (code: string) => route.urlPath.replace("[code]", code);
         const body = method === "GET" ? {} : { body: {} };
-        const request = (code: string, who?: string) => api(url(code), { ...SAAS, method, ...body, ...(who ? { cookie: cookies[who] } : {}) });
+        const request = (code: string, who?: string) =>
+          api(url(code), { ...SAAS, method, ...body, ...(who ? { cookie: cookies[who] } : {}) });
         // adminA is an ADMIN — of school A. On school B they hold nothing.
         const crossTenant = await request(b.code, "adminA");
         expect(crossTenant.status, `${method} ${url(b.code)} as an admin of ANOTHER school`).toBe(403);

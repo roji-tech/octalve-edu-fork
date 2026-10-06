@@ -1,5 +1,15 @@
 import { test, expect } from "@playwright/test";
-import { Role, addMembership, createTenant, createUser, db, deactivateMembership, reactivateMembership, removeCreatedTenants, seedInstance } from "../support/db";
+import {
+  Role,
+  addMembership,
+  createTenant,
+  createUser,
+  db,
+  deactivateMembership,
+  reactivateMembership,
+  removeCreatedTenants,
+  seedInstance,
+} from "../support/db";
 import { withEnv } from "../support/with-env";
 import { resolveTenant } from "@/lib/tenant/resolve-tenant";
 import { getUserMemberships } from "@/lib/auth/memberships";
@@ -31,7 +41,10 @@ test.describe("resolveTenant", () => {
       expect(refused).toEqual(await resolveTenant({ userId: stranger.id, code: school.code })); // indistinguishable from "not a member"
 
       await reactivateMembership(member.id, school.id);
-      expect(await resolveTenant({ userId: member.id, code: school.code })).toMatchObject({ ok: true, tenant: { role: "TEACHING_STAFF", campusId: school.campuses[0].id } });
+      expect(await resolveTenant({ userId: member.id, code: school.code })).toMatchObject({
+        ok: true,
+        tenant: { role: "TEACHING_STAFF", campusId: school.campuses[0].id },
+      });
     });
   });
 

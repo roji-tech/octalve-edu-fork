@@ -118,7 +118,12 @@ test.describe("POST /reset-password", () => {
     expect(res.json).toEqual({ data: { reset: true }, meta: {}, error: null });
     expect(res.headers.get("cache-control")).toBe("no-store");
     // The browser is told to drop whatever session cookie it held.
-    expect(res.setCookies.map(parseSetCookie).find((c) => c.name === "octalve.session-token")?.attributes.get("max-age")).toBe("0");
+    expect(
+      res.setCookies
+        .map(parseSetCookie)
+        .find((c) => c.name === "octalve.session-token")
+        ?.attributes.get("max-age"),
+    ).toBe("0");
 
     expect((await api("/api/v1/auth/me", { cookie: cookieHeader(session!) })).status).toBe(401);
     expect((await loginAs(user)).status).toBe(401); // old password
@@ -217,7 +222,11 @@ test.describe("POST /change-password", () => {
     expect((await api(CHANGE, { body: { currentPassword: "x", newPassword: NEW } })).status).toBe(401);
     const user = await createUser();
     const { token } = await loginAs(user);
-    const res = await api(CHANGE, { body: { currentPassword: user.password, newPassword: NEW }, cookie: cookieHeader(token!), origin: "https://evil.example" });
+    const res = await api(CHANGE, {
+      body: { currentPassword: user.password, newPassword: NEW },
+      cookie: cookieHeader(token!),
+      origin: "https://evil.example",
+    });
     expect(res.status).toBe(403);
   });
 
@@ -272,7 +281,10 @@ test.describe("POST /change-password", () => {
     const { token: t2 } = await loginAs(other);
     for (let i = 0; i < 7; i++) {
       const next = `rotating-pass-${i}-a`;
-      expect((await api(CHANGE, { body: { currentPassword: password, newPassword: next }, cookie: cookieHeader(t2!) })).status, `change #${i}`).toBe(200);
+      expect(
+        (await api(CHANGE, { body: { currentPassword: password, newPassword: next }, cookie: cookieHeader(t2!) })).status,
+        `change #${i}`,
+      ).toBe(200);
       password = next; // (this session survives each change)
     }
   });

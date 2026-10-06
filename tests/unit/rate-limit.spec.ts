@@ -1,13 +1,7 @@
 import "../support/env";
 import crypto from "node:crypto";
 import { test, expect } from "@playwright/test";
-import {
-  MAX_TRACKED_IDENTIFIERS,
-  checkRateLimit,
-  getClientIp,
-  refundAttempt,
-  reserveAttempt,
-} from "@/lib/auth/rate-limit";
+import { MAX_TRACKED_IDENTIFIERS, checkRateLimit, getClientIp, refundAttempt, reserveAttempt } from "@/lib/auth/rate-limit";
 
 const WINDOW_MS = 5 * 60 * 1000;
 const key = (label: string) => `test:${label}:${crypto.randomUUID()}`;
@@ -149,9 +143,7 @@ test.describe("getClientIp — only ever trusts what the proxy sets", () => {
 
   test("default: reads x-real-ip and ignores a spoofed X-Forwarded-For", async () => {
     await withEnv({ CLIENT_IP_HEADER: undefined, TRUSTED_PROXY_HOPS: undefined }, () => {
-      expect(getClientIp(req({ "x-real-ip": "203.0.113.7", "x-forwarded-for": "1.2.3.4, 5.6.7.8" }))).toBe(
-        "203.0.113.7",
-      );
+      expect(getClientIp(req({ "x-real-ip": "203.0.113.7", "x-forwarded-for": "1.2.3.4, 5.6.7.8" }))).toBe("203.0.113.7");
       // The client-controlled header alone must NOT be believed.
       expect(getClientIp(req({ "x-forwarded-for": "1.2.3.4" }))).toBe("unproxied");
     });

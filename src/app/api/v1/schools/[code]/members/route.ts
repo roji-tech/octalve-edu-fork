@@ -25,7 +25,13 @@ const query = z.object({
 export const GET = withAuth(
   validate({ query }, async (req, auth: TenantAuthContext, _ctx: unknown, { query: filters }) => {
     const page = parseOffsetPagination(req.nextUrl.searchParams);
-    if (!page.ok) return fail("Some of the query parameters are not valid.", 400, "VALIDATION", page.issues.map((i) => ({ ...i, path: `query.${i.path}` })));
+    if (!page.ok)
+      return fail(
+        "Some of the query parameters are not valid.",
+        400,
+        "VALIDATION",
+        page.issues.map((i) => ({ ...i, path: `query.${i.path}` })),
+      );
     const { members, total } = await listMembers(auth.tenant, filters, page);
     return ok({ members }, offsetMeta({ page: page.page, limit: page.limit, total }));
   }),

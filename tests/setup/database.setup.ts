@@ -37,7 +37,9 @@ setup("test database is created, migrated and empty", async () => {
           `The runtime role "${APP_DB_ROLE}" does not exist and "${me.rolname}" cannot create it. As a superuser run:\n\n  CREATE ROLE ${APP_DB_ROLE} LOGIN PASSWORD '${APP_DB_ROLE}' NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE;\n`,
         );
       }
-      await admin.$executeRawUnsafe(`CREATE ROLE ${APP_DB_ROLE} LOGIN PASSWORD '${APP_DB_ROLE}' NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE`);
+      await admin.$executeRawUnsafe(
+        `CREATE ROLE ${APP_DB_ROLE} LOGIN PASSWORD '${APP_DB_ROLE}' NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE`,
+      );
     }
     const exists = await admin.$queryRaw<{ one: number }[]>`
       SELECT 1 AS one FROM pg_database WHERE datname = ${TEST_DATABASE_NAME}`;
@@ -63,7 +65,9 @@ setup("test database is created, migrated and empty", async () => {
     const [row] = await app.$queryRaw<{ rolname: string; rolsuper: boolean; rolbypassrls: boolean }[]>`
       SELECT rolname, rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user`;
     if (row.rolsuper || row.rolbypassrls) {
-      throw new Error(`The runtime role "${row.rolname}" bypasses row-level security (superuser: ${row.rolsuper}, BYPASSRLS: ${row.rolbypassrls}); it must not.`);
+      throw new Error(
+        `The runtime role "${row.rolname}" bypasses row-level security (superuser: ${row.rolsuper}, BYPASSRLS: ${row.rolbypassrls}); it must not.`,
+      );
     }
   } finally {
     await app.$disconnect();

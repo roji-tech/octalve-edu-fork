@@ -133,7 +133,11 @@ export function createRedisStore(client: Redis, options: { windowMs?: number } =
 /// A small circuit breaker: after a failure Redis is not tried again for `cooldownMs`, so an outage costs ONE slow
 /// request (up to the command timeout) per cooldown, not one per request. The first call after the cooldown is the
 /// probe; if it succeeds Redis is back in use.
-export function createResilientStore(primary: RateLimitStore, fallback: RateLimitStore, options: { cooldownMs?: number } = {}): RateLimitStore {
+export function createResilientStore(
+  primary: RateLimitStore,
+  fallback: RateLimitStore,
+  options: { cooldownMs?: number } = {},
+): RateLimitStore {
   const cooldownMs = options.cooldownMs ?? 5_000;
   let down = false;
   let retryAt = 0;
@@ -150,7 +154,9 @@ export function createResilientStore(primary: RateLimitStore, fallback: RateLimi
       retryAt = Date.now() + cooldownMs;
       if (!down) {
         down = true;
-        console.error(`[RATE_LIMIT] Redis unavailable (${error instanceof Error ? error.message : error}) — limiting in this process's memory until it returns.`);
+        console.error(
+          `[RATE_LIMIT] Redis unavailable (${error instanceof Error ? error.message : error}) — limiting in this process's memory until it returns.`,
+        );
       }
       return run(fallback);
     }
@@ -191,7 +197,9 @@ function selectStore(): RateLimitStore {
   }
   if (!warnedMemoryInSaas && process.env.NODE_ENV === "production" && process.env.DEPLOYMENT_MODE === "saas") {
     warnedMemoryInSaas = true;
-    console.warn("[RATE_LIMIT] SaaS deployment on the in-memory store: each instance counts separately, so the limits are multiplied by the instance count. Set RATE_LIMIT_STORE=redis and REDIS_URL before running more than one instance.");
+    console.warn(
+      "[RATE_LIMIT] SaaS deployment on the in-memory store: each instance counts separately, so the limits are multiplied by the instance count. Set RATE_LIMIT_STORE=redis and REDIS_URL before running more than one instance.",
+    );
   }
   return memory;
 }
@@ -206,10 +214,7 @@ export function resetRateLimitStoreForTests(): void {
 
 /// Reserve-then-refund: call this at the very start of the handler, before any slow async work, for every key
 /// that should gate the request. Returns false (reserving nothing further) the moment a key is already at its limit.
-export async function reserveAttempt(
-  identifier: string,
-  limit: number = DEFAULT_MAX_ATTEMPTS,
-): Promise<boolean> {
+export async function reserveAttempt(identifier: string, limit: number = DEFAULT_MAX_ATTEMPTS): Promise<boolean> {
   return store().reserve(identifier, limit);
 }
 
@@ -220,10 +225,7 @@ export async function refundAttempt(identifier: string): Promise<void> {
 }
 
 /// Read-only check (does not reserve). Used for the soft per-account signal.
-export async function checkRateLimit(
-  identifier: string,
-  limit: number = DEFAULT_MAX_ATTEMPTS,
-): Promise<boolean> {
+export async function checkRateLimit(identifier: string, limit: number = DEFAULT_MAX_ATTEMPTS): Promise<boolean> {
   return (await store().count(identifier)) < limit;
 }
 
@@ -263,9 +265,7 @@ function nthFromRight(value: string, hops: number): string | null {
   return index >= 0 && index < parts.length ? parts[index] : null;
 }
 
-export function getClientIp(req: {
-  headers: { get(name: string): string | null };
-}): string {
+export function getClientIp(req: { headers: { get(name: string): string | null } }): string {
   const header = (process.env.CLIENT_IP_HEADER ?? "x-real-ip").toLowerCase();
   const raw = req.headers.get(header);
 

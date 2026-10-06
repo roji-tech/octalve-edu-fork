@@ -10,7 +10,8 @@ import { CheckCircleIcon } from "@/components/ui/icons";
 import { useFragmentToken } from "@/components/auth/useFragmentToken";
 import { checkNewPassword } from "@/lib/auth/password-policy";
 
-const LINK = "inline-flex min-h-11 items-center font-semibold text-brand-fg hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring rounded-md";
+const LINK =
+  "inline-flex min-h-11 items-center font-semibold text-brand-fg hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring rounded-md";
 
 /// Step 2: the page the emailed link opens. The token is in the URL FRAGMENT (`#token=…`), which the browser
 /// never sends to a server; it is read once and then removed from the address bar, so it is not left in
@@ -62,11 +63,14 @@ function ResetPasswordBody({ token }: { token: string | undefined }) {
     }
   }
 
-  const wrapper =
-    "rounded-2xl border border-line bg-surface p-6 shadow-card sm:p-7 lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none";
+  const wrapper = "rounded-2xl border border-line bg-surface p-6 shadow-card sm:p-7 lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none";
 
   if (token === undefined) {
-    return <div className={wrapper} aria-busy="true"><p className="text-sm text-fg-muted">One moment…</p></div>;
+    return (
+      <div className={wrapper} aria-busy="true">
+        <p className="text-sm text-fg-muted">One moment…</p>
+      </div>
+    );
   }
 
   if (done) {
@@ -107,9 +111,7 @@ function ResetPasswordBody({ token }: { token: string | undefined }) {
   return (
     <div className={wrapper}>
       <h1 className="text-[22px] font-bold tracking-tight text-fg">Choose a new password</h1>
-      <p className="mt-1.5 text-sm leading-relaxed text-fg-muted">
-        At least 8 characters, with a letter and a number.
-      </p>
+      <p className="mt-1.5 text-sm leading-relaxed text-fg-muted">At least 8 characters, with a letter and a number.</p>
       <form method="post" onSubmit={handleSubmit} noValidate className="mt-6 space-y-4">
         <PasswordField
           label="New password"

@@ -1,12 +1,7 @@
 import "../support/env";
 import { test, expect } from "@playwright/test";
 import bcrypt from "bcryptjs";
-import {
-  BCRYPT_COST,
-  PASSWORD_MAX_BYTES,
-  hashPassword,
-  verifyPassword,
-} from "@/lib/auth/password";
+import { BCRYPT_COST, PASSWORD_MAX_BYTES, hashPassword, verifyPassword } from "@/lib/auth/password";
 import { passwordByteLength } from "@/lib/auth/password-policy";
 
 test.describe("password hashing", () => {

@@ -19,8 +19,7 @@ const valid = () => ({
   email: uniqueEmail("setup"),
   password: "correct-horse-battery-9",
 });
-const post = (body: unknown, opts: { ip?: string | null; origin?: string | null } = {}) =>
-  api(SETUP, { body, ...opts });
+const post = (body: unknown, opts: { ip?: string | null; origin?: string | null } = {}) => api(SETUP, { body, ...opts });
 
 test.describe("GET /api/v1/setup", () => {
   test("reports whether setup is complete", async () => {

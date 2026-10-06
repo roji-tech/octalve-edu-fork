@@ -4,7 +4,21 @@ import type { Page } from "@playwright/test";
 import { test, expect } from "../support/fixtures";
 import { Role, codeFor, createUser, db, enableMfa, rewindMfa, seedInstance } from "../support/db";
 import { base32Decode } from "@/lib/auth/mfa/base32";
-import { alerts, codeField, fillCredentials, keepSignedInBox, mfaHeading, passwordField, recoveryField, signInButton, signInThroughUi, signInWithSecondFactor, signOut, verifyButton, HOME_URL } from "./helpers";
+import {
+  alerts,
+  codeField,
+  fillCredentials,
+  keepSignedInBox,
+  mfaHeading,
+  passwordField,
+  recoveryField,
+  signInButton,
+  signInThroughUi,
+  signInWithSecondFactor,
+  signOut,
+  verifyButton,
+  HOME_URL,
+} from "./helpers";
 
 // Two-step verification in a real browser (plan §0.5.D): turning it on, signing in with it, losing the
 // authenticator, turning it off. Codes are computed by the test from the secret the page shows — exactly what
@@ -356,7 +370,10 @@ test.describe("signing in — step 2", () => {
     await expect(alerts(page)).toContainText("ran out of attempts");
   });
 
-  test("'Keep me signed in' ticked at the password step is honoured after step 2 (persistent cookie); unticked is a session cookie", async ({ page, context }) => {
+  test("'Keep me signed in' ticked at the password step is honoured after step 2 (persistent cookie); unticked is a session cookie", async ({
+    page,
+    context,
+  }) => {
     const remembered = await createUser({ role: Role.TEACHING_STAFF });
     const rm = await enableMfa(remembered.id);
     await signInWithSecondFactor(page, remembered, { code: codeFor(rm.secret) }, { remember: true });
@@ -416,7 +433,9 @@ test.describe("managing it — recovery codes and turning it off", () => {
     await expect(alerts(page)).toContainText("running low");
   });
 
-  test("turning it off: a wrong password and a wrong code are each explained; a recovery code works in place of the app", async ({ page }) => {
+  test("turning it off: a wrong password and a wrong code are each explained; a recovery code works in place of the app", async ({
+    page,
+  }) => {
     const user = await createUser({ role: Role.TEACHING_STAFF });
     const { secret, recoveryCodes } = await enableMfa(user.id);
     await signInWithSecondFactor(page, user, { code: codeFor(secret) });

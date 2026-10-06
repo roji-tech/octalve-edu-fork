@@ -29,39 +29,39 @@ export default async function SchoolPage({ params }: { params: Promise<{ code: s
 
   return (
     <div>
-        <h1 className="text-3xl font-bold tracking-tight text-fg">Welcome, {firstName}</h1>
-        <div className="mt-8 flex items-start gap-4">
-          <span aria-hidden="true" className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-brand-tint text-brand-fg">
-            <GraduationCapIcon className="h-6 w-6" />
-          </span>
-          <div className="min-w-0">
-            <h2 className="text-xl font-semibold tracking-tight break-words text-fg">{tenant.tenantName}</h2>
-            <p className="mt-1 text-base text-fg-muted">
-              You&apos;re signed in as <strong className="font-semibold text-fg">{ROLE_LABELS[tenant.role]}</strong>
-              {tenant.role === "ADMIN" ? " · all campuses" : ""}.
-            </p>
-            <p className="mt-1 font-mono text-xs text-fg-muted">{tenant.tenantCode}</p>
-          </div>
+      <h1 className="text-3xl font-bold tracking-tight text-fg">Welcome, {firstName}</h1>
+      <div className="mt-8 flex items-start gap-4">
+        <span aria-hidden="true" className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-brand-tint text-brand-fg">
+          <GraduationCapIcon className="h-6 w-6" />
+        </span>
+        <div className="min-w-0">
+          <h2 className="text-xl font-semibold tracking-tight break-words text-fg">{tenant.tenantName}</h2>
+          <p className="mt-1 text-base text-fg-muted">
+            You&apos;re signed in as <strong className="font-semibold text-fg">{ROLE_LABELS[tenant.role]}</strong>
+            {tenant.role === "ADMIN" ? " · all campuses" : ""}.
+          </p>
+          <p className="mt-1 font-mono text-xs text-fg-muted">{tenant.tenantCode}</p>
         </div>
+      </div>
 
-        <section aria-labelledby="campuses-heading" className="mt-10">
-          <h3 id="campuses-heading" className="text-sm font-semibold tracking-wider text-fg-muted uppercase">
-            {tenant.role === "ADMIN" ? "Campuses" : "Your campus"}
-          </h3>
-          {campuses.length === 0 ? (
-            <p className="mt-4 rounded-2xl border border-dashed border-line-strong p-8 text-center text-sm text-fg-muted">
-              {tenant.role === "ADMIN" ? "No campuses have been added yet." : "You haven’t been assigned to a campus yet."}
-            </p>
-          ) : (
-            <ul className="mt-4 grid gap-4 sm:grid-cols-2">
-              {campuses.map((c) => (
-                <li key={c.id} className="rounded-2xl border border-line bg-surface p-5 font-semibold text-fg">
-                  {c.name}
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
+      <section aria-labelledby="campuses-heading" className="mt-10">
+        <h3 id="campuses-heading" className="text-sm font-semibold tracking-wider text-fg-muted uppercase">
+          {tenant.role === "ADMIN" ? "Campuses" : "Your campus"}
+        </h3>
+        {campuses.length === 0 ? (
+          <p className="mt-4 rounded-2xl border border-dashed border-line-strong p-8 text-center text-sm text-fg-muted">
+            {tenant.role === "ADMIN" ? "No campuses have been added yet." : "You haven’t been assigned to a campus yet."}
+          </p>
+        ) : (
+          <ul className="mt-4 grid gap-4 sm:grid-cols-2">
+            {campuses.map((c) => (
+              <li key={c.id} className="rounded-2xl border border-line bg-surface p-5 font-semibold text-fg">
+                {c.name}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
     </div>
   );
 }

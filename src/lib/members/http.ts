@@ -32,7 +32,9 @@ export function memberFailure(reason: MemberFailure): Response {
     case "LAST_ADMIN":
       return fail("This is the school's last administrator. Make someone else an administrator first.", 409, "LAST_ADMIN");
     case "INVALID_CAMPUS":
-      return fail("Choose one of this school's campuses.", 400, "VALIDATION", [{ path: "body.campusId", message: "Choose one of this school's campuses." }]);
+      return fail("Choose one of this school's campuses.", 400, "VALIDATION", [
+        { path: "body.campusId", message: "Choose one of this school's campuses." },
+      ]);
     case "DEACTIVATED":
       return fail("This person is deactivated. Reactivate them first.", 409, "DEACTIVATED");
   }

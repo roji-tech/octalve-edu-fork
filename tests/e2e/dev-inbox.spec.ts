@@ -55,7 +55,9 @@ test.describe("where it is, and where it is not", () => {
 });
 
 test.describe("unlocking it (a staging deployment is reachable by other people)", () => {
-  test("opens on a token form; a wrong token is explained and stays locked; the right one shows the empty inbox — and survives a reload", async ({ page }) => {
+  test("opens on a token form; a wrong token is explained and stays locked; the right one shows the empty inbox — and survives a reload", async ({
+    page,
+  }) => {
     await page.goto("/login");
     await launcher(page).click();
     await expect(dialog(page)).toBeVisible();
@@ -119,7 +121,9 @@ test.describe("reading the mail", () => {
     await expect(page.getByRole("heading", { name: "Password updated" })).toBeVisible();
   });
 
-  test("reading it clears the badge; a NEW message brings it back — even after a full page load; Clear all empties the list", async ({ page }) => {
+  test("reading it clears the badge; a NEW message brings it back — even after a full page load; Clear all empties the list", async ({
+    page,
+  }) => {
     const user = await createUser();
     await unlock(page);
     await requestResetFor(page, user.email);

@@ -34,10 +34,23 @@ if (!fs.existsSync(keyPath) || !fs.existsSync(certPath)) {
   execFileSync(
     "openssl",
     [
-      "req", "-x509", "-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:prime256v1", "-nodes",
-      "-days", "7", "-subj", "/CN=localhost",
-      "-addext", "subjectAltName=DNS:localhost,IP:127.0.0.1,IP:::1",
-      "-keyout", keyPath, "-out", certPath,
+      "req",
+      "-x509",
+      "-newkey",
+      "ec",
+      "-pkeyopt",
+      "ec_paramgen_curve:prime256v1",
+      "-nodes",
+      "-days",
+      "7",
+      "-subj",
+      "/CN=localhost",
+      "-addext",
+      "subjectAltName=DNS:localhost,IP:127.0.0.1,IP:::1",
+      "-keyout",
+      keyPath,
+      "-out",
+      certPath,
     ],
     { stdio: "ignore" },
   );
@@ -45,41 +58,35 @@ if (!fs.existsSync(keyPath) || !fs.existsSync(certPath)) {
 
 const HOP_BY_HOP = new Set(["connection", "keep-alive", "proxy-connection", "transfer-encoding", "upgrade", "te", "trailer"]);
 
-const server = https.createServer(
-  { key: fs.readFileSync(keyPath), cert: fs.readFileSync(certPath) },
-  (req, res) => {
-    const headers = {};
-    for (const [name, value] of Object.entries(req.headers)) {
-      if (!HOP_BY_HOP.has(name)) headers[name] = value;
-    }
-    const peer = req.socket.remoteAddress ?? "unknown";
-    headers["x-real-ip"] = req.headers["x-test-client-ip"] ?? peer;
-    delete headers["x-test-client-ip"];
-    headers["x-forwarded-for"] = peer;
-    headers["x-forwarded-proto"] = "https";
-    headers["x-forwarded-host"] = req.headers.host ?? "";
+const server = https.createServer({ key: fs.readFileSync(keyPath), cert: fs.readFileSync(certPath) }, (req, res) => {
+  const headers = {};
+  for (const [name, value] of Object.entries(req.headers)) {
+    if (!HOP_BY_HOP.has(name)) headers[name] = value;
+  }
+  const peer = req.socket.remoteAddress ?? "unknown";
+  headers["x-real-ip"] = req.headers["x-test-client-ip"] ?? peer;
+  delete headers["x-test-client-ip"];
+  headers["x-forwarded-for"] = peer;
+  headers["x-forwarded-proto"] = "https";
+  headers["x-forwarded-host"] = req.headers.host ?? "";
 
-    const upstream = http.request(
-      { host: "127.0.0.1", port: upstreamPort, method: req.method, path: req.url, headers },
-      (upstreamRes) => {
-        // rawHeaders keeps repeated headers (multiple Set-Cookie) intact and in order.
-        const raw = [];
-        for (let i = 0; i < upstreamRes.rawHeaders.length; i += 2) {
-          if (!HOP_BY_HOP.has(upstreamRes.rawHeaders[i].toLowerCase())) {
-            raw.push(upstreamRes.rawHeaders[i], upstreamRes.rawHeaders[i + 1]);
-          }
-        }
-        res.writeHead(upstreamRes.statusCode ?? 502, upstreamRes.statusMessage, raw);
-        upstreamRes.pipe(res);
-      },
-    );
-    upstream.on("error", () => {
-      if (!res.headersSent) res.writeHead(502, { "content-type": "text/plain" });
-      res.end("bad gateway");
-    });
-    req.pipe(upstream);
-  },
-);
+  const upstream = http.request({ host: "127.0.0.1", port: upstreamPort, method: req.method, path: req.url, headers }, (upstreamRes) => {
+    // rawHeaders keeps repeated headers (multiple Set-Cookie) intact and in order.
+    const raw = [];
+    for (let i = 0; i < upstreamRes.rawHeaders.length; i += 2) {
+      if (!HOP_BY_HOP.has(upstreamRes.rawHeaders[i].toLowerCase())) {
+        raw.push(upstreamRes.rawHeaders[i], upstreamRes.rawHeaders[i + 1]);
+      }
+    }
+    res.writeHead(upstreamRes.statusCode ?? 502, upstreamRes.statusMessage, raw);
+    upstreamRes.pipe(res);
+  });
+  upstream.on("error", () => {
+    if (!res.headersSent) res.writeHead(502, { "content-type": "text/plain" });
+    res.end("bad gateway");
+  });
+  req.pipe(upstream);
+});
 
 server.listen(listenPort, () => console.log(`tls-proxy: https://localhost:${listenPort} -> http://127.0.0.1:${upstreamPort}`));
 for (const signal of ["SIGINT", "SIGTERM"]) process.on(signal, () => server.close(() => process.exit(0)));

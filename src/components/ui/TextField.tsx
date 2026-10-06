@@ -17,17 +17,7 @@ export type TextFieldProps = Omit<InputHTMLAttributes<HTMLInputElement>, "id"> &
 /// aria-invalid when there is an error. Callers pass `autoComplete`,
 /// `inputMode` etc. straight through. The label is the artifact's small
 /// uppercase style (CSS only — the accessible name is the plain text).
-export function TextField({
-  label,
-  id,
-  hint,
-  error,
-  trailing,
-  labelAction,
-  className = "",
-  ref,
-  ...rest
-}: TextFieldProps) {
+export function TextField({ label, id, hint, error, trailing, labelAction, className = "", ref, ...rest }: TextFieldProps) {
   const autoId = useId();
   const inputId = id ?? autoId;
   const hintId = `${inputId}-hint`;

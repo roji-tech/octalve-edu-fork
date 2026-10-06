@@ -15,11 +15,16 @@ export default async function UsersPage({ params }: { params: Promise<{ code: st
   const { session, tenant } = await requireTenantPage(code);
   if (tenant.role !== "ADMIN") forbidden();
 
-  const campuses = await tenant.run((tx) => tx.campus.findMany({ where: { tenantId: tenant.tenantId }, select: { id: true, name: true }, orderBy: { name: "asc" } }));
+  const campuses = await tenant.run((tx) =>
+    tx.campus.findMany({ where: { tenantId: tenant.tenantId }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
+  );
 
   return (
     <div>
-      <PageHeader title="Users" description={`The people who can sign in to ${tenant.tenantName}, and the invitations still waiting for an answer.`} />
+      <PageHeader
+        title="Users"
+        description={`The people who can sign in to ${tenant.tenantName}, and the invitations still waiting for an answer.`}
+      />
       <UsersPanel schoolCode={tenant.tenantCode} schoolName={tenant.tenantName} campuses={campuses} currentUserId={session.userId} />
     </div>
   );

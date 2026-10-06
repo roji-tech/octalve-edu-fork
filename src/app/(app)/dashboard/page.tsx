@@ -21,45 +21,46 @@ export default async function DashboardPage() {
 
   return (
     <div>
-        <h1 className="text-3xl font-bold tracking-tight text-fg">Welcome, {firstName}</h1>
-        <p className="mt-2 text-base text-fg-muted">
-          {memberships.length > 0
-            ? "Choose a school to open."
-            : "You're signed in, but you aren't a member of any school yet."}
-        </p>
+      <h1 className="text-3xl font-bold tracking-tight text-fg">Welcome, {firstName}</h1>
+      <p className="mt-2 text-base text-fg-muted">
+        {memberships.length > 0 ? "Choose a school to open." : "You're signed in, but you aren't a member of any school yet."}
+      </p>
 
-        <section aria-labelledby="schools-heading" className="mt-10">
-          <h2 id="schools-heading" className="text-sm font-semibold tracking-wider text-fg-muted uppercase">
-            Your schools
-          </h2>
+      <section aria-labelledby="schools-heading" className="mt-10">
+        <h2 id="schools-heading" className="text-sm font-semibold tracking-wider text-fg-muted uppercase">
+          Your schools
+        </h2>
 
-          {memberships.length === 0 ? (
-            <p className="mt-4 rounded-2xl border border-dashed border-line-strong p-8 text-center text-sm text-fg-muted">
-              Ask your school administrator to invite you.
-            </p>
-          ) : (
-            <ul className="mt-4 grid gap-4 sm:grid-cols-2">
-              {memberships.map((m) => (
-                <li key={m.tenantId}>
-                  <Link
-                    href={`/schools/${m.tenantCode}`}
-                    className="flex min-h-11 items-start gap-4 rounded-2xl border border-line bg-surface p-5 transition-colors hover:border-line-strong hover:bg-surface-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+        {memberships.length === 0 ? (
+          <p className="mt-4 rounded-2xl border border-dashed border-line-strong p-8 text-center text-sm text-fg-muted">
+            Ask your school administrator to invite you.
+          </p>
+        ) : (
+          <ul className="mt-4 grid gap-4 sm:grid-cols-2">
+            {memberships.map((m) => (
+              <li key={m.tenantId}>
+                <Link
+                  href={`/schools/${m.tenantCode}`}
+                  className="flex min-h-11 items-start gap-4 rounded-2xl border border-line bg-surface p-5 transition-colors hover:border-line-strong hover:bg-surface-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                >
+                  <span
+                    aria-hidden="true"
+                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-tint text-brand-fg"
                   >
-                    <span aria-hidden="true" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-tint text-brand-fg">
-                      <GraduationCapIcon className="h-5 w-5" />
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate font-semibold text-fg">{m.tenantName}</span>
-                      <span className="mt-0.5 block text-sm text-fg-muted">{ROLE_LABELS[m.role]}</span>
-                      <span className="mt-2 block font-mono text-xs text-fg-muted">{m.tenantCode}</span>
-                    </span>
-                    <ChevronRightIcon className="mt-1 h-5 w-5 shrink-0 text-fg-muted" />
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
+                    <GraduationCapIcon className="h-5 w-5" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-semibold text-fg">{m.tenantName}</span>
+                    <span className="mt-0.5 block text-sm text-fg-muted">{ROLE_LABELS[m.role]}</span>
+                    <span className="mt-2 block font-mono text-xs text-fg-muted">{m.tenantCode}</span>
+                  </span>
+                  <ChevronRightIcon className="mt-1 h-5 w-5 shrink-0 text-fg-muted" />
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
     </div>
   );
 }

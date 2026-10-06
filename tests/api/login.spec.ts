@@ -73,8 +73,7 @@ test.describe("POST /api/v1/auth/login — success", () => {
 // alone can outlive "closing the browser" (session restore). Remembered is the long policy.
 test.describe("POST /api/v1/auth/login — remember me", () => {
   const HOUR_MS = 60 * 60 * 1000;
-  const near = (actual: Date | number, expected: number) =>
-    Math.abs(new Date(actual).getTime() - expected) < 2 * 60_000;
+  const near = (actual: Date | number, expected: number) => Math.abs(new Date(actual).getTime() - expected) < 2 * 60_000;
 
   test("by default (no `remember`): a session cookie with no Expires/Max-Age, and a 12-hour server cap", async () => {
     const user = await createUser({ role: Role.TEACHING_STAFF });

@@ -26,7 +26,13 @@ const body = z.strictObject({ email: emailField, role: roleField, campusId: camp
 export const GET = withAuth(
   async (req, auth: TenantAuthContext) => {
     const page = parseOffsetPagination(req.nextUrl.searchParams);
-    if (!page.ok) return fail("Some of the query parameters are not valid.", 400, "VALIDATION", page.issues.map((i) => ({ ...i, path: `query.${i.path}` })));
+    if (!page.ok)
+      return fail(
+        "Some of the query parameters are not valid.",
+        400,
+        "VALIDATION",
+        page.issues.map((i) => ({ ...i, path: `query.${i.path}` })),
+      );
     const { invitations, total } = await listOpenInvitations(auth.tenant, page);
     return ok({ invitations }, offsetMeta({ page: page.page, limit: page.limit, total }));
   },
@@ -46,11 +52,17 @@ export const POST = withAuth(
     if (!result.ok) {
       switch (result.reason) {
         case "ALREADY_MEMBER":
-          return fail("That person is already a member of this school.", 409, "ALREADY_MEMBER", [{ path: "body.email", message: "That person is already a member of this school." }]);
+          return fail("That person is already a member of this school.", 409, "ALREADY_MEMBER", [
+            { path: "body.email", message: "That person is already a member of this school." },
+          ]);
         case "DEACTIVATED_MEMBER":
-          return fail("That person was deactivated in this school. Reactivate them instead.", 409, "DEACTIVATED_MEMBER", [{ path: "body.email", message: "Deactivated here — reactivate them instead." }]);
+          return fail("That person was deactivated in this school. Reactivate them instead.", 409, "DEACTIVATED_MEMBER", [
+            { path: "body.email", message: "Deactivated here — reactivate them instead." },
+          ]);
         case "INVALID_CAMPUS":
-          return fail("Choose one of this school's campuses.", 400, "VALIDATION", [{ path: "body.campusId", message: "Choose one of this school's campuses." }]);
+          return fail("Choose one of this school's campuses.", 400, "VALIDATION", [
+            { path: "body.campusId", message: "Choose one of this school's campuses." },
+          ]);
       }
     }
 
@@ -58,7 +70,14 @@ export const POST = withAuth(
       try {
         if (!(await reserveAttempt(`invite:mail:${input.email}`, MAIL_PER_ADDRESS))) return;
         await sendEmailQuietly(
-          invitationEmail({ to: input.email, token: result.token, schoolName: tenant.tenantName, roleLabel: ROLE_LABELS[input.role], inviterName: auth.user.name, days: INVITATION_TTL_DAYS }),
+          invitationEmail({
+            to: input.email,
+            token: result.token,
+            schoolName: tenant.tenantName,
+            roleLabel: ROLE_LABELS[input.role],
+            inviterName: auth.user.name,
+            days: INVITATION_TTL_DAYS,
+          }),
         );
       } catch (error) {
         console.error("[invitations] mail failed:", error instanceof Error ? error.message : error);

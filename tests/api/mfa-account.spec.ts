@@ -338,9 +338,7 @@ test.describe("POST /mfa/recovery-codes", () => {
 
     const mails = await waitForMail(person.user.email, 2);
     expect(mails.some((m) => /New recovery codes/.test(m.subject))).toBe(true);
-    await expect
-      .poll(() => db.auditLog.count({ where: { actorUserId: person.user.id, action: "MFA_RECOVERY_CODES_REPLACED" } }))
-      .toBe(1);
+    await expect.poll(() => db.auditLog.count({ where: { actorUserId: person.user.id, action: "MFA_RECOVERY_CODES_REPLACED" } })).toBe(1);
   });
 
   test("the code used to ask is spent (no replay)", async () => {

@@ -12,11 +12,7 @@ export const brand = {
   login: {
     headline: "Run every campus from one dashboard.",
     blurb: "Solo or SaaS — Octalve Edu adapts to how your school actually operates.",
-    points: [
-      "Multi-campus & multi-tenant ready",
-      "Role-based staff permissions",
-      "Self-hosted or fully managed",
-    ],
+    points: ["Multi-campus & multi-tenant ready", "Role-based staff permissions", "Self-hosted or fully managed"],
   },
   /// What the artifact draws as "Branches" is, in this product's data model, a Campus.
   place: { singular: "campus", plural: "campuses", Singular: "Campus", Plural: "Campuses" },

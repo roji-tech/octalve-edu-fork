@@ -16,10 +16,7 @@ export function proxy(request: NextRequest) {
     dev: process.env.NODE_ENV === "development",
     https: (process.env.APP_URL ?? "").startsWith("https://"),
   });
-  const header =
-    process.env.CSP_REPORT_ONLY === "true"
-      ? "Content-Security-Policy-Report-Only"
-      : "Content-Security-Policy";
+  const header = process.env.CSP_REPORT_ONLY === "true" ? "Content-Security-Policy-Report-Only" : "Content-Security-Policy";
 
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set(header, policy);

@@ -34,10 +34,7 @@ export async function isLiveResetToken(token: string): Promise<boolean> {
 /// two requests present it at the same instant. Every session of that person is deleted (whoever knew
 /// the old password, or had a stolen session, is out), and their other links are dropped.
 /// Returns the user id, or null for an unknown / used / expired token — callers treat all three alike.
-export async function resetPasswordWithToken(
-  token: string,
-  newPasswordHash: string,
-): Promise<{ userId: string } | null> {
+export async function resetPasswordWithToken(token: string, newPasswordHash: string): Promise<{ userId: string } | null> {
   const tokenHash = hashToken(token);
   return prisma.$transaction(async (tx) => {
     const claimed = await tx.passwordResetToken.updateMany({

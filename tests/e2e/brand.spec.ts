@@ -13,8 +13,7 @@ test.beforeAll(async () => {
 const INDIGO = "rgb(79, 70, 229)"; //      #4F46E5 — filled buttons (6.29 : 1 with white)
 const DEEP_INDIGO = "rgb(55, 48, 163)"; // #3730a3 — the sign-in brand panel
 
-const backgroundOf = (locator: import("@playwright/test").Locator) =>
-  locator.evaluate((el) => getComputedStyle(el).backgroundColor);
+const backgroundOf = (locator: import("@playwright/test").Locator) => locator.evaluate((el) => getComputedStyle(el).backgroundColor);
 
 test.describe("Octalve Edu's brand", () => {
   test("the tab title carries the product name", async ({ page }) => {

@@ -5,8 +5,7 @@ import { API_CSP, buildCsp, generateNonce } from "@/lib/security/csp";
 // The policy's shape, as pure functions (domain-implementation-plan.md §0.5.B). Whether a real browser
 // enforces it, and whether every real flow survives it, is tests/api/csp.spec.ts and tests/e2e/csp.spec.ts.
 
-const directive = (policy: string, name: string) =>
-  policy.split("; ").find((d) => d === name || d.startsWith(`${name} `));
+const directive = (policy: string, name: string) => policy.split("; ").find((d) => d === name || d.startsWith(`${name} `));
 
 test.describe("generateNonce", () => {
   test("is 128 bits of base64", () => {

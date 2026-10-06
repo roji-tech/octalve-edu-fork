@@ -54,7 +54,12 @@ export function InviteDialog({
   }
 
   return (
-    <Dialog open={open} onClose={onClose} title="Invite someone" description="They get an email with a link that works for 7 days. Until they accept, they have no access.">
+    <Dialog
+      open={open}
+      onClose={onClose}
+      title="Invite someone"
+      description="They get an email with a link that works for 7 days. Until they accept, they have no access."
+    >
       <form onSubmit={submit} noValidate className="space-y-4">
         <TextField
           label="Email address"
@@ -72,14 +77,23 @@ export function InviteDialog({
           autoFocus
           disabled={pending}
         />
-        <SelectField label="Role" name="role" value={role} onChange={(e) => setRole(e.target.value as RoleName)} options={ROLE_OPTIONS} disabled={pending} />
+        <SelectField
+          label="Role"
+          name="role"
+          value={role}
+          onChange={(e) => setRole(e.target.value as RoleName)}
+          options={ROLE_OPTIONS}
+          disabled={pending}
+        />
         <SelectField
           label="Campus"
           name="campus"
           value={campusId}
           onChange={(e) => setCampusId(e.target.value)}
           options={[{ value: "", label: "No specific campus" }, ...campuses.map((c) => ({ value: c.id, label: c.name }))]}
-          hint={role === "ADMIN" ? "Administrators can see every campus whatever is chosen here." : "Everyone else sees only their own campus."}
+          hint={
+            role === "ADMIN" ? "Administrators can see every campus whatever is chosen here." : "Everyone else sees only their own campus."
+          }
           disabled={pending}
         />
         {formError && <Alert variant="error">{formError}</Alert>}

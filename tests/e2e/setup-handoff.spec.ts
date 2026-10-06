@@ -101,7 +101,11 @@ test.describe("the wizard gives live, accessible feedback", () => {
     await page.goto("/setup");
     await fillWizard(page);
     await page.route("**/api/v1/setup", (route) =>
-      route.fulfill({ status: 409, contentType: "application/json", body: JSON.stringify({ data: null, meta: {}, error: { code: "ALREADY_COMPLETE", message: "Setup has already been completed." } }) }),
+      route.fulfill({
+        status: 409,
+        contentType: "application/json",
+        body: JSON.stringify({ data: null, meta: {}, error: { code: "ALREADY_COMPLETE", message: "Setup has already been completed." } }),
+      }),
     );
     await complete(page).click();
     await expect(alertWith(page, "Setup has already been completed.")).toBeVisible();

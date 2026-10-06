@@ -1,7 +1,17 @@
 import "../support/env";
 import { test, expect } from "@playwright/test";
 import { SAAS_URL } from "../support/env";
-import { Role, addMembership, createTenant, createUser, db, deactivateMembership, removeCreatedTenants, seedInstance, type TestTenant } from "../support/db";
+import {
+  Role,
+  addMembership,
+  createTenant,
+  createUser,
+  db,
+  deactivateMembership,
+  removeCreatedTenants,
+  seedInstance,
+  type TestTenant,
+} from "../support/db";
 import { api, cookieHeader, loginAs } from "../support/http";
 
 // What deactivation means over real HTTP: access ends on the person's NEXT request (the role is read from the membership every
@@ -41,7 +51,10 @@ test("sign-in treats a deactivated administrator as an ordinary person: the 7-da
   await addMembership(active.id, school.id, Role.ADMIN);
   await addMembership(former.id, school.id, Role.ADMIN);
   await deactivateMembership(former.id, school.id);
-  for (const [user, days] of [[active, 7], [former, 90]] as const) {
+  for (const [user, days] of [
+    [active, 7],
+    [former, 90],
+  ] as const) {
     const res = await loginAs(user, { ...SAAS, remember: true });
     expect(res.status).toBe(200);
     const row = await db.session.findFirstOrThrow({ where: { userId: user.id }, orderBy: { createdAt: "desc" } });

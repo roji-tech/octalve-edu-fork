@@ -14,7 +14,9 @@ test.describe("createResetToken", () => {
     const rows = await db.passwordResetToken.findMany({ where: { userId: user.id } });
     expect(rows).toHaveLength(1);
     expect(rows[0].tokenHash).toBe(sha256Hex(token));
-    const hits = await db.$queryRaw<{ n: number }[]>`SELECT count(*)::int AS n FROM "PasswordResetToken" t WHERE t::text LIKE ${"%" + token + "%"}`;
+    const hits = await db.$queryRaw<
+      { n: number }[]
+    >`SELECT count(*)::int AS n FROM "PasswordResetToken" t WHERE t::text LIKE ${"%" + token + "%"}`;
     expect(hits[0].n).toBe(0);
   });
 

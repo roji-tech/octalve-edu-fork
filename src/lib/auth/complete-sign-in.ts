@@ -4,12 +4,7 @@ import { forUser } from "@/lib/tenant/for-tenant";
 import { auditPersonEvent } from "@/lib/auth/audit";
 import { describeUserAgent } from "@/lib/auth/user-agent";
 import { ok } from "@/lib/api/envelope";
-import {
-  SESSION_COOKIE_NAME,
-  createSession,
-  deleteSessionByToken,
-  setSessionCookie,
-} from "@/lib/auth/session";
+import { SESSION_COOKIE_NAME, createSession, deleteSessionByToken, setSessionCookie } from "@/lib/auth/session";
 
 /// The ONE place a person becomes signed in. Used by sign-in step 1 (no second factor on the account) and
 /// by step 2 (`/login/mfa`, after the second factor) — so the two can't drift apart, and nothing else may

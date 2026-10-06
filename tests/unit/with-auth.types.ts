@@ -24,19 +24,24 @@ withAuth(handler, { permissions: ["students:read"] });
 withAuth(handler, { tenant: true, permissions: ["students:read"] });
 
 // A tenant route's handler receives `auth.tenant`, and only a real Role is accepted.
-withAuth(async (_req: NextRequest, auth: TenantAuthContext, ctx: TenantRouteContext) => {
-  void ctx;
-  void auth.tenant.tenantId;
-  void auth.tenant.role;
-  return new Response("ok");
-}, { tenant: true, roles: ["ADMIN", "TEACHING_STAFF"] });
+withAuth(
+  async (_req: NextRequest, auth: TenantAuthContext, ctx: TenantRouteContext) => {
+    void ctx;
+    void auth.tenant.tenantId;
+    void auth.tenant.role;
+    return new Response("ok");
+  },
+  { tenant: true, roles: ["ADMIN", "TEACHING_STAFF"] },
+);
 
 // @ts-expect-error not a Role
 withAuth(async () => new Response("ok"), { tenant: true, roles: ["SUPERUSER"] });
 
 // A tenant route must be able to read `[code]`: a route context without it is refused.
 // @ts-expect-error the route context has no `params.code`
-withAuth(async (_req: NextRequest, auth: TenantAuthContext, ctx: { nothing: true }) => (void auth, void ctx, new Response("ok")), { tenant: true });
+withAuth(async (_req: NextRequest, auth: TenantAuthContext, ctx: { nothing: true }) => (void auth, void ctx, new Response("ok")), {
+  tenant: true,
+});
 
 // The branded id: a plain string — a URL segment, say — is not a VerifiedTenantId.
 const fromUrl: string = "tenant-from-the-url";

@@ -24,13 +24,32 @@ export function EditMemberDialog({
   onSaved: (member: Member, changed: boolean) => void;
 }) {
   return (
-    <Dialog open={member !== null} onClose={onClose} title={member ? `Change access for ${displayName(member)}` : "Change access"} description="Takes effect on their next request.">
-      {member && <EditForm key={member.userId} member={member} onClose={onClose} schoolCode={schoolCode} campuses={campuses} onSaved={onSaved} />}
+    <Dialog
+      open={member !== null}
+      onClose={onClose}
+      title={member ? `Change access for ${displayName(member)}` : "Change access"}
+      description="Takes effect on their next request."
+    >
+      {member && (
+        <EditForm key={member.userId} member={member} onClose={onClose} schoolCode={schoolCode} campuses={campuses} onSaved={onSaved} />
+      )}
     </Dialog>
   );
 }
 
-function EditForm({ member, onClose, schoolCode, campuses, onSaved }: { member: Member; onClose: () => void; schoolCode: string; campuses: CampusOption[]; onSaved: (member: Member, changed: boolean) => void }) {
+function EditForm({
+  member,
+  onClose,
+  schoolCode,
+  campuses,
+  onSaved,
+}: {
+  member: Member;
+  onClose: () => void;
+  schoolCode: string;
+  campuses: CampusOption[];
+  onSaved: (member: Member, changed: boolean) => void;
+}) {
   const [role, setRole] = useState<RoleName>(member.role);
   const [campusId, setCampusId] = useState(member.campusId ?? "");
   const [campusError, setCampusError] = useState<string | null>(null);
@@ -62,7 +81,14 @@ function EditForm({ member, onClose, schoolCode, campuses, onSaved }: { member: 
 
   return (
     <form onSubmit={submit} noValidate className="space-y-4">
-      <SelectField label="Role" name="role" value={role} onChange={(e) => setRole(e.target.value as RoleName)} options={ROLE_OPTIONS} disabled={pending} />
+      <SelectField
+        label="Role"
+        name="role"
+        value={role}
+        onChange={(e) => setRole(e.target.value as RoleName)}
+        options={ROLE_OPTIONS}
+        disabled={pending}
+      />
       <SelectField
         label="Campus"
         name="campus"

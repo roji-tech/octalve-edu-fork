@@ -7,11 +7,7 @@ import { reserveAttempt, refundAttempt } from "@/lib/auth/rate-limit";
 import { verifyPassword, PASSWORD_MAX_LENGTH } from "@/lib/auth/password";
 import { createEmailChangeToken } from "@/lib/auth/email-change";
 import { auditPersonEvent } from "@/lib/auth/audit";
-import {
-  emailChangeConfirmEmail,
-  emailChangeRequestedNotice,
-  emailChangeTakenNotice,
-} from "@/lib/email/messages";
+import { emailChangeConfirmEmail, emailChangeRequestedNotice, emailChangeTakenNotice } from "@/lib/email/messages";
 import { sendEmailQuietly } from "@/lib/email/transport";
 
 // POST /api/v1/auth/email-change/request  { newEmail, password }                         (plan §0.5.E)

@@ -12,8 +12,7 @@ test.beforeAll(async () => {
 });
 
 const html = (page: import("@playwright/test").Page) => page.locator("html");
-const toggle = (page: import("@playwright/test").Page, to: "light" | "dark") =>
-  page.getByRole("button", { name: `Switch to ${to} theme` });
+const toggle = (page: import("@playwright/test").Page, to: "light" | "dark") => page.getByRole("button", { name: `Switch to ${to} theme` });
 
 test.describe("server-rendered theme", () => {
   test("dark by default, light when the cookie says so — in the raw HTML, before any script runs", async () => {

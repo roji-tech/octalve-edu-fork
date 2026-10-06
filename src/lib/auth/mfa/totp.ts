@@ -26,8 +26,7 @@ export function hotp(secret: Buffer, counter: number, digits: number = TOTP_DIGI
   message.writeBigUInt64BE(BigInt(counter));
   const mac = crypto.createHmac("sha1", secret).update(message).digest();
   const offset = mac[mac.length - 1] & 0x0f; // dynamic truncation
-  const binary =
-    ((mac[offset] & 0x7f) << 24) | (mac[offset + 1] << 16) | (mac[offset + 2] << 8) | mac[offset + 3];
+  const binary = ((mac[offset] & 0x7f) << 24) | (mac[offset + 1] << 16) | (mac[offset + 2] << 8) | mac[offset + 3];
   return String(binary % 10 ** digits).padStart(digits, "0");
 }
 

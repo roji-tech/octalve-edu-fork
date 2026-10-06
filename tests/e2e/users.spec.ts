@@ -1,6 +1,18 @@
 import { test, expect } from "../support/fixtures";
 import type { Page } from "@playwright/test";
-import { Role, addMembership, createTenant, createUser, db, deactivateMembership, removeCreatedTenants, seedInstance, uniqueEmail, type TestTenant, type TestUser } from "../support/db";
+import {
+  Role,
+  addMembership,
+  createTenant,
+  createUser,
+  db,
+  deactivateMembership,
+  removeCreatedTenants,
+  seedInstance,
+  uniqueEmail,
+  type TestTenant,
+  type TestUser,
+} from "../support/db";
 import { SAAS_URL } from "../support/env";
 import { api, cookieHeader, loginAs } from "../support/http";
 import { waitForMail, tokenFrom } from "../support/outbox";
@@ -46,7 +58,9 @@ async function member(role: Role, name: string, campus: number | null = 0) {
 }
 
 test.describe("the page", () => {
-  test("an administrator sees the school's people — themselves marked 'You' with no actions — and the empty invitations section", async ({ page }) => {
+  test("an administrator sees the school's people — themselves marked 'You' with no actions — and the empty invitations section", async ({
+    page,
+  }) => {
     const tola = await member(Role.TEACHING_STAFF, "Tola Teacher", 0);
     await signedInAdmin(page);
     await expect(page).toHaveTitle(/Users/);
@@ -75,7 +89,9 @@ test.describe("the page", () => {
     await expect(page.getByText(school.campuses[0].name)).toHaveCount(0); // … and nothing of the page
   });
 
-  test("search narrows the list as you type (waiting for a pause), filters combine, 'Clear filters' resets, and an empty result says so", async ({ page }) => {
+  test("search narrows the list as you type (waiting for a pause), filters combine, 'Clear filters' resets, and an empty result says so", async ({
+    page,
+  }) => {
     await member(Role.TEACHING_STAFF, "Tola Teacher", 0);
     await member(Role.PARENT, "Pat Parent", null);
     await signedInAdmin(page);
@@ -102,11 +118,17 @@ test.describe("the page", () => {
     await expect(pages.getByText("Page 1 of 2")).toBeVisible();
     await expect(pages.getByRole("button", { name: "Previous" })).toBeDisabled();
     await expect(page.getByText("23 people")).toBeVisible();
-    const firstPage = await page.getByRole("listitem").filter({ has: page.getByText(/Parent \d\d|Amina/) }).allTextContents();
+    const firstPage = await page
+      .getByRole("listitem")
+      .filter({ has: page.getByText(/Parent \d\d|Amina/) })
+      .allTextContents();
     await pages.getByRole("button", { name: "Next" }).click();
     await expect(pages.getByText("Page 2 of 2")).toBeVisible();
     await expect(pages.getByRole("button", { name: "Next" })).toBeDisabled();
-    const secondPage = await page.getByRole("listitem").filter({ has: page.getByText(/Parent \d\d|Amina/) }).allTextContents();
+    const secondPage = await page
+      .getByRole("listitem")
+      .filter({ has: page.getByText(/Parent \d\d|Amina/) })
+      .allTextContents();
     expect(secondPage.length).toBeGreaterThan(0);
     expect(secondPage.some((text) => firstPage.includes(text))).toBe(false);
     await pages.getByRole("button", { name: "Previous" }).click();
@@ -115,7 +137,9 @@ test.describe("the page", () => {
 });
 
 test.describe("inviting", () => {
-  test("Invite someone: the dialog opens on the email field; mistakes are explained in place; sending announces it, lists it, and mails a link", async ({ page }) => {
+  test("Invite someone: the dialog opens on the email field; mistakes are explained in place; sending announces it, lists it, and mails a link", async ({
+    page,
+  }) => {
     await signedInAdmin(page);
     const trigger = page.getByRole("button", { name: "Invite someone" });
     await trigger.click();
@@ -198,7 +222,9 @@ test.describe("inviting", () => {
 
   test("an expired invitation says so and offers 'Send again'", async ({ page }) => {
     const to = uniqueEmail("late");
-    await db.invitation.create({ data: { tenantId: school.id, email: to, role: Role.PARENT, tokenHash: "f".repeat(64), expiresAt: new Date(Date.now() - 3_600_000) } });
+    await db.invitation.create({
+      data: { tenantId: school.id, email: to, role: Role.PARENT, tokenHash: "f".repeat(64), expiresAt: new Date(Date.now() - 3_600_000) },
+    });
     await signedInAdmin(page);
     const pending = row(page, to);
     await expect(pending).toContainText("Expired");
@@ -207,7 +233,9 @@ test.describe("inviting", () => {
 });
 
 test.describe("changing people", () => {
-  test("Edit: change role and campus; the list and the person's NEXT request follow; Escape and Cancel change nothing", async ({ page }) => {
+  test("Edit: change role and campus; the list and the person's NEXT request follow; Escape and Cancel change nothing", async ({
+    page,
+  }) => {
     const tola = await member(Role.TEACHING_STAFF, "Tola Teacher", 0);
     const tolaCookie = cookieHeader((await loginAs(tola, { baseUrl: SAAS_URL })).token!);
     await signedInAdmin(page);
@@ -237,7 +265,9 @@ test.describe("changing people", () => {
     expect(school_.json.data).toMatchObject({ role: "NON_TEACHING_STAFF", campuses: [{ name: "Alpha South" }] }); // their next request already sees it
   });
 
-  test("Deactivate asks first and says what it does; confirming ends their access at once; Reactivate brings them back", async ({ page }) => {
+  test("Deactivate asks first and says what it does; confirming ends their access at once; Reactivate brings them back", async ({
+    page,
+  }) => {
     const tola = await member(Role.TEACHING_STAFF, "Tola Teacher", 1);
     const tolaCookie = cookieHeader((await loginAs(tola, { baseUrl: SAAS_URL })).token!);
     await signedInAdmin(page);
@@ -277,7 +307,9 @@ test.describe("changing people", () => {
     await expect(page.getByText(/^1 person/)).toBeFocused();
   });
 
-  test("a person deactivated by someone else in the meantime: the Edit that follows is refused with the server's own words", async ({ page }) => {
+  test("a person deactivated by someone else in the meantime: the Edit that follows is refused with the server's own words", async ({
+    page,
+  }) => {
     const tola = await member(Role.TEACHING_STAFF, "Tola Teacher", 0);
     await signedInAdmin(page);
     await page.getByRole("button", { name: "Change role or campus for Tola Teacher" }).click();

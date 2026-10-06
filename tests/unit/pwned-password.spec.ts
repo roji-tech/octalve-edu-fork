@@ -23,7 +23,9 @@ function fetcherReturning(body: string, status = 200) {
 test.describe("isBreachedPassword", () => {
   test("the published example: 'password' hashes to 5BAA6…, and that suffix in the answer means breached", async () => {
     expect(sha1("password")).toBe("5BAA61E4C9B93F3F0682250B6CF8331B7EE68FD8");
-    const { fetcher } = fetcherReturning("0018A45C4D1DEF81644B54AB7F969B88D65:3\r\n1E4C9B93F3F0682250B6CF8331B7EE68FD8:9545824\r\n011053FD0102E94D6AE2F8B83D76FAF94F6:1");
+    const { fetcher } = fetcherReturning(
+      "0018A45C4D1DEF81644B54AB7F969B88D65:3\r\n1E4C9B93F3F0682250B6CF8331B7EE68FD8:9545824\r\n011053FD0102E94D6AE2F8B83D76FAF94F6:1",
+    );
     await withEnv(ON, async () => expect(await isBreachedPassword("password", { fetcher })).toBe(true));
   });
 
@@ -54,9 +56,16 @@ test.describe("isBreachedPassword", () => {
     await withEnv(ON, async () => {
       expect(await isBreachedPassword("pw", { fetcher: fetcherReturning("x", 500).fetcher })).toBe(false);
       expect(await isBreachedPassword("pw", { fetcher: fetcherReturning("x", 429).fetcher })).toBe(false);
-      expect(await isBreachedPassword("pw", { fetcher: async () => { throw new Error("offline"); } })).toBe(false);
+      expect(
+        await isBreachedPassword("pw", {
+          fetcher: async () => {
+            throw new Error("offline");
+          },
+        }),
+      ).toBe(false);
       expect(await isBreachedPassword("pw", { fetcher: fetcherReturning("").fetcher })).toBe(false);
-      const hangs = (_url: string, init: { signal: AbortSignal }) => new Promise<never>((_, reject) => init.signal.addEventListener("abort", () => reject(new Error("aborted"))));
+      const hangs = (_url: string, init: { signal: AbortSignal }) =>
+        new Promise<never>((_, reject) => init.signal.addEventListener("abort", () => reject(new Error("aborted"))));
       const started = Date.now();
       expect(await isBreachedPassword("pw", { fetcher: hangs as never, timeoutMs: 150 })).toBe(false);
       expect(Date.now() - started).toBeLessThan(1_500);
@@ -74,7 +83,10 @@ test.describe("checkNewPasswordOnServer", () => {
   test("the shape rule comes first (and needs no network); then the breach check", async () => {
     const original = globalThis.fetch;
     let calls = 0;
-    globalThis.fetch = (async () => { calls++; return new Response(`${sha1("correct-horse-9").slice(5)}:12`); }) as typeof fetch;
+    globalThis.fetch = (async () => {
+      calls++;
+      return new Response(`${sha1("correct-horse-9").slice(5)}:12`);
+    }) as typeof fetch;
     try {
       await withEnv(ON, async () => {
         expect(await checkNewPasswordOnServer("short1")).toMatch(/at least 8 characters/);

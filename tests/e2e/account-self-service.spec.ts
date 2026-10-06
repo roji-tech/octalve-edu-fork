@@ -110,7 +110,10 @@ async function requestChange(page: Page, user: { password: string }, newEmail: s
 }
 
 test.describe("change your email address", () => {
-  test("the whole journey: request → mail to the NEW address → confirm → signed out everywhere → the new address signs in", async ({ page, browser }) => {
+  test("the whole journey: request → mail to the NEW address → confirm → signed out everywhere → the new address signs in", async ({
+    page,
+    browser,
+  }) => {
     const user = await createUser({ role: Role.TEACHING_STAFF });
     const newEmail = uniqueEmail("fresh");
     // Signed in on another device.

@@ -48,19 +48,29 @@ export default defineConfig({
   workers: 1,
   retries: 0, // a flaky test is a bug to fix, not to retry away
   forbidOnly: !!process.env.CI,
-  reporter: process.env.CI
-    ? [["list"], ["github"], ["html", { open: "never" }]]
-    : [["list"], ["html", { open: "never" }]],
+  reporter: process.env.CI ? [["list"], ["github"], ["html", { open: "never" }]] : [["list"], ["html", { open: "never" }]],
   use: { trace: "retain-on-failure", screenshot: "only-on-failure" },
 
   webServer: [
     // The breached-password service stand-in (see tests/support/pwned-stub.mjs).
-    { command: `node tests/support/pwned-stub.mjs ${PWNED_STUB_PORT}`, url: `http://127.0.0.1:${PWNED_STUB_PORT}/__requests`, reuseExistingServer: false, timeout: 20_000 },
+    {
+      command: `node tests/support/pwned-stub.mjs ${PWNED_STUB_PORT}`,
+      url: `http://127.0.0.1:${PWNED_STUB_PORT}/__requests`,
+      reuseExistingServer: false,
+      timeout: 20_000,
+    },
     // A throwaway Redis (no persistence) for the rate-limit store tests — see tests/README.md. Skipped when the
     // developer points TEST_REDIS_URL at their own.
     ...(process.env.TEST_REDIS_URL
       ? []
-      : [{ command: `redis-server --port ${REDIS_TEST_PORT} --save "" --appendonly no --bind 127.0.0.1`, port: REDIS_TEST_PORT, reuseExistingServer: false, timeout: 20_000 }]),
+      : [
+          {
+            command: `redis-server --port ${REDIS_TEST_PORT} --save "" --appendonly no --bind 127.0.0.1`,
+            port: REDIS_TEST_PORT,
+            reuseExistingServer: false,
+            timeout: 20_000,
+          },
+        ]),
     {
       command: `pnpm exec next start -p ${HTTP_PORT}`,
       url: `${HTTP_URL}/favicon.ico`,
