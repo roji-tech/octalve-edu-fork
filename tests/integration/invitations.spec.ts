@@ -9,7 +9,11 @@ import { resolveTenant } from "@/lib/tenant/resolve-tenant";
 import type { TenantAuthContext } from "@/lib/auth/with-auth";
 import { hashPassword } from "@/lib/auth/password";
 import { acceptInvitation, createInvitation, listOpenInvitations, previewInvitation, resendInvitation, revokeInvitation } from "@/lib/invitations/service";
-import { hashInvitationToken, INVITATION_TTL_MS, isInvitationToken, newInvitationToken } from "@/lib/invitations/token";
+import { hashInvitationToken, INVITATION_TTL_DAYS, INVITATION_TTL_MS, isInvitationToken, newInvitationToken } from "@/lib/invitations/token";
+
+// The lifetime is a product rule (plan §0.5.4: seven days), so it is spelled out HERE, not read back from the module under test —
+// comparing a result with the very constant that produced it passes whatever the constant is (found by mutation I5e: 30 days).
+const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 import { invitationStatus } from "@/lib/invitations/status";
 import { invitationEmail } from "@/lib/email/messages";
 
@@ -57,6 +61,11 @@ test.describe("the token", () => {
     for (const bad of ["", "short", "a".repeat(42), "a".repeat(44), `${"a".repeat(42)}=`, `${"a".repeat(42)}/`, 42, null, undefined]) expect(isInvitationToken(bad)).toBe(false);
   });
 
+  test("an invitation lives seven days — the constants are pinned to the plan, not to each other", () => {
+    expect(INVITATION_TTL_DAYS).toBe(7);
+    expect(INVITATION_TTL_MS).toBe(SEVEN_DAYS_MS);
+  });
+
   test("status is derived from the three timestamps, in order of precedence", () => {
     const now = new Date("2026-10-05T12:00:00Z");
     const future = new Date(now.getTime() + 1000);
@@ -86,7 +95,7 @@ test.describe("creating", () => {
     const row = await db.invitation.findUniqueOrThrow({ where: { id: invitation.id } });
     expect(row.tokenHash).toBe(hashInvitationToken(token));
     expect(row.tokenHash).not.toContain(token);
-    expect(Math.abs(row.expiresAt.getTime() - (Date.now() + INVITATION_TTL_MS))).toBeLessThan(60_000);
+    expect(Math.abs(row.expiresAt.getTime() - (Date.now() + SEVEN_DAYS_MS))).toBeLessThan(60_000);
     expect(row).toMatchObject({ tenantId: a.id, email: to, role: "TEACHING_STAFF", invitedById: admin.id, acceptedAt: null, revokedAt: null });
     const audit = await db.auditLog.findMany({ where: { tenantId: a.id, targetId: invitation.id } });
     expect(audit.map((r) => r.action)).toEqual(["INVITATION_CREATED"]);
@@ -171,7 +180,7 @@ test.describe("resend, revoke, list", () => {
     expect(resent!.token).not.toBe(token);
     expect(await previewInvitation(token)).toBeNull();
     expect(await previewInvitation(resent!.token)).not.toBeNull();
-    expect(Math.abs(resent!.invitation.expiresAt.getTime() - (Date.now() + INVITATION_TTL_MS))).toBeLessThan(60_000);
+    expect(Math.abs(resent!.invitation.expiresAt.getTime() - (Date.now() + SEVEN_DAYS_MS))).toBeLessThan(60_000);
     expect((await db.auditLog.findMany({ where: { targetId: invitation.id, action: "INVITATION_RESENT" } })).length).toBe(1);
   });
 
@@ -206,9 +215,12 @@ test.describe("resend, revoke, list", () => {
     const mid = await run(email("l2"));
     await new Promise((resolve) => setTimeout(resolve, 15));
     const fresh = await run(email("l3"));
-    if (!old.ok || !mid.ok || !fresh.ok) throw new Error("setup");
+    const used = await run(email("l4"));
+    if (!old.ok || !mid.ok || !fresh.ok || !used.ok) throw new Error("setup");
     await db.invitation.update({ where: { id: old.invitation.id }, data: { expiresAt: new Date(Date.now() - 1000) } });
     await revokeInvitation(ctx(school), admin.id, mid.invitation.id);
+    // An ACCEPTED invitation is not "open": it must not be listed (it would offer a Resend/Revoke on a link that is spent).
+    expect(await acceptInvitation({ token: used.token, viewerUserId: null, newAccount: { name: "List Person", passwordHash: await strongHash() } })).toMatchObject({ ok: true });
     const { invitations, total } = await listOpenInvitations(ctx(school), { skip: 0, take: 10 });
     expect(total).toBe(2);
     expect(invitations.map((i) => [i.id, i.status])).toEqual([[fresh.invitation.id, "pending"], [old.invitation.id, "expired"]]);
