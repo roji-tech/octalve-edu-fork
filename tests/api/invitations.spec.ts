@@ -2,7 +2,7 @@ import "../support/env";
 import crypto from "node:crypto";
 import { test, expect } from "@playwright/test";
 import { SAAS_URL } from "../support/env";
-import { Role, addMembership, createTenant, createUser, db, deactivateMembership, removeCreatedTenants, seedInstance, type TestTenant, type TestUser } from "../support/db";
+import { Role, addMembership, createTenant, createUser, db, deactivateMembership, removeCreatedTenants, seedInstance, uniqueIp, type TestTenant, type TestUser } from "../support/db";
 import { api, cookieHeader, loginAs, sessionCookie } from "../support/http";
 import { mailAfterGrace, tokenFrom, waitForMail } from "../support/outbox";
 import { BREACHED_MESSAGE } from "@/lib/auth/pwned-password";
@@ -175,6 +175,17 @@ test.describe("POST /invitations — the administrator invites", () => {
     expect(csrf.status).toBe(403);
     expect(csrf.json.error.code).toBe("CSRF");
   });
+
+  test("a non-admin cannot RESEND or REVOKE either: the same one 403 body (found by mutation H8: resend had no role check)", async () => {
+    const { id } = await invitedWithToken(unique("rs"));
+    const resend = await api(`${invitations()}/${id}/resend`, { ...SAAS, cookie: teacherCookie, method: "POST", body: {} });
+    expect(resend.status).toBe(403);
+    expect(resend.json).toEqual(NO_ACCESS);
+    const revoke = await api(`${invitations()}/${id}`, { ...SAAS, cookie: teacherCookie, method: "DELETE" });
+    expect(revoke.status).toBe(403);
+    expect(revoke.json).toEqual(NO_ACCESS);
+    expect((await db.invitation.findUniqueOrThrow({ where: { id } })).revokedAt).toBeNull();
+  });
 });
 
 test.describe("GET, resend, revoke", () => {
@@ -268,6 +279,15 @@ test.describe("POST /invitations/preview — public", () => {
     expect((await api("/api/v1/invitations/preview", { ...SAAS, body: { token: 42 } })).json).toEqual(INVALID);
     expect((await api("/api/v1/invitations/preview", { ...SAAS, body: {} })).json).toEqual(INVALID);
     expect((await api("/api/v1/invitations/preview", { ...SAAS, rawBody: "{" })).json.error.code).toBe("INVALID_BODY");
+  });
+
+  test("it is limited per IP: forty guesses are answered, the forty-first is a 429 (found by mutation H18: the limit was effectively off)", async () => {
+    const ip = uniqueIp();
+    for (let i = 0; i < 40; i++) expect((await preview(newInvitationToken(), { ip })).status, `guess ${i + 1}`).toBe(400);
+    const limited = await preview(newInvitationToken(), { ip });
+    expect(limited.status).toBe(429);
+    expect(limited.json.error.code).toBe("RATE_LIMITED");
+    expect((await preview(newInvitationToken(), { ip: uniqueIp() })).status).toBe(400); // someone else is unaffected
   });
 
   test("it is public but not cross-site: a cross-origin request is a 403", async () => {

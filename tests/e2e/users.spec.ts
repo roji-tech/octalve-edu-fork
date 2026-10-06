@@ -247,6 +247,7 @@ test.describe("changing people", () => {
     const d = dialog(page);
     await expect(d.getByRole("heading", { name: "Deactivate Tola Teacher?" })).toBeVisible();
     await expect(d).toContainText("They lose access to Alpha School on their next request. Nothing they did is deleted");
+    await expect(d.getByRole("button", { name: "Cancel" })).toBeFocused(); // the SAFE choice has focus, so Enter cannot deactivate (found by mutation U5)
     await d.getByRole("button", { name: "Cancel" }).click();
     expect((await api(`/api/v1/schools/${school.code}`, { baseUrl: SAAS_URL, cookie: tolaCookie })).status).toBe(200); // cancelled: nothing happened
 

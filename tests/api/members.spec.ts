@@ -261,6 +261,7 @@ test.describe("POST /members/[userId]/deactivate and /reactivate", () => {
     expect(real.json).toEqual(unknown.json);
     expect((await reactivate(outsider.id)).json).toEqual(real.json);
     expect((await deactivate(admin.id, "teacher")).json).toEqual(NO_ACCESS);
+    expect((await reactivate(admin.id, "teacher")).json).toEqual(NO_ACCESS); // found by mutation H4: reactivate had no role check
     expect(await db.tenantMembership.count({ where: { userId: outsider.id, tenantId: b.id, deactivatedAt: null } })).toBe(1);
   });
 });

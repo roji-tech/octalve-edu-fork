@@ -403,6 +403,42 @@ test.describe("Invitation: a school's own invitations — and the ONE row a toke
     expect(viaRaw).toEqual([]);
   });
 
+  test("an EMPTY hash setting matches no row — even one whose stored hash is empty (the policy must not read '' as a token)", async () => {
+    // found by mutation Q12: without NULLIF the unset/blank setting became '' and matched a row stored with ''
+    const row = await db.invitation.create({ data: { tenantId: a.id, email: "blank@rls.test", role: Role.PARENT, tokenHash: "", expiresAt: new Date(Date.now() + 60_000) } });
+    try {
+      const blank = await prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT set_config('app.invitation_hash', ''::text, true)`;
+        return tx.invitation.findMany({ where: { id: row.id } });
+      });
+      expect(blank).toEqual([]);
+      expect(await prisma.$transaction((tx) => tx.invitation.findMany({ where: { id: row.id } }))).toEqual([]); // no setting at all
+    } finally {
+      await db.invitation.delete({ where: { id: row.id } });
+    }
+  });
+
+  test("a token hash is UNIQUE: two invitations can never share one (a lookup by hash must name one row)", async () => {
+    // found by mutation Q11: the unique index had been made a plain one
+    const hash = hashOf(`dup-${a.code}`);
+    const base = { tenantId: a.id, role: Role.PARENT, tokenHash: hash, expiresAt: new Date(Date.now() + 60_000) };
+    const first = await db.invitation.create({ data: { ...base, email: "one@rls.test" } });
+    try {
+      await expect(db.invitation.create({ data: { ...base, tenantId: b.id, email: "two@rls.test" } })).rejects.toThrow(/Unique constraint/);
+    } finally {
+      await db.invitation.delete({ where: { id: first.id } });
+    }
+  });
+
+  test("an invitation belongs to a REAL school (foreign key), and goes with it when the school is removed", async () => {
+    // found by mutation Q13: without the constraint an invitation could name a school that does not exist, and outlive it
+    await expect(db.invitation.create({ data: { tenantId: "no-such-school", email: "ghost@rls.test", role: Role.PARENT, tokenHash: hashOf("ghost"), expiresAt: new Date(Date.now() + 60_000) } })).rejects.toThrow(/Foreign key constraint/);
+    const doomed = await createTenant({ name: "Doomed School", campuses: [] });
+    await db.invitation.create({ data: { tenantId: doomed.id, email: "gone@rls.test", role: Role.PARENT, tokenHash: hashOf("doomed"), expiresAt: new Date(Date.now() + 60_000) } });
+    await db.tenant.delete({ where: { id: doomed.id } });
+    expect(await db.invitation.count({ where: { tenantId: doomed.id } })).toBe(0);
+  });
+
   test("the invitation context reads NOTHING else: no campuses, no audit rows, no memberships, no other school's invitations", async () => {
     await forInvitation(hashOf(a.code)).transaction(async (tx) => {
       expect(await tx.campus.findMany()).toEqual([]);

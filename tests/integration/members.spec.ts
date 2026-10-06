@@ -186,6 +186,25 @@ test.describe("changeMember — the authority rules", () => {
   });
 });
 
+test.describe("listMembers — paging", () => {
+  test("people with the SAME name are ordered by address then id, so a page never repeats or loses anyone (found by mutation M16)", async () => {
+    await person(a, R.ADMIN, { name: "Aaa Admin" });
+    // inserted in REVERSE address order: only an explicit tiebreak puts them back in order
+    const emails = ["zed", "yan", "xia", "wes", "van"].map((n) => `${n}@twin.test`);
+    for (const address of emails) {
+      const user = await createUser({ name: "Twin Person", email: address });
+      await addMembership(user.id, a.id, R.PARENT, null);
+    }
+    const seen: string[] = [];
+    for (let skip = 0; skip < 6; skip += 2) {
+      const { members } = await listMembers(ctx(a), { status: "all" }, { skip, take: 2 });
+      seen.push(...members.map((m) => m.email ?? ""));
+    }
+    expect(seen.slice(1)).toEqual([...emails].sort()); // all five, once each, by address
+    expect(new Set(seen).size).toBe(seen.length);
+  });
+});
+
 test.describe("deactivate and reactivate", () => {
   test("deactivation keeps the row, ends access at once, is audited, and is undone by reactivation (same row, same role and campus)", async () => {
     const boss = await person(a, R.ADMIN);
@@ -197,6 +216,8 @@ test.describe("deactivate and reactivate", () => {
     expect(await db.tenantMembership.findUniqueOrThrow({ where: { id: before.id } })).toMatchObject({ deactivatedAt: null, role: "TEACHING_STAFF", campusId: a.campuses[1].id });
     const actions = (await db.auditLog.findMany({ where: { tenantId: a.id, targetId: target.id }, orderBy: { createdAt: "asc" } })).map((r) => r.action);
     expect(actions).toEqual(["MEMBER_DEACTIVATED", "MEMBER_REACTIVATED"]);
+    // what the person WAS is on the record (found by mutation M19): a later reader can see who lost access, and at which role and campus
+    expect(await db.auditLog.findFirstOrThrow({ where: { tenantId: a.id, targetId: target.id, action: "MEMBER_DEACTIVATED" } })).toMatchObject({ actorUserId: boss.id, beforeValue: { role: "TEACHING_STAFF", campusId: a.campuses[1].id } });
   });
 
   test("both are idempotent: doing it twice is a quiet success that writes no second audit row", async () => {
