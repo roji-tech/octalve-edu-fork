@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { Role } from "@prisma/client";
+import { Permission, Role } from "@prisma/client";
 import { fail } from "@/lib/api/envelope";
 import type { MemberFailure } from "./service";
 
@@ -19,6 +19,12 @@ export const emailField = z
   .toLowerCase();
 
 export const roleField = z.enum(ROLES, { error: "Choose a role." });
+export const PERMISSIONS = Object.values(Permission) as [Permission, ...Permission[]];
+/// The full desired set of permissions: real values only, at most one of each (a duplicate is a client bug, refused rather than merged).
+export const permissionsField = z
+  .array(z.enum(PERMISSIONS, { error: "Choose from the listed permissions." }), { error: "Give a list of permissions." })
+  .max(PERMISSIONS.length)
+  .refine((list) => new Set(list).size === list.length, "Give each permission once.");
 export const campusIdField = z.string().min(1).max(64);
 
 export const notFound = (what: string) => fail(`No such ${what}.`, 404, "NOT_FOUND");
@@ -34,6 +40,10 @@ export function memberFailure(reason: MemberFailure): Response {
     case "INVALID_CAMPUS":
       return fail("Choose one of this school's campuses.", 400, "VALIDATION", [
         { path: "body.campusId", message: "Choose one of this school's campuses." },
+      ]);
+    case "PERMISSIONS_NOT_APPLICABLE":
+      return fail("Extra permissions can only be given to teaching and non-teaching staff.", 400, "VALIDATION", [
+        { path: "body.permissions", message: "Extra permissions can only be given to teaching and non-teaching staff." },
       ]);
     case "DEACTIVATED":
       return fail("This person is deactivated. Reactivate them first.", 409, "DEACTIVATED");

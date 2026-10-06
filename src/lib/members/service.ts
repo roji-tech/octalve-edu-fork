@@ -1,4 +1,4 @@
-import type { Prisma, Role } from "@prisma/client";
+import { Permission, type Prisma, type Role } from "@prisma/client";
 import type { Tx } from "@/lib/tenant/for-tenant";
 import type { TenantAuthContext } from "@/lib/auth/with-auth";
 
@@ -24,7 +24,16 @@ export type PublicMember = {
   campusName: string | null;
   status: MemberStatus;
   joinedAt: Date;
+  /// The extra capabilities granted IN THIS SCHOOL (plan §1.7), in a fixed order. Always empty for an ADMIN (implies them all), a student or a parent.
+  permissions: Permission[];
 };
+
+/// Permissions are meaningful only on these roles (a CHECK constraint in the database says the same).
+export const STAFF_ROLES: readonly Role[] = ["TEACHING_STAFF", "NON_TEACHING_STAFF"];
+const PERMISSION_ORDER = Object.values(Permission);
+/// A canonical set: deduplicated, in enum order — so comparing two sets, auditing one and showing one are all the same string.
+export const normalisePermissions = (list: readonly Permission[]): Permission[] =>
+  PERMISSION_ORDER.filter((permission) => list.includes(permission));
 
 const MEMBER_SELECT = {
   userId: true,
@@ -32,6 +41,7 @@ const MEMBER_SELECT = {
   campusId: true,
   deactivatedAt: true,
   createdAt: true,
+  permissions: true,
   user: { select: { name: true, email: true } },
   campus: { select: { name: true } },
 } satisfies Prisma.TenantMembershipSelect;
@@ -47,6 +57,7 @@ const toPublic = (row: MemberRow): PublicMember => ({
   campusName: row.campus?.name ?? null,
   status: row.deactivatedAt ? "deactivated" : "active",
   joinedAt: row.createdAt,
+  permissions: normalisePermissions(row.permissions),
 });
 
 /// Prisma's `contains` hands the value to `ILIKE` as it is, so `%` and `_` in what someone typed would act as patterns (a search for
@@ -97,6 +108,8 @@ export type MemberFailure =
   /// The school's last active administrator cannot be demoted or deactivated: it would leave the school with nobody who can manage it.
   | "LAST_ADMIN"
   | "INVALID_CAMPUS"
+  /// Permissions were asked for a role that cannot hold any (ADMIN implies them all; students and parents never hold one).
+  | "PERMISSIONS_NOT_APPLICABLE"
   /// A deactivated member must be reactivated before anything else about them changes.
   | "DEACTIVATED";
 
@@ -118,7 +131,7 @@ export async function changeMember(
   tenant: TenantCtx,
   actorUserId: string,
   targetUserId: string,
-  change: { role?: Role; campusId?: string | null },
+  change: { role?: Role; campusId?: string | null; permissions?: readonly Permission[] },
 ): Promise<MemberResult> {
   if (targetUserId === actorUserId) return { ok: false, reason: "SELF" };
   const { tenantId } = tenant;
@@ -135,7 +148,17 @@ export async function changeMember(
 
     const roleChanged = change.role !== undefined && change.role !== current.role;
     const campusChanged = change.campusId !== undefined && change.campusId !== current.campusId;
-    if (!roleChanged && !campusChanged) return { ok: true, member: toPublic(current), changed: false }; // a no-op writes nothing
+
+    // Permissions (plan §1.7, decision 6): the FULL desired set, only on a staff role. Moving a member to a role that cannot hold any
+    // (ADMIN, student, parent) clears theirs IN THIS SAME TRANSACTION — a parent must never silently keep CAN_MANAGE_FINANCE.
+    const newRole = change.role ?? current.role;
+    const canHold = STAFF_ROLES.includes(newRole);
+    const asked = change.permissions === undefined ? undefined : normalisePermissions(change.permissions);
+    if (asked && asked.length > 0 && !canHold) return { ok: false, reason: "PERMISSIONS_NOT_APPLICABLE" };
+    const before = normalisePermissions(current.permissions);
+    const after = !canHold ? [] : (asked ?? before);
+    const permissionsChanged = before.length !== after.length || before.some((permission, index) => permission !== after[index]);
+    if (!roleChanged && !campusChanged && !permissionsChanged) return { ok: true, member: toPublic(current), changed: false }; // a no-op writes nothing
 
     if (roleChanged && current.role === "ADMIN" && change.role !== "ADMIN" && !(await hasAnotherActiveAdmin(tx, tenantId))) {
       return { ok: false, reason: "LAST_ADMIN" };
@@ -143,7 +166,11 @@ export async function changeMember(
 
     const updated = await tx.tenantMembership.update({
       where: { id: current.id },
-      data: { ...(roleChanged ? { role: change.role } : {}), ...(campusChanged ? { campusId: change.campusId } : {}) },
+      data: {
+        ...(roleChanged ? { role: change.role } : {}),
+        ...(campusChanged ? { campusId: change.campusId } : {}),
+        ...(permissionsChanged ? { permissions: after } : {}),
+      },
       select: MEMBER_SELECT,
     });
     if (roleChanged) {
@@ -169,6 +196,20 @@ export async function changeMember(
           targetId: targetUserId,
           beforeValue: { campusId: current.campusId },
           afterValue: { campusId: change.campusId ?? null },
+        },
+      });
+    }
+    if (permissionsChanged) {
+      await tx.auditLog.create({
+        data: {
+          tenantId,
+          actorUserId,
+          action: "MEMBER_PERMISSIONS_CHANGED",
+          targetType: "User",
+          targetId: targetUserId,
+          beforeValue: { permissions: before },
+          // `clearedByRoleChange` says WHY they went (the role moved to one that cannot hold any), so the trail is not a mystery.
+          afterValue: { permissions: after, ...(roleChanged && !canHold ? { clearedByRoleChange: newRole } : {}) },
         },
       });
     }

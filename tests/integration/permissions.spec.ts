@@ -34,7 +34,7 @@ test.afterAll(async () => {
 });
 
 const seen: { userId: string; permissions: readonly Permission[]; role: Role }[] = [];
-const handler = async (_req: NextRequest, auth: TenantAuthContext, _ctx: TenantRouteContext) => {
+const handler = async (_req: NextRequest, auth: TenantAuthContext) => {
   seen.push({ userId: auth.userId, permissions: auth.tenant.permissions, role: auth.tenant.role });
   return NextResponse.json({ ok: true });
 };

@@ -62,7 +62,17 @@ test.describe("listMembers", () => {
     });
     const dump = JSON.stringify(members);
     expect(dump).not.toMatch(/passwordHash|\$2[aby]\$/); // the person's name and address go through, nothing else of the User row
-    expect(Object.keys(members[0]).sort()).toEqual(["campusId", "campusName", "email", "joinedAt", "name", "role", "status", "userId"]);
+    expect(Object.keys(members[0]).sort()).toEqual([
+      "campusId",
+      "campusName",
+      "email",
+      "joinedAt",
+      "name",
+      "permissions",
+      "role",
+      "status",
+      "userId",
+    ]);
   });
 
   test("filters: role, campus, status (default: active), and a search that matches name or address, case-insensitively, as TEXT", async () => {
@@ -255,6 +265,60 @@ test.describe("listMembers — paging", () => {
     }
     expect(seen.slice(1)).toEqual([...emails].sort()); // all five, once each, by address
     expect(new Set(seen).size).toBe(seen.length);
+  });
+});
+
+test.describe("changeMember — permissions (Phase 1.0)", () => {
+  test("a refused request changes NOTHING: permissions asked for a role that cannot hold them leave the role, campus and permissions as they were", async () => {
+    const boss = await person(a, R.ADMIN);
+    const target = await person(a, R.NON_TEACHING_STAFF, { campus: 0 });
+    await changeMember(ctx(a), boss.id, target.id, { permissions: ["CAN_MANAGE_FINANCE"] });
+    const refused = await changeMember(ctx(a), boss.id, target.id, {
+      role: "PARENT",
+      campusId: a.campuses[1].id,
+      permissions: ["CAN_MANAGE_USERS"],
+    });
+    expect(refused).toEqual({ ok: false, reason: "PERMISSIONS_NOT_APPLICABLE" });
+    expect(
+      await db.tenantMembership.findUniqueOrThrow({ where: { userId_tenantId: { userId: target.id, tenantId: a.id } } }),
+    ).toMatchObject({
+      role: "NON_TEACHING_STAFF",
+      campusId: a.campuses[0].id,
+      permissions: ["CAN_MANAGE_FINANCE"],
+    });
+    expect(await db.auditLog.count({ where: { tenantId: a.id, targetId: target.id, action: "MEMBER_ROLE_CHANGED" } })).toBe(0); // no half-written trail
+  });
+
+  test("role, campus and permissions together are ONE change with one audit row each, all in the same transaction", async () => {
+    const boss = await person(a, R.ADMIN);
+    const target = await person(a, R.PARENT, { campus: 0 });
+    const result = await changeMember(ctx(a), boss.id, target.id, {
+      role: "TEACHING_STAFF",
+      campusId: a.campuses[1].id,
+      permissions: ["CAN_APPROVE_RESULTS"],
+    });
+    expect(result).toMatchObject({
+      ok: true,
+      changed: true,
+      member: { role: "TEACHING_STAFF", campusName: "Alpha South", permissions: ["CAN_APPROVE_RESULTS"] },
+    });
+    const actions = (await db.auditLog.findMany({ where: { tenantId: a.id, targetId: target.id }, orderBy: { action: "asc" } })).map(
+      (row) => row.action,
+    );
+    expect(actions).toEqual(["MEMBER_CAMPUS_CHANGED", "MEMBER_PERMISSIONS_CHANGED", "MEMBER_ROLE_CHANGED"]);
+  });
+
+  test("permissions are never read from, or written to, another school's membership of the same person", async () => {
+    const boss = await person(a, R.ADMIN);
+    const both = await createUser();
+    await addMembership(both.id, a.id, R.TEACHING_STAFF);
+    await addMembership(both.id, b.id, R.TEACHING_STAFF);
+    await changeMember(ctx(a), boss.id, both.id, { permissions: ["CAN_MANAGE_FINANCE"] });
+    expect(
+      (await db.tenantMembership.findUniqueOrThrow({ where: { userId_tenantId: { userId: both.id, tenantId: b.id } } })).permissions,
+    ).toEqual([]);
+    const listedInB = await listMembers(ctx(b), { status: "all" }, { skip: 0, take: 10 });
+    expect(listedInB.members.find((m) => m.userId === both.id)?.permissions).toEqual([]);
   });
 });
 

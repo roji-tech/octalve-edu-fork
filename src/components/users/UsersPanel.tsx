@@ -14,7 +14,7 @@ import { DeactivateDialog } from "./DeactivateDialog";
 import { EditMemberDialog } from "./EditMemberDialog";
 import { InvitationsList } from "./InvitationsList";
 import { InviteDialog } from "./InviteDialog";
-import { ROLE_OPTIONS, displayName, type CampusOption, type Invitation, type Member, type PageMeta } from "./model";
+import { ROLE_OPTIONS, displayName, permissionLabel, type CampusOption, type Invitation, type Member, type PageMeta } from "./model";
 
 const PAGE_SIZE = 20;
 const ROW = "md:grid md:grid-cols-[minmax(0,2.2fr)_9rem_minmax(0,1.2fr)_6.5rem_auto] md:items-center md:gap-4";
@@ -310,6 +310,11 @@ export function UsersPanel({
                     <p className="text-sm text-fg-2">
                       <span className="text-xs font-semibold tracking-wide text-fg-muted uppercase md:hidden">Role: </span>
                       {ROLE_LABELS[member.role]}
+                      {member.permissions.length > 0 && (
+                        <span className="mt-0.5 block text-xs text-fg-muted">
+                          Extra: {member.permissions.map((permission) => permissionLabel(permission)).join(", ")}
+                        </span>
+                      )}
                     </p>
                     <p className="text-sm text-fg-2">
                       <span className="text-xs font-semibold tracking-wide text-fg-muted uppercase md:hidden">Campus: </span>
@@ -417,7 +422,11 @@ export function UsersPanel({
           setNotice({
             variant: "success",
             text: changed
-              ? `Saved. ${displayName(member)} is now ${ROLE_LABELS[member.role]}${member.campusName ? ` at ${member.campusName}` : ""}.`
+              ? `Saved. ${displayName(member)} is now ${ROLE_LABELS[member.role]}${member.campusName ? ` at ${member.campusName}` : ""}${
+                  member.permissions.length > 0
+                    ? ` with extra permissions: ${member.permissions.map((p) => permissionLabel(p).toLowerCase()).join(", ")}`
+                    : ""
+                }.`
               : "Nothing needed changing.",
           });
           void refresh();
