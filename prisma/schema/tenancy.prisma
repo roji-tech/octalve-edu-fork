@@ -30,6 +30,10 @@ model Tenant {
   classArms   ClassArm[]
   subjects    Subject[]
   offerings   SubjectOffering[]
+  schemes     AssessmentScheme[]
+  components  AssessmentComponent[]
+  gradeScales GradeScale[]
+  gradeBands  GradeBand[]
 }
 
 /// A branch/campus under one tenant (PRD §7) — distinct from multi-tenancy:

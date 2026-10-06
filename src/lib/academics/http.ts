@@ -116,6 +116,66 @@ export function academicFailure(reason: AcademicFailure, detail?: Record<string,
       ]);
     case "TOO_MANY_ARMS":
       return fail("A class can have at most 26 arms.", 409, "TOO_MANY_ARMS");
+    case "SCHEME_INVALID": {
+      const problem = String(detail?.problem);
+      const sum = detail?.sum;
+      const MESSAGES: Record<string, string> = {
+        PRECISION: "Marks can have at most two decimal places.",
+        TOTAL_NOT_POSITIVE: "The total must be more than zero.",
+        EXAM_NEGATIVE: "The exam mark can't be negative.",
+        NO_COMPONENTS: "Add at least one component.",
+        TOO_MANY_COMPONENTS: "A scheme can have at most ten components.",
+        COMPONENT_NAME_INVALID: "Give each component a name of 1 to 40 characters.",
+        COMPONENT_NAME_DUPLICATE: "Two components have the same name.",
+        COMPONENT_MAX_NOT_POSITIVE: "Each component's maximum must be more than zero.",
+        SUM_MISMATCH: `The components and the exam add up to ${sum ?? "a different number"}, not the total.`,
+      };
+      const message = MESSAGES[problem] ?? "Check the scheme.";
+      const path =
+        problem === "SUM_MISMATCH"
+          ? "body.examMax"
+          : problem.startsWith("COMPONENT") || (problem === "PRECISION" && detail?.index !== undefined)
+            ? `body.components.${String(detail?.index ?? 0)}`
+            : problem.startsWith("EXAM")
+              ? "body.examMax"
+              : problem.startsWith("TOTAL")
+                ? "body.totalMax"
+                : "body.components";
+      return fail(message, 400, "VALIDATION", [{ path, message }]);
+    }
+    case "BANDS_INVALID": {
+      const problem = String(detail?.problem);
+      const MESSAGES: Record<string, string> = {
+        NO_BANDS: "Add at least one band.",
+        TOO_MANY_BANDS: "A scale can have at most twelve bands.",
+        PRECISION: "Scores can have at most two decimal places.",
+        OUT_OF_RANGE: "Scores must be between 0 and 100.",
+        NOT_ASCENDING: "A band must end above where it starts.",
+        GAP: "There is a gap before this band — every score from 0 to 100 needs a band.",
+        OVERLAP: "This band overlaps another.",
+        STARTS_ABOVE_ZERO: "The lowest band must start at 0.",
+        ENDS_BELOW_HUNDRED: "The highest band must end at 100.",
+        LETTER_INVALID: "Give each band a letter of 1 to 4 characters.",
+        LETTER_DUPLICATE: "Two bands have the same letter.",
+        REMARK_INVALID: "Give each band a remark of 1 to 40 characters.",
+      };
+      const message = MESSAGES[problem] ?? "Check the bands.";
+      return fail(message, 400, "VALIDATION", [
+        { path: detail?.index === undefined ? "body.bands" : `body.bands.${String(detail.index)}`, message },
+      ]);
+    }
+    case "LOCKED":
+      return fail("Results already use this, so it can't be edited. Make a new version instead.", 409, "LOCKED");
+    case "NOT_LOCKED":
+      return fail("Nothing uses this yet, so edit it directly instead of making a new version.", 409, "NOT_LOCKED");
+    case "UNKNOWN_CLASS_GROUP":
+      return fail("Choose one of this school's classes.", 400, "VALIDATION", [
+        { path: "body.classGroupId", message: "Choose one of this school's classes." },
+      ]);
+    case "SCOPE_TAKEN":
+      return fail("That class (or the school as a whole) already has a scheme. Archive or edit it instead.", 409, "SCOPE_TAKEN");
+    case "DEFAULT_CANNOT_ARCHIVE":
+      return fail("This is the school's default scale. Make another scale the default first.", 409, "DEFAULT_CANNOT_ARCHIVE");
     case "SESSION_NOT_ACTIVE":
       return fail("Only a term of the active session can be the current one.", 409, "SESSION_NOT_ACTIVE");
   }

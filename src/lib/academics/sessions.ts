@@ -126,7 +126,18 @@ export type AcademicFailure =
   | "SUBJECT_IN_USE"
   /// The offering list named a subject that does not exist in this school (or is archived).
   | "UNKNOWN_SUBJECT"
-  | "TOO_MANY_ARMS";
+  | "TOO_MANY_ARMS"
+  // --- assessment schemes and grade scales (families C and D) ---
+  | "SCHEME_INVALID"
+  | "BANDS_INVALID"
+  /// A locked scheme/scale (a result references it) cannot be edited in place — make a new version.
+  | "LOCKED"
+  /// A new version is only for a LOCKED scheme/scale; an unlocked one is edited in place.
+  | "NOT_LOCKED"
+  | "UNKNOWN_CLASS_GROUP"
+  /// A live scheme already exists for that scope (one class group, or the school default).
+  | "SCOPE_TAKEN"
+  | "DEFAULT_CANNOT_ARCHIVE";
 
 export type AcademicResult<T> = ({ ok: true } & T) | { ok: false; reason: AcademicFailure; detail?: Record<string, unknown> };
 export const refuse = (reason: AcademicFailure, detail?: Record<string, unknown>) => ({

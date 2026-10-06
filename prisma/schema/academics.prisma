@@ -81,10 +81,11 @@ model ClassGroup {
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @default(now()) @updatedAt
 
-  tenant    Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  campus    Campus?           @relation(fields: [tenantId, campusId], references: [tenantId, id], onDelete: NoAction)
+  tenant    Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  campus    Campus?            @relation(fields: [tenantId, campusId], references: [tenantId, id], onDelete: NoAction)
   arms      ClassArm[]
   offerings SubjectOffering[]
+  schemes   AssessmentScheme[]
 
   @@unique([tenantId, id])
   @@index([tenantId])
@@ -141,4 +142,92 @@ model SubjectOffering {
 
   @@unique([classGroupId, subjectId])
   @@index([tenantId])
+}
+
+// --- Assessment schemes and grade scales (Phase 1.1, families C and D; decisions 14 and 15) ---
+//
+// Both are VERSIONED so history cannot be rewritten: they are edited in place only while `lockedAt` is null; the first time a result references one
+// (a function Phase 1.4 will call) it is locked — a database trigger then refuses any change to it or its children — and a change after that is a NEW VERSION
+// that supersedes it. The canonical snapshot a result stores is `snapshotScheme()` in lib/academics/scoring.ts.
+
+/// How a mark is built: continuous-assessment components plus the exam, summing exactly to totalMax. classGroupId null = the school default.
+model AssessmentScheme {
+  id           String    @id @default(cuid())
+  tenantId     String
+  classGroupId String?
+  name         String
+  totalMax     Decimal   @default(100) @db.Decimal(6, 2)
+  examMax      Decimal   @db.Decimal(6, 2)
+  version      Int       @default(1)
+  /// Set (once, never cleared) the first time a result references this scheme; from then on it and its components are immutable.
+  lockedAt     DateTime?
+  supersedesId String?
+  archivedAt   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @default(now()) @updatedAt
+
+  tenant     Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  classGroup ClassGroup?           @relation(fields: [tenantId, classGroupId], references: [tenantId, id], onDelete: NoAction)
+  supersedes AssessmentScheme?     @relation("SchemeVersions", fields: [tenantId, supersedesId], references: [tenantId, id], onDelete: NoAction)
+  successors AssessmentScheme[]    @relation("SchemeVersions")
+  components AssessmentComponent[]
+
+  @@unique([tenantId, id])
+  @@index([tenantId])
+}
+
+model AssessmentComponent {
+  id        String  @id @default(cuid())
+  tenantId  String
+  schemeId  String
+  name      String
+  maxScore  Decimal @db.Decimal(6, 2)
+  sortOrder Int
+
+  tenant Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  scheme AssessmentScheme @relation(fields: [tenantId, schemeId], references: [tenantId, id], onDelete: NoAction)
+
+  @@unique([tenantId, id])
+  @@index([tenantId, schemeId])
+}
+
+/// A grade scale as data: bands of score → letter → remark. Exactly one live DEFAULT per school (partial unique index).
+model GradeScale {
+  id           String    @id @default(cuid())
+  tenantId     String
+  name         String
+  isDefault    Boolean   @default(false)
+  version      Int       @default(1)
+  lockedAt     DateTime?
+  supersedesId String?
+  archivedAt   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @default(now()) @updatedAt
+
+  tenant     Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  supersedes GradeScale?  @relation("ScaleVersions", fields: [tenantId, supersedesId], references: [tenantId, id], onDelete: NoAction)
+  successors GradeScale[] @relation("ScaleVersions")
+  bands      GradeBand[]
+
+  @@unique([tenantId, id])
+  @@index([tenantId])
+}
+
+/// Half-open [minScore, maxScore), except the top band which is closed at 100; the bands of a scale are contiguous from 0 to 100 (checked by
+/// lib/academics/scoring.ts#checkBands, in the write transaction).
+model GradeBand {
+  id        String  @id @default(cuid())
+  tenantId  String
+  scaleId   String
+  minScore  Decimal @db.Decimal(5, 2)
+  maxScore  Decimal @db.Decimal(5, 2)
+  letter    String
+  remark    String
+  sortOrder Int
+
+  tenant Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  scale  GradeScale @relation(fields: [tenantId, scaleId], references: [tenantId, id], onDelete: NoAction)
+
+  @@unique([tenantId, id])
+  @@index([tenantId, scaleId])
 }
