@@ -1,17 +1,29 @@
 // --- Tenancy (PRD §7) ---
 
+/// What kind of school this is (plan §0.5 → Phase 1.0, decision 1). It decides which kind of academic period a school has
+/// (term / semester / cohort). Additive, with a default, so every existing school migrates as K12.
+enum SchoolType {
+  K12
+  HIGHER_ED
+  VOCATIONAL
+}
+
 model Tenant {
-  id        String   @id @default(cuid())
+  id         String     @id @default(cuid())
   /// URL slug (PRD §7 "Tenant code selection") — unique, reserved-word-checked
   /// and format-validated at the application layer before insert, fixed at
   /// creation for MVP (support-mediated changes only).
-  code      String   @unique
-  name      String
-  createdAt DateTime @default(now())
+  code       String     @unique
+  name       String
+  /// Defaults to K12 because every school that exists today is one; the setup wizard does not ask until the Settings screen exists.
+  schoolType SchoolType @default(K12)
+  createdAt  DateTime   @default(now())
 
   campuses    Campus[]
   memberships TenantMembership[]
   invitations Invitation[]
+  /// Exactly one row, created by the database when the tenant is (a trigger — see the phase 1.0 migration).
+  settings    SchoolSettings?
 }
 
 /// A branch/campus under one tenant (PRD §7) — distinct from multi-tenancy:
@@ -39,16 +51,28 @@ enum Role {
   PARENT
 }
 
+/// The deliberately small permission set (plan §1.7): an ADMIN implicitly has all of them; the enum exists so a NON-admin staff
+/// membership can be granted one extra capability. No custom roles, no per-record ACLs, no hierarchy.
+enum Permission {
+  CAN_APPROVE_RESULTS
+  CAN_MANAGE_FINANCE
+  CAN_PUBLISH_CONTENT
+  CAN_MANAGE_USERS
+}
+
 /// The verified membership table PRD §7's tenant-trust-boundary check reads:
 /// "authenticated user -> verified tenant membership -> SET LOCAL
 /// app.tenant_id -> RLS". The URL's tenant code is only ever a hint; this
 /// table is the actual authorization source.
 model TenantMembership {
-  id       String  @id @default(cuid())
-  userId   String
-  tenantId String
-  campusId String?
-  role     Role
+  id          String       @id @default(cuid())
+  userId      String
+  tenantId    String
+  campusId    String?
+  role        Role
+  /// Extra capabilities beyond the role. Only staff roles may hold any (a CHECK constraint in the phase 1.0 migration states it:
+  /// `permissions = '{}' OR role IN ('TEACHING_STAFF','NON_TEACHING_STAFF')`); ADMIN implies every permission and holds none stored.
+  permissions Permission[] @default([])
 
   user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   tenant Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)

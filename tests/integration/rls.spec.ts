@@ -610,6 +610,44 @@ test.describe("Invitation: a school's own invitations — and the ONE row a toke
 });
 
 // --- the catalog guard: the next table cannot forget -------------------------------------------------------------------
+test.describe("SchoolSettings: one row per school, tenant-scoped (Phase 1.0)", () => {
+  test("no context = no rows; a tenant reads ITS settings and never another's", async () => {
+    expect(await prisma.schoolSettings.findMany()).toEqual([]); // the runtime role with NO context
+    const mine = await asTenant<{ tenantId: string }[]>(a, (tx) => tx.schoolSettings.findMany());
+    expect(mine.map((r) => r.tenantId)).toEqual([a.id]);
+    expect(await asTenant(a, (tx) => tx.schoolSettings.findMany({ where: { tenantId: b.id } }))).toEqual([]); // asking explicitly changes nothing
+  });
+
+  test("WITH CHECK: A's context cannot create settings for B, nor move its own row to B (statements that read nothing, so only the write check can refuse)", async () => {
+    await expect(asTenant(a, (tx) => tx.schoolSettings.createMany({ data: [{ tenantId: b.id }] }))).rejects.toThrow(violation);
+    await expect(asTenant(a, (tx) => tx.$executeRaw`UPDATE "SchoolSettings" SET "tenantId" = ${b.id}`)).rejects.toThrow(violation); // no WHERE: no read policy is consulted for the new row
+    expect(await db.schoolSettings.count({ where: { tenantId: { in: [a.id, b.id] } } })).toBe(2); // nothing moved, nothing added
+  });
+
+  test("a tenant can update ITS OWN settings row (the Settings screen will) but not B's, and cannot DELETE even its own (no policy, by design)", async () => {
+    const own = await asTenant<{ count: number }>(a, (tx) =>
+      tx.schoolSettings.updateMany({ where: { tenantId: a.id }, data: { multiCampusEnabled: true } }),
+    );
+    expect(own.count).toBe(1);
+    expect(
+      (
+        await asTenant<{ count: number }>(a, (tx) =>
+          tx.schoolSettings.updateMany({ where: { tenantId: b.id }, data: { multiCampusEnabled: true } }),
+        )
+      ).count,
+    ).toBe(0);
+    expect((await asTenant<{ count: number }>(a, (tx) => tx.schoolSettings.deleteMany())).count).toBe(0);
+    expect(await db.schoolSettings.count({ where: { tenantId: { in: [a.id, b.id] } } })).toBe(2);
+    expect((await db.schoolSettings.findUniqueOrThrow({ where: { tenantId: b.id } })).multiCampusEnabled).toBe(false);
+    await db.schoolSettings.update({ where: { tenantId: a.id }, data: { multiCampusEnabled: false } }); // leave it as the secure default
+  });
+
+  test("the user and invitation contexts read NO settings (a person with no school in view sees nothing of any school's)", async () => {
+    expect(await forUser(userBoth.id).transaction((tx) => tx.schoolSettings.findMany())).toEqual([]);
+    expect(await forInvitation(hashOf(a.code)).transaction((tx) => tx.schoolSettings.findMany())).toEqual([]);
+  });
+});
+
 test.describe("catalog guard", () => {
   // Tables with NO tenantId column — by design, and each for a stated reason. A NEW table must either carry a tenantId
   // (and then the test below demands forced RLS and a policy) or be added here on purpose, in review.
@@ -634,7 +672,7 @@ test.describe("catalog guard", () => {
         JOIN pg_namespace n ON n.oid = c.relnamespace
         JOIN pg_attribute att ON att.attrelid = c.oid AND att.attname = 'tenantId' AND NOT att.attisdropped
        WHERE n.nspname = 'public' AND c.relkind = 'r'`;
-    expect(rows.map((r) => r.relname).sort()).toEqual(["AuditLog", "Campus", "Invitation", "TenantMembership"]); // update this list WITH the migration
+    expect(rows.map((r) => r.relname).sort()).toEqual(["AuditLog", "Campus", "Invitation", "SchoolSettings", "TenantMembership"]); // update this list WITH the migration
     for (const row of rows) {
       expect(row, row.relname).toMatchObject({ enabled: true, forced: true });
       expect(row.policies, `${row.relname} needs a policy`).toBeGreaterThanOrEqual(1);
