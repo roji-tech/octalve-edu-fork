@@ -30,7 +30,7 @@ replace a design pass — every phase still gets its design written into the pla
 | **0.5.2 Tenant trust boundary** | ✅ application layer (`claude/tenant-trust-boundary`) **and row-level security** (`claude/tenant-rls`) built and verified | `phases/phase-0.5.2…` |
 | 0.5.3 Shared API infrastructure | ✅ built and verified (`claude/tenant-trust-boundary`) | `phases/phase-0.5.3…` |
 | **0.5.2-H App shell** | ✅ built and verified (`claude/app-shell-users`) | `phases/phase-0.5.2H-app-shell.md` |
-| **0.5.4 Users pages & invitations** | 🟡 **built and WIP-committed** (`claude/app-shell-users`); **mutation pass (122 written, none run), a complete green run and the docs are outstanding** — handed to the local Claude Code session: `handoff/TAKEOVER.md` | plan; `handoff/` |
+| **0.5.4 Users pages & invitations** | ✅ built, verified, documented (`claude/app-shell-users`); 122-mutation first pass done (102 caught, survivors turned into tests, 5 justified-equivalent) — **the survivors' re-check is deferred to the end of Phase 2** by the maintainer; admin-initiated email change (0.5.4-F) still open | `phases/phase-0.5.4-users-invitations.md` |
 | Phase 1 … 5 | ⬜ | plan |
 
 **No open blocker.** The RLS role was created with the maintainer's approval ("do both and run") and the whole suite now runs as `app_user`. Phase 1 may start once the shell and
@@ -65,17 +65,16 @@ Design: plan §0.5.2 + "Build design for §0.5.2". Branch `claude/tenant-trust-b
   context (no campus names) · **T3** `completeSignIn` admin check via user context · **T4** setup wizard sets the tenant
   context in its own transaction · **T5** `scripts/mfa-reset.mjs` uses plain `set_config`.
 
-### 0.5.2-D — School routes, pages and the front door 🟡
+### 0.5.2-D — School routes, pages and the front door ✅
 - **T1 API** `GET /api/v1/schools/[code]` ✅ (20 API tests incl. *every route under `/schools/` discovered from the file system
   and hit cross-tenant / signed-out / no-school*).
 - **T2 pages** `/schools/[code]` workspace; `requireTenantPage`; `forbidden()` 403 view (`experimental.authInterrupts`) ✅ built.
 - **T3 front door** `/dashboard` → one school redirects, several → picker, none → message ✅ built.
-- **T4 existing tests adapt to the front door** (a one-school user now lands on `/schools/<code>`): `HOME_URL` helper applied;
-  **⬜ steps:** (1) run the whole api/e2e/https suites; (2) fix the tests that assert dashboard *content* (`sign-in.spec`,
-  `setup-handoff.spec`, a11y "dashboard" block); (3) confirm `forbidden()` returns a real 403 in the production build.
-- **T5 new e2e** `front-door.spec.ts` on the SaaS server ⬜: one school → redirect; several → picker → click; none → message;
-  code tampering → 403 view naming no school; ADMIN sees all campuses, staff only theirs; hostile school name renders inert.
-- **T6 a11y** both themes + phone targets for picker, workspace, workspace-without-campus, 403 view ⬜.
+- **T4 existing tests adapt to the front door** (a one-school user now lands on `/schools/<code>`) ✅: `HOME_URL` helper applied; the whole suites run green (2026-10-06 baseline: 1131 tests, one lane);
+  `forbidden()` is a real 403 in the production build (asserted).
+- **T5 new e2e** `front-door.spec.ts` on the SaaS server ✅ (6 tests): one school → redirect; several → picker → click; none → message; code tampering → 403 view naming no school; ADMIN sees all campuses,
+  staff only theirs; hostile school name renders inert.
+- **T6 a11y** both themes + phone targets for picker, workspace, workspace-without-campus, 403 view ✅ (blocks in `responsive-and-a11y.spec.ts`).
 
 ### 0.5.2-E — Test harness for multi-school ✅ built
 SaaS-mode **fifth server** (`SAAS_PORT` 3103), `createTenant` / `addMembership` / `removeCreatedTenants`, shared `withEnv`.
@@ -87,7 +86,7 @@ T1 infra (`docker/postgres/init/01-roles.sql`, `pnpm db:roles`, `DIRECT_URL`) �
 T3 harness (`TEST_APP_DATABASE_URL`; every server and in-process module runs as `app_user`; admin for fixtures; setup verifies and prints the exact fix) ✅ · T4 `assertRlsEnforced()` (+ a sixth, deliberately
 misconfigured test server proving it is wired in) ✅ · T5 negative tests as `app_user` incl. the catalog guard (33 + 4) ✅ · T6 mutation pass (44; results in the phase record) ✅ · T7 docs ✅ — PR only when asked.
 
-### 0.5.2-G — Mutation pass and docs for the application layer ⬜
+### 0.5.2-G — Mutation pass and docs for the application layer ✅ (records in `phases/phase-0.5.2-tenant-boundary.md`)
 Mutations for A–D (resolver trusting the URL, differing refusals, roles from the wrong school, Solo invariant removed, session
 check after tenant check, forbidden view leaking the name, picker choosing the wrong school); full suites (unit, integration,
 api, e2e desktop + phone, https); plan "as built"; `phases/phase-0.5.2-tenant-boundary.md`; trackers; `CLAUDE.md`.
@@ -96,7 +95,7 @@ api, e2e desktop + phone, https); plan "as built"; `phases/phase-0.5.2-tenant-bo
 T1 shell components + nav model driven by the role **in the school in view** ✅ · T2 account menu / sign-out ✅ · T3 `/account`, `/dashboard`, `/schools/[code]` and the 403 view moved into the shell ✅ · T4 responsive + axe both themes
 (open states too) ✅ · T5 tests that sign out through the header adapted (`signOut` helper) ✅ · T6 record + 26 mutations ✅.
 
-## 0.5.3 — Shared API infrastructure ⬜ (plan §0.5.3; each item below is its own task)
+## 0.5.3 — Shared API infrastructure ✅ (plan §0.5.3; each item below is its own task)
 - **A envelope** exists; audit that no route builds the shape inline (an ESLint/test guard).
 - **B pagination** `lib/api/pagination.ts`: offset (`page`/`limit`) and cursor helpers; hard caps; malformed params → 400 with
   field errors; tests for boundaries (0, negative, huge, non-numeric, repeated params).
@@ -111,7 +110,7 @@ T1 shell components + nav model driven by the role **in the school in view** ✅
 - **H negative-test file** exercising every item (wrong tenant, no membership, revoked session, malformed pagination, limit
   exceeded) **as `app_user`** — the Phase 1 gate.
 
-## 0.5.4 (new) — Users pages and invitations ⬜ (finishes 0.5.E)
+## 0.5.4 (new) — Users pages and invitations ✅ (finishes 0.5.E; email change 0.5.4-F still open)
 Needs 0.5.2's roles. Tasks: (1) member list per school (paged, role/campus filters); (2) **invite** — hashed single-use link,
 invitee proves the email and sets their own password; existing accounts attach only when the invitee accepts while signed in as
 themselves (never silently by an admin); (3) change role / campus / deactivate (history survives; sessions revoked); (4) admin

@@ -897,6 +897,14 @@ Safari `relatedTarget` case written once); (b) `forbidden.tsx` moved **into** th
 schools); (c) the sidebar's person card is a named group (`Signed in as`) so it can be asserted; (d) `requireTenantPage` now goes through the cached `requirePageSession`. 26 injected bugs: 24 caught, 1 at build time, 1 equivalent.
 **Not built:** the Users and Settings *pages* (visible "Soon" entries) — Users is §0.5.4 below.
 
+**As built — Users and invitations (0.5.4, 2026-10-06)** — record: `phases/phase-0.5.4-users-invitations.md`, branch `claude/app-shell-users`. Designed items 1–6 and 8 are built as written. Differences and additions: (a) the invitation
+accept path is **one transaction through `forInvitation(hash)`**, which sets the tenant context from the row the secret names (the second legitimate `trustedTenantId` site, still forbidden in school code by ESLint); (b) the
+single-use claim is a conditional `updateMany` whose row count decides, and a lost race is now tested **deterministically** (`whileHeld()` in `tests/integration/invitations.spec.ts`) rather than by luck; (c) the member list's order is
+`name, email, id` (the id tiebreak is the design's; the address was added so ties read naturally); (d) `Invitation_tokenHash_key` is unique and `app_invitation_hash()` is `NULLIF`-guarded so a blank setting can never match a row stored
+with an empty hash (both pinned by tests); (e) the harness got two fixes found on the way — a **corrupt mail outbox is now an error, not "no mail"**, and a CSP test that could pass against a report-only policy was made real. **Not built:** the admin-initiated
+email change (design item 7, "0.5.4-F") — still deliberately open. **Mutation testing:** 122 injected bugs, first pass 102 caught / 19 survived / 1 did not compile; the survivors were turned into tests (five are justified-equivalent) and
+their re-check is **deferred by the maintainer to the end of Phase 2**, to run together with Phase 1's passes.
+
 ### Phase 0.5 addenda (2026-09-30, after the auth build)
 
 Four pieces of work that sit between "auth works" and "Phase 1 can start", each designed here first
