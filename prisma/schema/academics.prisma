@@ -1,0 +1,68 @@
+// --- Academic structure (Phase 1.1; plan "Build design — Phase 1.0 and 1.1", decisions 9–16) ---
+//
+// Every table carries its own tenantId and a composite foreign key to its parent on (tenantId, id), so a row can never point at another
+// school's parent even though a foreign key is checked without row-level security. Rules Prisma's schema language cannot express (partial
+// unique indexes, CHECK constraints, RLS) live in the migration SQL. Nothing here is ever deleted by a request: rows are ARCHIVED.
+
+enum SessionStatus {
+  PLANNED
+  ACTIVE
+  CLOSED
+}
+
+/// How a school divides its year: TERM (K12), SEMESTER (higher education), COHORT (vocational: a running intake). Derived from
+/// Tenant.schoolType on the server; never accepted from a client.
+enum PeriodKind {
+  TERM
+  SEMESTER
+  COHORT
+}
+
+/// One academic year/session. campusId null = every campus; set = that campus's own calendar (a campus's own ACTIVE session shadows the school-wide one).
+model AcademicSession {
+  id           String        @id @default(cuid())
+  tenantId     String
+  campusId     String?
+  label        String
+  startDate    DateTime      @db.Date
+  endDate      DateTime      @db.Date
+  status       SessionStatus @default(PLANNED)
+  /// Set when this session was created by copy-forward from another; at most one live copy per source (partial unique index).
+  copiedFromId String?
+  archivedAt   DateTime?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @default(now()) @updatedAt
+
+  tenant     Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  campus     Campus?           @relation(fields: [tenantId, campusId], references: [tenantId, id], onDelete: NoAction)
+  copiedFrom AcademicSession?  @relation("SessionCopies", fields: [tenantId, copiedFromId], references: [tenantId, id], onDelete: NoAction)
+  copies     AcademicSession[] @relation("SessionCopies")
+  periods    AcademicPeriod[]
+
+  @@unique([tenantId, id])
+  @@index([tenantId, status])
+}
+
+/// A term / semester / cohort inside a session. The "current" one is a pointer (isCurrent), at most one per session.
+model AcademicPeriod {
+  id         String     @id @default(cuid())
+  tenantId   String
+  sessionId  String
+  kind       PeriodKind
+  /// 1-based position inside the session (1st term, 2nd term…); unique among live periods of the session.
+  ordinal    Int
+  label      String
+  startDate  DateTime   @db.Date
+  /// Required for TERM and SEMESTER; a COHORT may run without a fixed end.
+  endDate    DateTime?  @db.Date
+  isCurrent  Boolean    @default(false)
+  archivedAt DateTime?
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @default(now()) @updatedAt
+
+  tenant  Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  session AcademicSession @relation(fields: [tenantId, sessionId], references: [tenantId, id], onDelete: NoAction)
+
+  @@unique([tenantId, id])
+  @@index([tenantId, sessionId])
+}

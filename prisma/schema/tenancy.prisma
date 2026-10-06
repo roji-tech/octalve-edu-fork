@@ -24,6 +24,8 @@ model Tenant {
   invitations Invitation[]
   /// Exactly one row, created by the database when the tenant is (a trigger — see the phase 1.0 migration).
   settings    SchoolSettings?
+  sessions    AcademicSession[]
+  periods     AcademicPeriod[]
 }
 
 /// A branch/campus under one tenant (PRD §7) — distinct from multi-tenancy:
@@ -37,9 +39,12 @@ model Campus {
   tenant      Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   memberships TenantMembership[]
   invitations Invitation[]
+  sessions    AcademicSession[]
 
   /// A school cannot have two campuses of the same name (compared exactly, after the API trims it).
   @@unique([tenantId, name])
+  /// The target of the composite foreign keys that keep academic rows inside their own school (plan, Phase 1.1 reconciliation 2).
+  @@unique([tenantId, id])
   @@index([tenantId])
 }
 
