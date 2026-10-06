@@ -20,6 +20,25 @@ export const isoDateField = z.string({ error: "Give a date as YYYY-MM-DD." }).re
 export const nameField = z.string({ error: "Give a name." }).max(200, "That is too long.");
 export const idField = z.string().min(1).max(64);
 
+/// A mark or band edge is a plain JSON number; the rules (at most two decimals, the ranges, the sum) are judged by lib/academics/scoring.ts.
+export const markField = z.number({ error: "Give a number." });
+export const componentsField = z
+  .array(z.strictObject({ name: z.string({ error: "Give a name." }).max(200, "That is too long."), maxScore: markField }), {
+    error: "Give the components as a list.",
+  })
+  .max(50, "That is too many.");
+export const bandsField = z
+  .array(
+    z.strictObject({
+      min: markField,
+      max: markField,
+      letter: z.string({ error: "Give a letter." }).max(40, "That is too long."),
+      remark: z.string({ error: "Give a remark." }).max(200, "That is too long."),
+    }),
+    { error: "Give the bands as a list." },
+  )
+  .max(50, "That is too many.");
+
 const WRITES_PER_WINDOW = 120;
 /// One administrator's writes to the academic structure are limited like the Users page's: a runaway client cannot hammer the calendar.
 export async function writeLimited(auth: TenantAuthContext): Promise<Response | null> {
