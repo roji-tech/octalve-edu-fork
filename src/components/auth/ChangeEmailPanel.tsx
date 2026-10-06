@@ -97,8 +97,8 @@ export function ChangeEmailPanel({ email }: { email: string | null }) {
         <form method="post" onSubmit={submit} noValidate className="max-w-md space-y-4">
           <Heading focus={touched}>Change your email address</Heading>
           <p className="text-sm text-fg-muted">
-            We&apos;ll send a link to the new address. Nothing changes until it is opened. When it is, you&apos;ll be
-            signed out everywhere and sign in with the new address.
+            We&apos;ll send a link to the new address. Nothing changes until it is opened. When it is, you&apos;ll be signed out everywhere
+            and sign in with the new address.
           </p>
           <TextField
             label="New email address"
@@ -152,9 +152,9 @@ export function ChangeEmailPanel({ email }: { email: string | null }) {
             <Heading focus={touched}>Check your inbox</Heading>
           </div>
           <p className="text-sm leading-relaxed text-fg-2">
-            If <strong className="font-semibold break-words text-fg">{sentTo}</strong> can be used, a confirmation link is
-            on its way. It works once and stops working after an hour. Your current address keeps working until you
-            open it, and we&apos;ve let it know about the request.
+            If <strong className="font-semibold break-words text-fg">{sentTo}</strong> can be used, a confirmation link is on its way. It
+            works once and stops working after an hour. Your current address keeps working until you open it, and we&apos;ve let it know
+            about the request.
           </p>
           <Button variant="secondary" onClick={() => go("idle")}>
             Done

@@ -16,7 +16,10 @@ const eslintConfig = defineConfig([
         {
           paths: [
             { name: "@/lib/db", message: "School code must use the tenant context (auth.tenant.run / forTenant), never the raw client." },
-            { name: "@/lib/tenant/verified-tenant", message: "Only resolve-tenant.ts, the setup route and audit.ts may mint a VerifiedTenantId." },
+            {
+              name: "@/lib/tenant/verified-tenant",
+              message: "Only resolve-tenant.ts, the setup route and audit.ts may mint a VerifiedTenantId.",
+            },
           ],
         },
       ],
@@ -26,7 +29,8 @@ const eslintConfig = defineConfig([
         "error",
         {
           selector: "MemberExpression[property.name='user'][object.name=/^(tx|prisma|db|client)$/]",
-          message: "School code must not query `user` directly (no tenant column, so RLS can't protect it): read people through `tenantMembership` — see lib/members/service.ts.",
+          message:
+            "School code must not query `user` directly (no tenant column, so RLS can't protect it): read people through `tenantMembership` — see lib/members/service.ts.",
         },
       ],
     },

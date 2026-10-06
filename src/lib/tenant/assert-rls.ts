@@ -27,7 +27,8 @@ export async function checkRlsEnforcement(client: Pick<PrismaClient, "$queryRaw"
   if (who.rolsuper) problems.push(`the database role "${who.rolname}" is a superuser`);
   if (who.rolbypassrls) problems.push(`the database role "${who.rolname}" has BYPASSRLS`);
   if (who.owns_tables) problems.push(`the database role "${who.rolname}" OWNS the tables (it is the migrator, not the runtime role)`);
-  for (const table of unprotected) problems.push(`table "${table.relname}" has a tenantId column but row-level security is not enabled and forced on it`);
+  for (const table of unprotected)
+    problems.push(`table "${table.relname}" has a tenantId column but row-level security is not enabled and forced on it`);
   return { role: who.rolname, problems };
 }
 
@@ -47,7 +48,10 @@ let checked: Promise<void> | null = null;
 export function assertRlsEnforced(client: Pick<PrismaClient, "$queryRaw"> = prisma): Promise<void> {
   checked ??= (async () => {
     const report = await checkRlsEnforcement(client);
-    const verdict = rlsVerdict(report, { production: process.env.NODE_ENV === "production", allowBypass: process.env.ALLOW_RLS_BYPASS === "true" });
+    const verdict = rlsVerdict(report, {
+      production: process.env.NODE_ENV === "production",
+      allowBypass: process.env.ALLOW_RLS_BYPASS === "true",
+    });
     if (verdict === "ok") return;
     const message = `Row-level security is NOT enforced for this connection: ${report.problems.join("; ")}. Connect the app as the unprivileged runtime role (DATABASE_URL = app_user; DIRECT_URL is for migrations only) — see .env.example.`;
     if (verdict === "throw") throw new Error(message);

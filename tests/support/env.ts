@@ -87,9 +87,7 @@ function resolveTestDatabaseUrl(): string {
 }
 
 export const TEST_DATABASE_URL = resolveTestDatabaseUrl();
-export const TEST_DATABASE_NAME = decodeURIComponent(
-  new URL(TEST_DATABASE_URL).pathname.replace(/^\//, ""),
-);
+export const TEST_DATABASE_NAME = decodeURIComponent(new URL(TEST_DATABASE_URL).pathname.replace(/^\//, ""));
 
 /// The runtime role's credentials are fixed by the infrastructure (docker/postgres/init, `pnpm db:roles`).
 export const APP_DB_ROLE = "app_user";
@@ -132,9 +130,7 @@ process.env.MFA_ENCRYPTION_KEY = TEST_MFA_KEY;
 /// Environment for the Next.js servers under test. Explicit and complete on
 /// purpose: nothing from a developer's shell or .env may change what is tested.
 export function serverEnv(appUrl: string): Record<string, string> {
-  const inherited = Object.fromEntries(
-    Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined),
-  );
+  const inherited = Object.fromEntries(Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined));
   return {
     ...inherited,
     NODE_ENV: "production",
@@ -166,7 +162,14 @@ export function httpsServerEnv(): Record<string, string> {
 export function saasServerEnv(): Record<string, string> {
   // The SaaS-shaped server also uses the shared Redis rate-limit store (the other servers use memory), so the store
   // is exercised end to end by every limit test that runs here.
-  return { ...serverEnv(SAAS_URL), DEPLOYMENT_MODE: "saas", RATE_LIMIT_STORE: "redis", REDIS_URL: TEST_REDIS_URL, PWNED_PASSWORD_CHECK: "on", PWNED_PASSWORD_URL: `${PWNED_STUB_URL}/range/` };
+  return {
+    ...serverEnv(SAAS_URL),
+    DEPLOYMENT_MODE: "saas",
+    RATE_LIMIT_STORE: "redis",
+    REDIS_URL: TEST_REDIS_URL,
+    PWNED_PASSWORD_CHECK: "on",
+    PWNED_PASSWORD_URL: `${PWNED_STUB_URL}/range/`,
+  };
 }
 
 /// The misconfigured server (see UNSAFE_RLS_PORT): SaaS-shaped, but its DATABASE_URL is the admin's — and no

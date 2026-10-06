@@ -42,7 +42,9 @@ test.describe("sign-in challenge (the pending-MFA state)", () => {
     expect(Math.abs(rows[0].expiresAt.getTime() - (Date.now() + CHALLENGE_TTL_MS))).toBeLessThan(60_000);
     expect(CHALLENGE_TTL_MS).toBe(5 * 60_000);
 
-    const hits = await db.$queryRaw<{ n: number }[]>`SELECT count(*)::int AS n FROM "MfaChallenge" c WHERE c::text LIKE ${"%" + token + "%"}`;
+    const hits = await db.$queryRaw<
+      { n: number }[]
+    >`SELECT count(*)::int AS n FROM "MfaChallenge" c WHERE c::text LIKE ${"%" + token + "%"}`;
     expect(hits[0].n).toBe(0);
     // The whole point: a pending challenge is not a session.
     expect(await db.session.count({ where: { userId: user.id } })).toBe(0);
@@ -124,7 +126,9 @@ test.describe("enrolment", () => {
     const plaintext = decryptSecret(row.secretEnc, user.id);
     expect(plaintext.equals(base32Decode(started!.secret)!)).toBe(true);
     // The secret is nowhere in the table in any readable form.
-    const hits = await db.$queryRaw<{ n: number }[]>`SELECT count(*)::int AS n FROM "MfaCredential" c WHERE c::text LIKE ${"%" + started!.secret + "%"}`;
+    const hits = await db.$queryRaw<
+      { n: number }[]
+    >`SELECT count(*)::int AS n FROM "MfaCredential" c WHERE c::text LIKE ${"%" + started!.secret + "%"}`;
     expect(hits[0].n).toBe(0);
 
     expect(await hasActiveMfa(user.id)).toBe(false);

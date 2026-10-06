@@ -187,7 +187,14 @@ export function DevEmailInbox() {
               </span>
             </h2>
             <div className="flex items-center">
-              <button type="button" onClick={() => void clearAll()} aria-label="Clear all messages" title="Clear all" className={iconButton} disabled={state !== "ready" || emails.length === 0}>
+              <button
+                type="button"
+                onClick={() => void clearAll()}
+                aria-label="Clear all messages"
+                title="Clear all"
+                className={iconButton}
+                disabled={state !== "ready" || emails.length === 0}
+              >
                 <TrashIcon className="h-4 w-4" />
               </button>
               <button type="button" onClick={close} aria-label="Close dev email inbox" title="Close" className={iconButton}>
@@ -205,9 +212,7 @@ export function DevEmailInbox() {
 
             {(state === "locked" || state === "wrong-token") && (
               <form onSubmit={submitToken} className="space-y-3 p-4">
-                <p className="text-sm text-fg-muted">
-                  This is a staging deployment. Enter the dev tools token to read its mail.
-                </p>
+                <p className="text-sm text-fg-muted">This is a staging deployment. Enter the dev tools token to read its mail.</p>
                 <div>
                   <label htmlFor="dev-tools-token" className="mb-1.5 block text-xs font-semibold tracking-wide text-fg-2 uppercase">
                     Dev tools token
@@ -228,21 +233,29 @@ export function DevEmailInbox() {
                     </p>
                   )}
                 </div>
-                <button type="submit" className="inline-flex min-h-11 items-center rounded-xl bg-brand-strong px-4 text-sm font-semibold text-white hover:bg-brand-strong-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
+                <button
+                  type="submit"
+                  className="inline-flex min-h-11 items-center rounded-xl bg-brand-strong px-4 text-sm font-semibold text-white hover:bg-brand-strong-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                >
                   Unlock
                 </button>
               </form>
             )}
 
             {state === "limited" && (
-              <p role="alert" className="p-4 text-sm text-danger-text">Too many wrong tokens. Try again in a few minutes.</p>
+              <p role="alert" className="p-4 text-sm text-danger-text">
+                Too many wrong tokens. Try again in a few minutes.
+              </p>
             )}
             {state === "error" && (
-              <p role="alert" className="p-4 text-sm text-danger-text">Couldn&apos;t reach the server.</p>
+              <p role="alert" className="p-4 text-sm text-danger-text">
+                Couldn&apos;t reach the server.
+              </p>
             )}
 
-            {state === "ready" && !selected && (
-              emails.length === 0 ? (
+            {state === "ready" &&
+              !selected &&
+              (emails.length === 0 ? (
                 <p className="p-6 text-center text-sm text-fg-muted">
                   No messages yet. Anything the app emails — a password-reset link, a security notice — shows up here.
                 </p>
@@ -250,7 +263,11 @@ export function DevEmailInbox() {
                 <ul className="divide-y divide-line">
                   {emails.map((email) => (
                     <li key={email.id}>
-                      <button type="button" onClick={() => setSelectedId(email.id)} className="flex min-h-11 w-full flex-col gap-0.5 px-4 py-3 text-left hover:bg-surface-2 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedId(email.id)}
+                        className="flex min-h-11 w-full flex-col gap-0.5 px-4 py-3 text-left hover:bg-surface-2 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
+                      >
                         <span className="flex items-baseline justify-between gap-3 text-xs text-fg-muted">
                           <span className="min-w-0 truncate">{email.to}</span>
                           <span className="shrink-0 tabular-nums">{time(email.sentAt)}</span>
@@ -260,24 +277,39 @@ export function DevEmailInbox() {
                     </li>
                   ))}
                 </ul>
-              )
-            )}
+              ))}
 
             {state === "ready" && selected && (
               <article className="p-4">
-                <button ref={backRef} type="button" onClick={() => { headingRef.current?.focus(); setSelectedId(null); }} className="-ml-2 mb-2 inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2 text-sm font-medium text-fg-2 hover:bg-surface-2 hover:text-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
+                <button
+                  ref={backRef}
+                  type="button"
+                  onClick={() => {
+                    headingRef.current?.focus();
+                    setSelectedId(null);
+                  }}
+                  className="-ml-2 mb-2 inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2 text-sm font-medium text-fg-2 hover:bg-surface-2 hover:text-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                >
                   <ArrowLeftIcon className="h-4 w-4" /> Back to the list
                 </button>
-                <p className="text-xs text-fg-muted">To {selected.to} · {time(selected.sentAt)}</p>
+                <p className="text-xs text-fg-muted">
+                  To {selected.to} · {time(selected.sentAt)}
+                </p>
                 <h3 className="mt-1 text-sm font-semibold text-fg">{selected.subject}</h3>
-                <pre className="mt-3 rounded-lg border border-line bg-surface-2 p-3 font-sans text-xs leading-relaxed break-words whitespace-pre-wrap text-fg-2">{selected.text}</pre>
+                <pre className="mt-3 rounded-lg border border-line bg-surface-2 p-3 font-sans text-xs leading-relaxed break-words whitespace-pre-wrap text-fg-2">
+                  {selected.text}
+                </pre>
                 {linksIn(selected.text).length > 0 && (
                   <div className="mt-3">
                     <p className="text-xs font-semibold tracking-wide text-fg-2 uppercase">Links in this message</p>
                     <ul className="mt-1 space-y-1">
                       {linksIn(selected.text).map((href) => (
                         <li key={href}>
-                          <a href={href} rel="noopener noreferrer" className="inline-flex min-h-11 max-w-full items-center rounded-md text-xs break-all text-brand-fg underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
+                          <a
+                            href={href}
+                            rel="noopener noreferrer"
+                            className="inline-flex min-h-11 max-w-full items-center rounded-md text-xs break-all text-brand-fg underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                          >
                             {href}
                           </a>
                         </li>
@@ -306,7 +338,10 @@ export function DevEmailInbox() {
       >
         <MailIcon className="h-5 w-5" />
         {unread > 0 && (
-          <span aria-hidden="true" className="absolute -top-1 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-brand-strong px-1 text-[11px] font-bold text-white">
+          <span
+            aria-hidden="true"
+            className="absolute -top-1 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-brand-strong px-1 text-[11px] font-bold text-white"
+          >
             {unread}
           </span>
         )}

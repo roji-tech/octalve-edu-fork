@@ -14,10 +14,18 @@ import { useSignOut } from "@/components/auth/useSignOut";
 import { checkNewPassword } from "@/lib/auth/password-policy";
 import { checkName } from "@/lib/auth/profile-policy";
 
-const LINK = "inline-flex min-h-11 items-center font-semibold text-brand-fg hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring rounded-md";
+const LINK =
+  "inline-flex min-h-11 items-center font-semibold text-brand-fg hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring rounded-md";
 const WRAPPER = "rounded-2xl border border-line bg-surface p-6 shadow-card sm:p-7 lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none";
 
-type Preview = { schoolName: string; role: string; roleLabel: string; email: string; accountExists: boolean; viewer: "none" | "invitee" | "other" };
+type Preview = {
+  schoolName: string;
+  role: string;
+  roleLabel: string;
+  email: string;
+  accountExists: boolean;
+  viewer: "none" | "invitee" | "other";
+};
 type Outcome = { schoolCode: string; newAccount: boolean };
 
 /// The page an invitation email opens (plan §0.5.4). The token is in the URL FRAGMENT, read once and removed from the address bar (like a
@@ -63,14 +71,16 @@ function AcceptInviteBody({ token }: { token: string | undefined }) {
     if (reply.code === "INVALID_TOKEN") return setPreview("dead");
     if (reply.code === "SIGN_IN_REQUIRED" || reply.code === "WRONG_ACCOUNT") {
       // Somebody signed in or out in another tab since the page loaded: ask again what this link needs.
-      if (token) sendJson("/api/v1/invitations/preview", "POST", { token }).then((next) => next.ok && setPreview(next.data as unknown as Preview));
+      if (token)
+        sendJson("/api/v1/invitations/preview", "POST", { token }).then((next) => next.ok && setPreview(next.data as unknown as Preview));
       return setFormError(reply.message ?? null);
     }
     setNameError(problemFor(reply, "name") ?? null);
     setPasswordError(problemFor(reply, "password") ?? null);
     if (reply.status === 429) setFormError(RATE_LIMITED);
     else if (reply.status === 0) setFormError(NETWORK_ERROR);
-    else if (!problemFor(reply, "name") && !problemFor(reply, "password")) setFormError(reply.message ?? "We couldn't accept that invitation right now. Please try again in a moment.");
+    else if (!problemFor(reply, "name") && !problemFor(reply, "password"))
+      setFormError(reply.message ?? "We couldn't accept that invitation right now. Please try again in a moment.");
   }
 
   async function accept(body: Record<string, unknown>) {
@@ -110,7 +120,9 @@ function AcceptInviteBody({ token }: { token: string | undefined }) {
         </span>
         <h1 className="mt-4 text-[22px] font-bold tracking-tight text-fg">You&apos;re in</h1>
         <p className="mt-1.5 text-sm leading-relaxed text-fg-muted">
-          {done.newAccount ? "Your account is ready. Sign in with the email address this invitation was sent to and the password you just chose." : "You now have access to the school."}
+          {done.newAccount
+            ? "Your account is ready. Sign in with the email address this invitation was sent to and the password you just chose."
+            : "You now have access to the school."}
         </p>
         <Button className="mt-6 w-full" onClick={() => router.push(done.newAccount ? "/login" : `/schools/${done.schoolCode}`)} autoFocus>
           {done.newAccount ? "Continue to sign in" : "Open the school"}
@@ -140,7 +152,8 @@ function AcceptInviteBody({ token }: { token: string | undefined }) {
 
   const intro = (
     <p className="mt-1.5 text-sm leading-relaxed text-fg-muted">
-      You&apos;ve been invited as <strong className="font-semibold text-fg">{preview.roleLabel}</strong>. This invitation is for {preview.email}.
+      You&apos;ve been invited as <strong className="font-semibold text-fg">{preview.roleLabel}</strong>. This invitation is for{" "}
+      {preview.email}.
     </p>
   );
 
@@ -172,7 +185,10 @@ function AcceptInviteBody({ token }: { token: string | undefined }) {
         <p className="mt-4 text-sm leading-relaxed text-fg-muted">
           An account already exists for this address. Sign in with it, then open the link in your email again to finish joining.
         </p>
-        <Link href="/login" className="mt-6 inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-brand-strong px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-brand-strong/25 transition-colors hover:bg-brand-strong-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
+        <Link
+          href="/login"
+          className="mt-6 inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-brand-strong px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-brand-strong/25 transition-colors hover:bg-brand-strong-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+        >
           Sign in
         </Link>
       </div>
@@ -200,7 +216,9 @@ function AcceptInviteBody({ token }: { token: string | undefined }) {
     <div className={WRAPPER}>
       <h1 className="text-[22px] font-bold tracking-tight text-fg">Join {preview.schoolName}</h1>
       {intro}
-      <p className="mt-1.5 text-sm leading-relaxed text-fg-muted">Choose how you&apos;ll sign in. Passwords need at least 8 characters, with a letter and a number.</p>
+      <p className="mt-1.5 text-sm leading-relaxed text-fg-muted">
+        Choose how you&apos;ll sign in. Passwords need at least 8 characters, with a letter and a number.
+      </p>
       <form method="post" onSubmit={submitNewAccount} noValidate className="mt-6 space-y-4">
         <TextField
           label="Your name"
@@ -229,7 +247,15 @@ function AcceptInviteBody({ token }: { token: string | undefined }) {
           maxLength={128}
           disabled={pending}
         />
-        <PasswordField label="Confirm password" name="confirmPassword" value={confirm} onChange={(e) => setConfirm(e.target.value)} autoComplete="new-password" maxLength={128} disabled={pending} />
+        <PasswordField
+          label="Confirm password"
+          name="confirmPassword"
+          value={confirm}
+          onChange={(e) => setConfirm(e.target.value)}
+          autoComplete="new-password"
+          maxLength={128}
+          disabled={pending}
+        />
         {formError && <Alert variant="error">{formError}</Alert>}
         <Button type="submit" className="w-full" loading={pending}>
           {pending ? "Creating your account…" : "Create account and join"}

@@ -99,8 +99,7 @@ export function TwoStepPanel({
     return (
       <div className="mt-4">
         <Alert variant="info">
-          Two-step verification isn&apos;t available on this installation yet. Ask your administrator to set it
-          up.
+          Two-step verification isn&apos;t available on this installation yet. Ask your administrator to set it up.
         </Alert>
       </div>
     );
@@ -117,8 +116,8 @@ export function TwoStepPanel({
             <StatusBadge on={false} />
           </div>
           <p className="max-w-prose text-sm text-fg-muted">
-            Use an authenticator app (such as Google Authenticator, Microsoft Authenticator, 1Password or Authy)
-            to generate a 6-digit code every time you sign in.
+            Use an authenticator app (such as Google Authenticator, Microsoft Authenticator, 1Password or Authy) to generate a 6-digit code
+            every time you sign in.
           </p>
           <Button
             onClick={() => {
@@ -176,9 +175,7 @@ export function TwoStepPanel({
             <ViewHeading focus={touched}>Status</ViewHeading>
             <StatusBadge on />
           </div>
-          <p className="text-sm text-fg-muted">
-            Signing in needs a code from your authenticator app as well as your password.
-          </p>
+          <p className="text-sm text-fg-muted">Signing in needs a code from your authenticator app as well as your password.</p>
           <p className="text-sm text-fg-2">
             <strong className="font-semibold text-fg">
               {remaining} of {RECOVERY_CODE_COUNT}
@@ -402,9 +399,7 @@ function ScanStep({
             // eslint-disable-next-line @next/next/no-img-element -- a data: URL drawn in this browser
             <img src={qr} alt="QR code to add this account to your authenticator app" width={208} height={208} />
           ) : qrFailed ? (
-            <p className="px-4 text-center text-xs text-neutral-700">
-              The QR code couldn&apos;t be drawn. Use the setup key instead.
-            </p>
+            <p className="px-4 text-center text-xs text-neutral-700">The QR code couldn&apos;t be drawn. Use the setup key instead.</p>
           ) : (
             <p className="text-xs text-neutral-700">Drawing QR code…</p>
           )}
@@ -464,15 +459,7 @@ function ScanStep({
 
 // --- Recovery codes (shown once) --------------------------------------------------------------------------
 
-function RecoveryCodes({
-  codes,
-  intro,
-  onDone,
-}: {
-  codes: string[];
-  intro: string | null;
-  onDone: () => void;
-}) {
+function RecoveryCodes({ codes, intro, onDone }: { codes: string[]; intro: string | null; onDone: () => void }) {
   const [saved, setSaved] = useState(false);
   const { state: copyState, copy } = useCopy();
   const text = codes.join("\n");
@@ -494,8 +481,8 @@ function RecoveryCodes({
       {intro && <Alert variant="success">{intro}</Alert>}
       <ViewHeading focus>Save your recovery codes</ViewHeading>
       <Alert variant="warning">
-        Each code works once, and they will not be shown again. If you lose your authenticator, a recovery code is
-        the only way back in — store them somewhere safe (a password manager, or printed).
+        Each code works once, and they will not be shown again. If you lose your authenticator, a recovery code is the only way back in —
+        store them somewhere safe (a password manager, or printed).
       </Alert>
       <ul className="grid max-w-md grid-cols-2 gap-2 rounded-xl border border-line bg-surface-2 p-4 font-mono text-sm tracking-wider text-fg">
         {codes.map((code) => (
@@ -514,12 +501,7 @@ function RecoveryCodes({
           {copyState === "failed" && "Couldn't copy here — select the codes and copy them."}
         </span>
       </div>
-      <CheckboxField
-        name="saved"
-        label="I have saved my recovery codes"
-        checked={saved}
-        onChange={(e) => setSaved(e.target.checked)}
-      />
+      <CheckboxField name="saved" label="I have saved my recovery codes" checked={saved} onChange={(e) => setSaved(e.target.checked)} />
       <Button onClick={onDone} disabled={!saved}>
         Done
       </Button>
@@ -529,13 +511,7 @@ function RecoveryCodes({
 
 // --- Replace recovery codes ---------------------------------------------------------------------------------
 
-function RegenerateForm({
-  onCancel,
-  onDone,
-}: {
-  onCancel: () => void;
-  onDone: (codes: string[]) => void;
-}) {
+function RegenerateForm({ onCancel, onDone }: { onCancel: () => void; onDone: (codes: string[]) => void }) {
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
@@ -564,8 +540,7 @@ function RegenerateForm({
     <form method="post" onSubmit={submit} noValidate className="max-w-md space-y-4">
       <ViewHeading focus>Generate new recovery codes</ViewHeading>
       <p className="text-sm text-fg-muted">
-        This replaces all your current recovery codes — the old ones stop working. Enter a code from your
-        authenticator app to continue.
+        This replaces all your current recovery codes — the old ones stop working. Enter a code from your authenticator app to continue.
       </p>
       <TextField
         label="Authentication code"
@@ -616,7 +591,13 @@ function DisableForm({ onCancel, onDone }: { onCancel: () => void; onDone: () =>
     setFormError(null);
     const payload = factorPayload(mode, factor);
     const noPassword = password ? null : "Enter your password.";
-    const noFactor = payload ? null : factor.trim() ? FACTOR_FORMAT_ERROR[mode] : mode === "code" ? "Enter the 6-digit code." : "Enter a recovery code.";
+    const noFactor = payload
+      ? null
+      : factor.trim()
+        ? FACTOR_FORMAT_ERROR[mode]
+        : mode === "code"
+          ? "Enter the 6-digit code."
+          : "Enter a recovery code.";
     setPasswordError(noPassword);
     setFactorError(noFactor);
     if (noPassword || noFactor || !payload) return;
@@ -629,7 +610,11 @@ function DisableForm({ onCancel, onDone }: { onCancel: () => void; onDone: () =>
     setFactor("");
     if (reply.code === "INVALID_PASSWORD") setPasswordError(reply.message ?? "Your password is incorrect.");
     else if (reply.code === "INVALID_CODE") {
-      setFactorError(mode === "code" ? "That code isn't right. Wait for your app to show a new one and try again." : "That recovery code isn't right, or it has already been used.");
+      setFactorError(
+        mode === "code"
+          ? "That code isn't right. Wait for your app to show a new one and try again."
+          : "That recovery code isn't right, or it has already been used.",
+      );
     } else if (reply.status === 429) setFormError("Too many attempts. Please wait a few minutes and try again.");
     else if (reply.status === 401) setFormError("Your session has ended. Please sign in again.");
     else if (reply.code === "NOT_ENABLED") setFormError("Two-step verification is already off.");
@@ -640,8 +625,8 @@ function DisableForm({ onCancel, onDone }: { onCancel: () => void; onDone: () =>
     <form method="post" onSubmit={submit} noValidate className="max-w-md space-y-4">
       <ViewHeading focus>Turn off two-step verification</ViewHeading>
       <p className="text-sm text-fg-muted">
-        Signing in will need only your password again, and you&apos;ll be signed out of your other devices. To
-        make sure it&apos;s you, enter your password and a current code.
+        Signing in will need only your password again, and you&apos;ll be signed out of your other devices. To make sure it&apos;s you,
+        enter your password and a current code.
       </p>
       <PasswordField
         label="Password"

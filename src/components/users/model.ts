@@ -31,7 +31,10 @@ export type Invitation = {
 
 export type PageMeta = { page: number; limit: number; total: number; pages: number; hasNext: boolean };
 
-export const ROLE_OPTIONS: SelectOption[] = (Object.keys(ROLE_LABELS) as RoleName[]).map((role) => ({ value: role, label: ROLE_LABELS[role] }));
+export const ROLE_OPTIONS: SelectOption[] = (Object.keys(ROLE_LABELS) as RoleName[]).map((role) => ({
+  value: role,
+  label: ROLE_LABELS[role],
+}));
 
 export const displayName = (member: Pick<Member, "name" | "email">) => member.name?.trim() || member.email || "Unnamed person";
 

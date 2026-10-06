@@ -18,7 +18,8 @@ test.beforeAll(async () => {
   await seedInstance();
 });
 
-const requests = async () => (await (await fetch(`${PWNED_STUB_URL}/__requests`)).json()) as { prefix: string; addPadding: string | null }[];
+const requests = async () =>
+  (await (await fetch(`${PWNED_STUB_URL}/__requests`)).json()) as { prefix: string; addPadding: string | null }[];
 
 test("reset: refused with the reason, the link survives, a fresh password then works", async () => {
   const user = await createUser();
@@ -36,11 +37,19 @@ test("change: a breached new password is refused (and costs no password-attempt 
   const cookie = cookieHeader((await loginAs(user, SAAS)).token!);
   const ip = uniqueIp();
   for (let i = 0; i < 7; i++) {
-    const refused = await api("/api/v1/auth/change-password", { ...SAAS, ip, cookie, body: { currentPassword: user.password, newPassword: BREACHED } });
+    const refused = await api("/api/v1/auth/change-password", {
+      ...SAAS,
+      ip,
+      cookie,
+      body: { currentPassword: user.password, newPassword: BREACHED },
+    });
     expect(refused.status, `attempt ${i}`).toBe(400);
     expect(refused.json.error.message).toBe(BREACHED_MESSAGE);
   }
-  expect((await api("/api/v1/auth/change-password", { ...SAAS, ip, cookie, body: { currentPassword: user.password, newPassword: FRESH } })).status).toBe(200);
+  expect(
+    (await api("/api/v1/auth/change-password", { ...SAAS, ip, cookie, body: { currentPassword: user.password, newPassword: FRESH } }))
+      .status,
+  ).toBe(200);
 });
 
 test("only the 5-character PREFIX ever reached the service — and it asked for padding", async () => {

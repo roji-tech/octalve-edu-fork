@@ -23,9 +23,7 @@ const DUMMY_HASH = bcrypt.hashSync(randomUUID(), BCRYPT_COST);
 /// can ever store a hash of a silently-truncated password.
 export function hashPassword(password: string): Promise<string> {
   if (passwordByteLength(password) > PASSWORD_MAX_BYTES) {
-    return Promise.reject(
-      new RangeError(`Password exceeds ${PASSWORD_MAX_BYTES} bytes; bcrypt would silently truncate it.`),
-    );
+    return Promise.reject(new RangeError(`Password exceeds ${PASSWORD_MAX_BYTES} bytes; bcrypt would silently truncate it.`));
   }
   return bcrypt.hash(password, BCRYPT_COST);
 }

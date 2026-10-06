@@ -36,7 +36,9 @@ async function signedInAs(page: Page, role: Role, opts: { name?: string; also?: 
 test.describe("on a desktop: the sidebar and the top bar", () => {
   test.beforeEach(({ isMobile }) => test.skip(isMobile, "the sidebar exists from the `lg` breakpoint up"));
 
-  test("an ADMIN: the school's name, Overview (current), Users as a link, and Settings as visible 'coming soon' text — never a dead link", async ({ page }) => {
+  test("an ADMIN: the school's name, Overview (current), Users as a link, and Settings as visible 'coming soon' text — never a dead link", async ({
+    page,
+  }) => {
     await signedInAs(page, Role.ADMIN);
     await expect(page).toHaveURL(new RegExp(`/schools/${a.code}$`));
     const nav = mainNav(page);
@@ -127,7 +129,9 @@ test.describe("on a desktop: the sidebar and the top bar", () => {
     await expect(page.getByText("Alpha School").first()).toBeVisible(); // their OWN school is in the shell
   });
 
-  test("the account page lives in the shell: with ONE school the sidebar still leads into it; with several it asks them to choose", async ({ page }) => {
+  test("the account page lives in the shell: with ONE school the sidebar still leads into it; with several it asks them to choose", async ({
+    page,
+  }) => {
     await signedInAs(page, Role.ADMIN);
     await page.goto("/account");
     await expect(page.getByRole("heading", { level: 1, name: "Account" })).toBeVisible();
@@ -143,7 +147,9 @@ test.describe("on a desktop: the sidebar and the top bar", () => {
     await expect(page.getByRole("button", { name: /School.*Choose a school/ })).toBeVisible();
   });
 
-  test("the account menu: opens, shows who you are and where, goes to Profile, and Escape closes it with focus back on its button", async ({ page }) => {
+  test("the account menu: opens, shows who you are and where, goes to Profile, and Escape closes it with focus back on its button", async ({
+    page,
+  }) => {
     await signedInAs(page, Role.ADMIN, { name: "Tunde Bello" });
     const menu = accountMenu(page);
     await expect(menu).toHaveAttribute("aria-expanded", "false");
@@ -199,7 +205,9 @@ test.describe("on a phone: the tab bar and the More sheet", () => {
     expect(card && bar && card.y + card.height <= bar.y).toBe(true); // the bar never covers the last thing on the page
   });
 
-  test("More: who you are and where, Settings as 'coming soon' (administrator), Profile, Sign out; Escape closes it and returns focus — Users is a TAB", async ({ page }) => {
+  test("More: who you are and where, Settings as 'coming soon' (administrator), Profile, Sign out; Escape closes it and returns focus — Users is a TAB", async ({
+    page,
+  }) => {
     await signedInAs(page, Role.ADMIN, { name: "Tunde Bello" });
     const more = mainNav(page).getByRole("button", { name: "More" });
     await more.click();

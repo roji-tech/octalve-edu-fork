@@ -3,6 +3,7 @@ import { test as setup } from "@playwright/test";
 import { PrismaClient } from "@prisma/client";
 import { APP_DB_ROLE, TEST_APP_DATABASE_URL, TEST_DATABASE_NAME, TEST_DATABASE_URL } from "../support/env";
 import { db, resetDatabase } from "../support/db";
+import { resetOutbox } from "../support/outbox";
 
 // Runs once, first, before any suite that needs a database (the other projects
 // depend on this one). Creates the *_test database if it doesn't exist yet,
@@ -36,7 +37,9 @@ setup("test database is created, migrated and empty", async () => {
           `The runtime role "${APP_DB_ROLE}" does not exist and "${me.rolname}" cannot create it. As a superuser run:\n\n  CREATE ROLE ${APP_DB_ROLE} LOGIN PASSWORD '${APP_DB_ROLE}' NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE;\n`,
         );
       }
-      await admin.$executeRawUnsafe(`CREATE ROLE ${APP_DB_ROLE} LOGIN PASSWORD '${APP_DB_ROLE}' NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE`);
+      await admin.$executeRawUnsafe(
+        `CREATE ROLE ${APP_DB_ROLE} LOGIN PASSWORD '${APP_DB_ROLE}' NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE`,
+      );
     }
     const exists = await admin.$queryRaw<{ one: number }[]>`
       SELECT 1 AS one FROM pg_database WHERE datname = ${TEST_DATABASE_NAME}`;
@@ -62,7 +65,9 @@ setup("test database is created, migrated and empty", async () => {
     const [row] = await app.$queryRaw<{ rolname: string; rolsuper: boolean; rolbypassrls: boolean }[]>`
       SELECT rolname, rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user`;
     if (row.rolsuper || row.rolbypassrls) {
-      throw new Error(`The runtime role "${row.rolname}" bypasses row-level security (superuser: ${row.rolsuper}, BYPASSRLS: ${row.rolbypassrls}); it must not.`);
+      throw new Error(
+        `The runtime role "${row.rolname}" bypasses row-level security (superuser: ${row.rolsuper}, BYPASSRLS: ${row.rolbypassrls}); it must not.`,
+      );
     }
   } finally {
     await app.$disconnect();
@@ -70,4 +75,5 @@ setup("test database is created, migrated and empty", async () => {
 
   await resetDatabase();
   await db.$disconnect();
+  await resetOutbox();
 });

@@ -28,7 +28,11 @@ const laneDir = (n) => (n === 0 ? repo : path.join(lanesRoot, `lane${n}`));
 const run = (cmd, args, options = {}) => spawnSync(cmd, args, { stdio: "inherit", ...options });
 
 function sourceFiles() {
-  const out = spawnSync("git", ["ls-files", "-z", "--cached", "--others", "--exclude-standard"], { cwd: repo, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+  const out = spawnSync("git", ["ls-files", "-z", "--cached", "--others", "--exclude-standard"], {
+    cwd: repo,
+    encoding: "utf8",
+    maxBuffer: 64 * 1024 * 1024,
+  });
   if (out.status !== 0) throw new Error("git ls-files failed");
   return out.stdout.split("\0").filter(Boolean);
 }
@@ -70,15 +74,20 @@ export function syncLane(n) {
   const stampFile = path.join(dir, ".lane-stamp.json");
   const stamp = fs.existsSync(stampFile) ? JSON.parse(fs.readFileSync(stampFile, "utf8")) : {};
   const lock = sha(path.join(repo, "pnpm-lock.yaml")) + sha(path.join(repo, "package.json"));
-  const schema = files.filter((f) => f.startsWith("prisma/schema/")).map((f) => sha(path.join(repo, f))).join("");
+  const schema = files
+    .filter((f) => f.startsWith("prisma/schema/"))
+    .map((f) => sha(path.join(repo, f)))
+    .join("");
   if (stamp.lock !== lock || !fs.existsSync(path.join(dir, "node_modules"))) {
     console.log(`[lane ${n}] installing dependencies…`);
-    if (run("pnpm", ["install", "--frozen-lockfile", "--prefer-offline"], { cwd: dir }).status !== 0) throw new Error(`lane ${n}: pnpm install failed`);
+    if (run("pnpm", ["install", "--frozen-lockfile", "--prefer-offline"], { cwd: dir }).status !== 0)
+      throw new Error(`lane ${n}: pnpm install failed`);
     stamp.schema = ""; // a fresh node_modules needs a fresh client
   }
   if (stamp.schema !== schema) {
     console.log(`[lane ${n}] generating the Prisma client…`);
-    if (run("pnpm", ["exec", "prisma", "generate"], { cwd: dir, stdio: "ignore" }).status !== 0) throw new Error(`lane ${n}: prisma generate failed`);
+    if (run("pnpm", ["exec", "prisma", "generate"], { cwd: dir, stdio: "ignore" }).status !== 0)
+      throw new Error(`lane ${n}: prisma generate failed`);
   }
   fs.writeFileSync(stampFile, JSON.stringify({ lock, schema }));
   console.log(`[lane ${n}] in sync (${copied} file${copied === 1 ? "" : "s"} updated) — ${dir}`);
@@ -120,7 +129,13 @@ function summarise(log) {
   const text = fs.readFileSync(log, "utf8").replace(/\x1b\[[0-9;?]*[A-Za-z]/g, "");
   const count = (word) => [...text.matchAll(new RegExp(`^\\s+(\\d+) ${word}\\b`, "gm"))].reduce((sum, m) => sum + Number(m[1]), 0);
   const failures = [...text.matchAll(/^\s+\d+\) (\[.*)$/gm)].map((m) => m[1].trim());
-  return { passed: count("passed"), failed: count("failed"), skipped: count("skipped"), flaky: count("flaky"), failures: [...new Set(failures)] };
+  return {
+    passed: count("passed"),
+    failed: count("failed"),
+    skipped: count("skipped"),
+    flaky: count("flaky"),
+    failures: [...new Set(failures)],
+  };
 }
 
 const TIMINGS = path.join(repo, ".lane-timings.json");
@@ -128,7 +143,11 @@ const DEFAULT_SECONDS_PER_TEST = { unit: 0.05, integration: 0.2, api: 1, "e2e-de
 
 /// Every (project, file) group in the suite and how many tests it holds, from `playwright test --list` (which starts no server).
 function listGroups() {
-  const out = spawnSync("pnpm", ["exec", "playwright", "test", "--list", "--reporter=json"], { cwd: repo, encoding: "utf8", maxBuffer: 256 * 1024 * 1024 });
+  const out = spawnSync("pnpm", ["exec", "playwright", "test", "--list", "--reporter=json"], {
+    cwd: repo,
+    encoding: "utf8",
+    maxBuffer: 256 * 1024 * 1024,
+  });
   const json = JSON.parse(out.stdout.slice(out.stdout.indexOf("{")));
   const counts = new Map();
   const visit = (suite, file) => {
@@ -165,8 +184,11 @@ export function schedule(groups, timings, lanes) {
       perProject[g.project].tests += g.tests;
     }
   }
-  const perTest = (project) => (perProject[project] ? perProject[project].seconds / perProject[project].tests : (DEFAULT_SECONDS_PER_TEST[project] ?? 5));
-  const sized = groups.map((g) => ({ ...g, seconds: timings[g.key] ?? g.tests * perTest(g.project) })).sort((x, y) => y.seconds - x.seconds || x.key.localeCompare(y.key));
+  const perTest = (project) =>
+    perProject[project] ? perProject[project].seconds / perProject[project].tests : (DEFAULT_SECONDS_PER_TEST[project] ?? 5);
+  const sized = groups
+    .map((g) => ({ ...g, seconds: timings[g.key] ?? g.tests * perTest(g.project) }))
+    .sort((x, y) => y.seconds - x.seconds || x.key.localeCompare(y.key));
   const plan = Array.from({ length: lanes }, () => ({ seconds: 0, groups: [] }));
   for (const g of sized) {
     const lane = plan.reduce((least, l) => (l.seconds < least.seconds ? l : least));
@@ -210,7 +232,10 @@ function recordTimings(jsonFiles) {
       // a lane that died before writing its report just contributes nothing
     }
   }
-  fs.writeFileSync(TIMINGS, JSON.stringify({ ...timings, ...Object.fromEntries(Object.entries(seconds).map(([k, v]) => [k, Math.round(v * 10) / 10])) }, null, 1));
+  fs.writeFileSync(
+    TIMINGS,
+    JSON.stringify({ ...timings, ...Object.fromEntries(Object.entries(seconds).map(([k, v]) => [k, Math.round(v * 10) / 10])) }, null, 1),
+  );
 }
 
 async function testCommand(args) {
@@ -229,13 +254,23 @@ async function testCommand(args) {
   if (lanes > 1) {
     // Single-token flags (--project=x, --repeat-each=5, --grep=…) and file filters can follow "--"; a flag whose value is a separate word cannot be told from a file filter.
     const unsupported = passthrough.filter((a) => a.startsWith("-") && !/^--[a-z-]+=/.test(a));
-    if (unsupported.length) throw new Error(`with several lanes, flags after "--" must be written --flag=value (got ${unsupported.join(" ")})`);
+    if (unsupported.length)
+      throw new Error(`with several lanes, flags after "--" must be written --flag=value (got ${unsupported.join(" ")})`);
   }
   // Extra Playwright arguments (a project, a file filter) narrow what is scheduled: they are applied to every invocation, so the
   // schedule only needs the groups they leave in.
-  const groups = lanes === 1 ? [] : listGroups().filter((g) => (passthrough.filter((a) => a.startsWith("--project=")).length === 0 || passthrough.includes(`--project=${g.project}`)) && passthrough.filter((a) => !a.startsWith("-")).every((f) => g.file.includes(f) || f.includes(g.file)));
+  const groups =
+    lanes === 1
+      ? []
+      : listGroups().filter(
+          (g) =>
+            (passthrough.filter((a) => a.startsWith("--project=")).length === 0 || passthrough.includes(`--project=${g.project}`)) &&
+            passthrough.filter((a) => !a.startsWith("-")).every((f) => g.file.includes(f) || f.includes(g.file)),
+        );
   const plan = lanes === 1 ? [{ seconds: 0, groups: [] }] : schedule(groups, loadTimings(), lanes);
-  console.log(`[plan] ${lanes === 1 ? "one lane, one invocation" : plan.map((l, n) => `lane ${n}: ${l.groups.length} groups ≈ ${(l.seconds / 60).toFixed(1)} min`).join(" · ")}`);
+  console.log(
+    `[plan] ${lanes === 1 ? "one lane, one invocation" : plan.map((l, n) => `lane ${n}: ${l.groups.length} groups ≈ ${(l.seconds / 60).toFixed(1)} min`).join(" · ")}`,
+  );
 
   const started = Date.now();
   const results = await Promise.all(
@@ -249,11 +284,21 @@ async function testCommand(args) {
       const byProject = new Map();
       for (const g of lane.groups) byProject.set(g.project, [...(byProject.get(g.project) ?? []), g.file]);
       const extraFlags = passthrough.filter((a) => a.startsWith("-") && !a.startsWith("--project="));
-      const invocations = lanes === 1 ? [passthrough] : [...byProject].map(([project, files]) => [`--project=${project}`, ...extraFlags, ...files.map((f) => `${f.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`)]);
+      const invocations =
+        lanes === 1
+          ? [passthrough]
+          : [...byProject].map(([project, files]) => [
+              `--project=${project}`,
+              ...extraFlags,
+              ...files.map((f) => `${f.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`),
+            ]);
       for (const [i, inv] of invocations.entries()) {
         const jsonOut = path.join(dir, `lane-report-${i}.json`);
         jsonFiles.push(jsonOut);
-        fs.writeSync(fd, `\n=== lane ${n} invocation ${i + 1}/${invocations.length}: ${inv.slice(0, 3).join(" ")}${inv.length > 3 ? ` … (+${inv.length - 3})` : ""}\n`);
+        fs.writeSync(
+          fd,
+          `\n=== lane ${n} invocation ${i + 1}/${invocations.length}: ${inv.slice(0, 3).join(" ")}${inv.length > 3 ? ` … (+${inv.length - 3})` : ""}\n`,
+        );
         code = (await runInvocation(dir, n, inv, jsonOut, fd, lanes > 1 ? 2 : 1)) || code;
       }
       return { n, code, log, jsonFiles };
@@ -274,7 +319,9 @@ async function testCommand(args) {
   }
   if (passthrough.length === 0) recordTimings(results.flatMap((r) => r.jsonFiles)); // a narrowed or repeated run would skew the schedule
   const minutes = ((Date.now() - started) / 60_000).toFixed(1);
-  console.log(`\nTOTAL over ${lanes} lane${lanes === 1 ? "" : "s"}: ${passed} passed, ${failed} failed, ${skipped} skipped (${minutes} min)`);
+  console.log(
+    `\nTOTAL over ${lanes} lane${lanes === 1 ? "" : "s"}: ${passed} passed, ${failed} failed, ${skipped} skipped (${minutes} min)`,
+  );
   for (const f of failures) console.log(`  FAILED ${f}`);
   const bad = results.some((r) => r.code !== 0) || failed > 0;
   process.exit(bad ? 1 : 0);

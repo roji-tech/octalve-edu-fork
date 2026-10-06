@@ -8,7 +8,8 @@ import { Button } from "@/components/ui/Button";
 import { CheckCircleIcon, MailIcon } from "@/components/ui/icons";
 import { GENERIC_ERROR, NETWORK_ERROR, RATE_LIMITED, sendJson } from "@/components/auth/postJson";
 
-const LINK = "inline-flex min-h-11 items-center font-semibold text-brand-fg hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring rounded-md";
+const LINK =
+  "inline-flex min-h-11 items-center font-semibold text-brand-fg hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring rounded-md";
 const WRAPPER = "rounded-2xl border border-line bg-surface p-6 shadow-card sm:p-7 lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none";
 
 /// The page the link mailed to the NEW address opens (plan §0.5.E). Like the reset page, the token is in the URL
@@ -63,8 +64,7 @@ function ConfirmEmailBody({ token }: { token: string | undefined }) {
           Email address changed
         </h1>
         <p className="mt-1.5 text-sm leading-relaxed text-fg-muted">
-          For your security you&apos;ve been signed out everywhere. Sign in with your new email address and your
-          usual password.
+          For your security you&apos;ve been signed out everywhere. Sign in with your new email address and your usual password.
         </p>
         <Link
           href="/login"
@@ -103,8 +103,7 @@ function ConfirmEmailBody({ token }: { token: string | undefined }) {
       </span>
       <h1 className="mt-4 text-[22px] font-bold tracking-tight text-fg">Confirm your new email address</h1>
       <p className="mt-1.5 text-sm leading-relaxed text-fg-muted">
-        Confirming switches your account to this address, and signs you out of every device. From then on you sign in
-        with this address.
+        Confirming switches your account to this address, and signs you out of every device. From then on you sign in with this address.
       </p>
       {formError && (
         <Alert variant="error" className="mt-4">

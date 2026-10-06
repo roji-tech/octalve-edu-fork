@@ -3,7 +3,15 @@ import { test, expect } from "@playwright/test";
 import { NextRequest } from "next/server";
 import { z } from "zod";
 import {
-  DEFAULT_LIMIT, MAX_LIMIT, MAX_PAGE, cursorMeta, decodeCursor, encodeCursor, offsetMeta, parseCursorPagination, parseOffsetPagination,
+  DEFAULT_LIMIT,
+  MAX_LIMIT,
+  MAX_PAGE,
+  cursorMeta,
+  decodeCursor,
+  encodeCursor,
+  offsetMeta,
+  parseCursorPagination,
+  parseOffsetPagination,
 } from "@/lib/api/pagination";
 import { MAX_BODY_BYTES, validate } from "@/lib/api/validate";
 
@@ -71,9 +79,20 @@ test.describe("cursor pagination", () => {
     const good = encodeCursor(cursor);
     const b64 = (value: unknown) => Buffer.from(JSON.stringify(value)).toString("base64url");
     for (const bad of [
-      "", "!!!", "not base64 url", good + "A".repeat(300), good.slice(0, -4),
-      b64(null), b64("str"), b64([]), b64({}), b64({ t: 1, id: "x" }), b64({ t: "2026-10-05", id: "x" }), // not the exact ISO form
-      b64({ t: "not a date", id: "x" }), b64({ t: cursor.createdAt.toISOString(), id: "" }), b64({ t: cursor.createdAt.toISOString(), id: "x".repeat(200) }),
+      "",
+      "!!!",
+      "not base64 url",
+      good + "A".repeat(300),
+      good.slice(0, -4),
+      b64(null),
+      b64("str"),
+      b64([]),
+      b64({}),
+      b64({ t: 1, id: "x" }),
+      b64({ t: "2026-10-05", id: "x" }), // not the exact ISO form
+      b64({ t: "not a date", id: "x" }),
+      b64({ t: cursor.createdAt.toISOString(), id: "" }),
+      b64({ t: cursor.createdAt.toISOString(), id: "x".repeat(200) }),
       b64({ t: cursor.createdAt.toISOString(), id: 7 }),
     ]) {
       expect(decodeCursor(bad), JSON.stringify(bad).slice(0, 60)).toBeNull();
@@ -81,7 +100,9 @@ test.describe("cursor pagination", () => {
   });
 
   test("a VALID cursor padded past the length cap is refused too (the cap is its own rule, not a side effect)", () => {
-    const padded = Buffer.from(JSON.stringify({ t: cursor.createdAt.toISOString(), id: cursor.id, pad: "x".repeat(400) })).toString("base64url");
+    const padded = Buffer.from(JSON.stringify({ t: cursor.createdAt.toISOString(), id: cursor.id, pad: "x".repeat(400) })).toString(
+      "base64url",
+    );
     expect(padded.length).toBeGreaterThan(256);
     expect(decodeCursor(padded)).toBeNull();
     expect(decodeCursor(encodeCursor(cursor))).toEqual(cursor); // …while the ordinary one is fine
@@ -116,7 +137,10 @@ function request(opts: { body?: string; query?: string; headers?: Record<string,
     headers: opts.headers,
   });
 }
-const bodySchema = z.object({ name: z.string().trim().min(1, "Enter a name.").max(10, "Too long."), age: z.number().int().min(0).optional() });
+const bodySchema = z.object({
+  name: z.string().trim().min(1, "Enter a name.").max(10, "Too long."),
+  age: z.number().int().min(0).optional(),
+});
 const querySchema = z.object({ q: z.string().max(5).optional(), tag: z.union([z.string(), z.array(z.string())]).optional() });
 
 function route() {
@@ -135,7 +159,10 @@ const run = async (handler: ReturnType<typeof route>["handler"], req: NextReques
 test.describe("validate()", () => {
   test("valid input reaches the handler parsed; unknown keys are STRIPPED, never passed on", async () => {
     const { handler, calls } = route();
-    const res = await run(handler, request({ body: JSON.stringify({ name: "  Amina  ", age: 3, isAdmin: true, role: "ADMIN" }), query: "q=ab&tag=x&tag=y" }));
+    const res = await run(
+      handler,
+      request({ body: JSON.stringify({ name: "  Amina  ", age: 3, isAdmin: true, role: "ADMIN" }), query: "q=ab&tag=x&tag=y" }),
+    );
     expect(res.status).toBe(200);
     expect(calls).toEqual([{ body: { name: "Amina", age: 3 }, query: { q: "ab", tag: ["x", "y"] } }]);
   });
@@ -189,6 +216,8 @@ test.describe("validate()", () => {
     const onlyQuery = validate({ query: querySchema }, async (_r, _a: unknown, _c: unknown, input) => Response.json(input));
     expect((await run(onlyQuery as never, request({ query: "q=a" }))).json).toEqual({ query: { q: "a" } });
     const onlyBody = validate({ body: bodySchema }, async (_r, _a: unknown, _c: unknown, input) => Response.json(input));
-    expect((await run(onlyBody as never, request({ body: JSON.stringify({ name: "n" }), query: "q=whatever&evil=1" }))).json).toEqual({ body: { name: "n" } });
+    expect((await run(onlyBody as never, request({ body: JSON.stringify({ name: "n" }), query: "q=whatever&evil=1" }))).json).toEqual({
+      body: { name: "n" },
+    });
   });
 });

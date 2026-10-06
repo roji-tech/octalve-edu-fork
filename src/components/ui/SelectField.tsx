@@ -46,7 +46,10 @@ export function SelectField({ label, id, options, hint, error, hideLabel = false
             </option>
           ))}
         </select>
-        <ChevronDownIcon aria-hidden="true" className="pointer-events-none absolute top-1/2 right-3.5 h-4 w-4 -translate-y-1/2 text-fg-muted" />
+        <ChevronDownIcon
+          aria-hidden="true"
+          className="pointer-events-none absolute top-1/2 right-3.5 h-4 w-4 -translate-y-1/2 text-fg-muted"
+        />
       </div>
       {hint && !error && (
         <p id={hintId} className="mt-1.5 text-xs text-fg-muted">

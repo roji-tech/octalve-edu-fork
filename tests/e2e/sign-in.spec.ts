@@ -1,6 +1,17 @@
 import { test, expect } from "../support/fixtures";
 import { Role, createUser, db, seedInstance, sha256Hex } from "../support/db";
-import { alerts, emailField, fillCredentials, keepSignedInBox, passwordField, signInButton, signInThroughUi, signOut, trackLoginRequests, HOME_URL } from "./helpers";
+import {
+  alerts,
+  emailField,
+  fillCredentials,
+  keepSignedInBox,
+  passwordField,
+  signInButton,
+  signInThroughUi,
+  signOut,
+  trackLoginRequests,
+  HOME_URL,
+} from "./helpers";
 
 test.beforeAll(async () => {
   await seedInstance();
@@ -30,7 +41,9 @@ test.describe("signing in", () => {
     expect(page.url()).not.toContain(user.password);
   });
 
-  test("a wrong password shows one generic message, empties the password, KEEPS the email, and puts focus back in the password field", async ({ page }) => {
+  test("a wrong password shows one generic message, empties the password, KEEPS the email, and puts focus back in the password field", async ({
+    page,
+  }) => {
     const user = await createUser({ role: Role.ADMIN });
     await page.goto("/login");
     await fillCredentials(page, user.email, "not-the-password-1");
@@ -116,7 +129,9 @@ test.describe("client-side validation", () => {
 test.describe("using only the keyboard", () => {
   test.skip(({ isMobile }) => isMobile, "tab order is a desktop concern");
 
-  test("the email field is focused on arrival, Tab moves email → forgot-password link → password → show/hide → keep-signed-in → Sign in, Enter submits", async ({ page }) => {
+  test("the email field is focused on arrival, Tab moves email → forgot-password link → password → show/hide → keep-signed-in → Sign in, Enter submits", async ({
+    page,
+  }) => {
     const user = await createUser({ role: Role.ADMIN });
     await page.goto("/login");
 
@@ -199,7 +214,10 @@ test.describe("keep me signed in on this device", () => {
     expect(cookie!.expires).toBeGreaterThan(Date.now() / 1000 + 80 * 86_400); // ~90 days out
   });
 
-  test("unticked (the default): the request carries remember:false and the cookie is a browser-session cookie", async ({ page, context }) => {
+  test("unticked (the default): the request carries remember:false and the cookie is a browser-session cookie", async ({
+    page,
+    context,
+  }) => {
     const user = await createUser({ role: Role.TEACHING_STAFF });
     await page.goto("/login");
     await fillCredentials(page, user.email, user.password);
@@ -284,7 +302,11 @@ test.describe("when the server pushes back", () => {
     const user = await createUser({ role: Role.ADMIN });
     await page.goto("/login");
     await page.route("**/api/v1/auth/login", (route) =>
-      route.fulfill({ status: 500, contentType: "application/json", body: JSON.stringify({ error: { message: "boom: prisma stack trace" } }) }),
+      route.fulfill({
+        status: 500,
+        contentType: "application/json",
+        body: JSON.stringify({ error: { message: "boom: prisma stack trace" } }),
+      }),
     );
     await fillCredentials(page, user.email, user.password);
     await signInButton(page).click();
@@ -292,7 +314,9 @@ test.describe("when the server pushes back", () => {
     await expect(page.getByText("prisma")).toHaveCount(0);
   });
 
-  test("repeated failures pause sign-in: banner, live countdown, disabled button — and the SERVER keeps refusing after the pause ends", async ({ page }) => {
+  test("repeated failures pause sign-in: banner, live countdown, disabled button — and the SERVER keeps refusing after the pause ends", async ({
+    page,
+  }) => {
     test.setTimeout(120_000);
     const user = await createUser({ role: Role.ADMIN });
     await page.clock.install();
@@ -385,7 +409,10 @@ test.describe("staying signed in, and signing out", () => {
     await expect(page).toHaveURL(HOME_URL);
   });
 
-  test("sign out: back at /login, the session is gone server-side AND in the browser, and the protected page is not left in this tab's history", async ({ page, context }) => {
+  test("sign out: back at /login, the session is gone server-side AND in the browser, and the protected page is not left in this tab's history", async ({
+    page,
+    context,
+  }) => {
     const user = await createUser({ role: Role.ADMIN });
     await signInThroughUi(page, user);
     expect(await db.session.count({ where: { userId: user.id } })).toBe(1);
@@ -405,7 +432,10 @@ test.describe("staying signed in, and signing out", () => {
     await expect(page).toHaveURL(/\/login$/);
   });
 
-  test("shared computer: someone signs out in another tab, then the next person presses Back to the old dashboard tab — they must land on /login, not see the dashboard", async ({ page, context }) => {
+  test("shared computer: someone signs out in another tab, then the next person presses Back to the old dashboard tab — they must land on /login, not see the dashboard", async ({
+    page,
+    context,
+  }) => {
     const user = await createUser({ role: Role.ADMIN });
     await signInThroughUi(page, user);
     await expect(page.getByRole("heading", { name: /Welcome/ })).toBeVisible();
@@ -422,7 +452,9 @@ test.describe("staying signed in, and signing out", () => {
     await expect(page.getByRole("heading", { name: /Welcome, / })).toHaveCount(0);
   });
 
-  test("if the browser restores the dashboard from its back/forward cache after the session ended, the page re-checks and leaves", async ({ page }) => {
+  test("if the browser restores the dashboard from its back/forward cache after the session ended, the page re-checks and leaves", async ({
+    page,
+  }) => {
     // Chromium doesn't put no-store pages in the bfcache, so the real thing can't
     // be provoked here; this drives the same code path a bfcache-happy browser
     // would (a `pageshow` with persisted=true) against a genuinely dead session.

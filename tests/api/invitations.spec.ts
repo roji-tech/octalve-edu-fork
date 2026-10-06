@@ -2,7 +2,19 @@ import "../support/env";
 import crypto from "node:crypto";
 import { test, expect } from "@playwright/test";
 import { SAAS_URL } from "../support/env";
-import { Role, addMembership, createTenant, createUser, db, deactivateMembership, removeCreatedTenants, seedInstance, type TestTenant, type TestUser } from "../support/db";
+import {
+  Role,
+  addMembership,
+  createTenant,
+  createUser,
+  db,
+  deactivateMembership,
+  removeCreatedTenants,
+  seedInstance,
+  uniqueIp,
+  type TestTenant,
+  type TestUser,
+} from "../support/db";
 import { api, cookieHeader, loginAs, sessionCookie } from "../support/http";
 import { mailAfterGrace, tokenFrom, waitForMail } from "../support/outbox";
 import { BREACHED_MESSAGE } from "@/lib/auth/pwned-password";
@@ -15,7 +27,11 @@ import { hashInvitationToken, newInvitationToken } from "@/lib/invitations/token
 
 const SAAS = { baseUrl: SAAS_URL };
 const NO_ACCESS = { data: null, meta: {}, error: { code: "FORBIDDEN", message: "You don't have access to this school." } };
-const INVALID = { data: null, meta: {}, error: { code: "INVALID_TOKEN", message: "This invitation link is invalid or has expired. Ask your administrator to send a new one." } };
+const INVALID = {
+  data: null,
+  meta: {},
+  error: { code: "INVALID_TOKEN", message: "This invitation link is invalid or has expired. Ask your administrator to send a new one." },
+};
 const BREACHED = "Tr0ub4dor&3-but-leaked";
 const FRESH = "a-fresh-unseen-passphrase-3";
 
@@ -32,7 +48,8 @@ const unique = (label: string) => `${label}-${crypto.randomBytes(3).toString("he
 // administrators (all "Ada Admin") and the helpers take turns, exactly as a busy school's would.
 const asAdmin = (extra: object = {}) => ({ ...SAAS, cookie: adminCookies[adminTurn++ % adminCookies.length], ...extra });
 const invitations = (code = a.code) => `/api/v1/schools/${code}/invitations`;
-const invite = (email: string, role = "TEACHING_STAFF", extra: Record<string, unknown> = {}) => api(invitations(), asAdmin({ method: "POST", body: { email, role, ...extra } }));
+const invite = (email: string, role = "TEACHING_STAFF", extra: Record<string, unknown> = {}) =>
+  api(invitations(), asAdmin({ method: "POST", body: { email, role, ...extra } }));
 async function cookieFor(user: TestUser) {
   const res = await loginAs(user, SAAS);
   expect(res.status).toBe(200);
@@ -74,7 +91,13 @@ test.describe("POST /invitations — the administrator invites", () => {
     const res = await invite(to, "PARENT", { campusId: a.campuses[1].id });
     expect(res.status).toBe(201);
     expect(res.headers.get("cache-control")).toBe("private, no-store");
-    expect(res.json.data.invitation).toMatchObject({ email: to, role: "PARENT", campusName: "Alpha South", status: "pending", invitedByName: "Ada Admin" });
+    expect(res.json.data.invitation).toMatchObject({
+      email: to,
+      role: "PARENT",
+      campusName: "Alpha South",
+      status: "pending",
+      invitedByName: "Ada Admin",
+    });
     expect(res.text).not.toMatch(/token/i);
 
     const [mail] = await waitForMail(to);
@@ -171,9 +194,23 @@ test.describe("POST /invitations — the administrator invites", () => {
     const as = await api(invitations(), { ...SAAS, cookie: teacherCookie, method: "POST", body: { email: unique("t"), role: "PARENT" } });
     expect(as.status).toBe(403);
     expect(as.json).toEqual(NO_ACCESS);
-    const csrf = await api(invitations(), asAdmin({ method: "POST", body: { email: unique("c"), role: "PARENT" }, origin: "https://evil.example" }));
+    const csrf = await api(
+      invitations(),
+      asAdmin({ method: "POST", body: { email: unique("c"), role: "PARENT" }, origin: "https://evil.example" }),
+    );
     expect(csrf.status).toBe(403);
     expect(csrf.json.error.code).toBe("CSRF");
+  });
+
+  test("a non-admin cannot RESEND or REVOKE either: the same one 403 body (found by mutation H8: resend had no role check)", async () => {
+    const { id } = await invitedWithToken(unique("rs"));
+    const resend = await api(`${invitations()}/${id}/resend`, { ...SAAS, cookie: teacherCookie, method: "POST", body: {} });
+    expect(resend.status).toBe(403);
+    expect(resend.json).toEqual(NO_ACCESS);
+    const revoke = await api(`${invitations()}/${id}`, { ...SAAS, cookie: teacherCookie, method: "DELETE" });
+    expect(revoke.status).toBe(403);
+    expect(revoke.json).toEqual(NO_ACCESS);
+    expect((await db.invitation.findUniqueOrThrow({ where: { id } })).revokedAt).toBeNull();
   });
 });
 
@@ -211,7 +248,15 @@ test.describe("GET, resend, revoke", () => {
     await api(`${invitations()}/${first.id}/resend`, asAdmin({ method: "POST", body: {} }));
     expect((await api(`${invitations()}/${first.id}/resend`, asAdmin({ method: "POST", body: {} }))).status).toBe(429);
 
-    const theirs = await db.invitation.create({ data: { tenantId: b.id, email: unique("b"), role: Role.PARENT, tokenHash: hashInvitationToken(newInvitationToken()), expiresAt: new Date(Date.now() + 60_000) } });
+    const theirs = await db.invitation.create({
+      data: {
+        tenantId: b.id,
+        email: unique("b"),
+        role: Role.PARENT,
+        tokenHash: hashInvitationToken(newInvitationToken()),
+        expiresAt: new Date(Date.now() + 60_000),
+      },
+    });
     const foreign = await api(`${invitations()}/${theirs.id}/resend`, asAdmin({ method: "POST", body: {} }));
     const unknown = await api(`${invitations()}/no-such-invitation/resend`, asAdmin({ method: "POST", body: {} }));
     expect(foreign.status).toBe(404);
@@ -241,7 +286,14 @@ test.describe("POST /invitations/preview — public", () => {
     const res = await preview(token);
     expect(res.status).toBe(200);
     expect(res.headers.get("cache-control")).toBe("no-store");
-    expect(res.json.data).toEqual({ schoolName: "Alpha School", role: "STUDENT", roleLabel: "Student", email: expect.stringMatching(/^p\*\*\*@invite\.test$/), accountExists: false, viewer: "none" });
+    expect(res.json.data).toEqual({
+      schoolName: "Alpha School",
+      role: "STUDENT",
+      roleLabel: "Student",
+      email: expect.stringMatching(/^p\*\*\*@invite\.test$/),
+      accountExists: false,
+      viewer: "none",
+    });
     expect(res.text).not.toContain(to);
   });
 
@@ -260,7 +312,17 @@ test.describe("POST /invitations/preview — public", () => {
     await db.invitation.update({ where: { id: expired.id }, data: { expiresAt: new Date(Date.now() - 1000) } });
     const used = await invitedWithToken(unique("us"));
     await accept({ token: used.token, name: "Used Person", password: FRESH });
-    for (const token of [newInvitationToken(), "short", "", "x".repeat(300), revoked.token, expired.token, used.token, "../../etc/passwd", "😀".repeat(20)]) {
+    for (const token of [
+      newInvitationToken(),
+      "short",
+      "",
+      "x".repeat(300),
+      revoked.token,
+      expired.token,
+      used.token,
+      "../../etc/passwd",
+      "😀".repeat(20),
+    ]) {
       const res = await preview(token);
       expect(res.status, token.slice(0, 20)).toBe(400);
       expect(res.json, token.slice(0, 20)).toEqual(INVALID);
@@ -268,6 +330,15 @@ test.describe("POST /invitations/preview — public", () => {
     expect((await api("/api/v1/invitations/preview", { ...SAAS, body: { token: 42 } })).json).toEqual(INVALID);
     expect((await api("/api/v1/invitations/preview", { ...SAAS, body: {} })).json).toEqual(INVALID);
     expect((await api("/api/v1/invitations/preview", { ...SAAS, rawBody: "{" })).json.error.code).toBe("INVALID_BODY");
+  });
+
+  test("it is limited per IP: forty guesses are answered, the forty-first is a 429 (found by mutation H18: the limit was effectively off)", async () => {
+    const ip = uniqueIp();
+    for (let i = 0; i < 40; i++) expect((await preview(newInvitationToken(), { ip })).status, `guess ${i + 1}`).toBe(400);
+    const limited = await preview(newInvitationToken(), { ip });
+    expect(limited.status).toBe(429);
+    expect(limited.json.error.code).toBe("RATE_LIMITED");
+    expect((await preview(newInvitationToken(), { ip: uniqueIp() })).status).toBe(400); // someone else is unaffected
   });
 
   test("it is public but not cross-site: a cross-origin request is a 403", async () => {
@@ -325,7 +396,10 @@ test.describe("POST /invitations/accept — a person with no account", () => {
   test("two people opening one link at once: exactly one account is made", async () => {
     const to = unique("simul");
     const { token } = await invitedWithToken(to);
-    const results = await Promise.all([accept({ token, name: "First", password: FRESH }), accept({ token, name: "Second", password: FRESH })]);
+    const results = await Promise.all([
+      accept({ token, name: "First", password: FRESH }),
+      accept({ token, name: "Second", password: FRESH }),
+    ]);
     expect(results.filter((r) => r.status === 200)).toHaveLength(1);
     expect(await db.user.count({ where: { email: to } })).toBe(1);
   });
@@ -340,10 +414,15 @@ test.describe("POST /invitations/accept — a person with no account", () => {
   test("failures are limited per IP (10); a success is refunded, so a person who fixes typos is never locked out", async () => {
     const ip = `10.66.${Math.floor(Math.random() * 200)}.${Math.floor(Math.random() * 200)}`;
     const { token } = await invitedWithToken(unique("ratelimit"));
-    for (let i = 0; i < 9; i++) expect((await accept({ token: newInvitationToken(), name: "X Y", password: FRESH }, { ip })).status).toBe(400);
+    for (let i = 0; i < 9; i++)
+      expect((await accept({ token: newInvitationToken(), name: "X Y", password: FRESH }, { ip })).status).toBe(400);
     expect((await accept({ token, name: "Rate Limit", password: FRESH }, { ip })).status).toBe(200); // the 10th: allowed, and refunded
-    // Refunded means the budget is back: the next ten failures are still ANSWERED (400), not refused (429).
-    for (let i = 0; i < 10; i++) expect((await accept({ token: newInvitationToken(), name: "X Y", password: FRESH }, { ip })).status, `failure ${i + 1} after the success`).toBe(400);
+    // Refunded means the success cost nothing: the budget is back to where it was BEFORE it — nine failures spent, one left. So exactly
+    // ONE more failure is still ANSWERED (400); without the refund the success would have spent the tenth and this one would be a 429.
+    expect(
+      (await accept({ token: newInvitationToken(), name: "X Y", password: FRESH }, { ip })).status,
+      "the tenth failure: the success was refunded",
+    ).toBe(400);
     const blocked = await accept({ token: newInvitationToken(), name: "X Y", password: FRESH }, { ip });
     expect(blocked.status).toBe(429);
     expect(blocked.json.error.code).toBe("RATE_LIMITED");
@@ -393,7 +472,15 @@ test.describe("POST /invitations/accept — an account that already exists is at
     const member = await createUser();
     await addMembership(member.id, a.id, Role.TEACHING_STAFF);
     const token = newInvitationToken();
-    const row = await db.invitation.create({ data: { tenantId: a.id, email: member.email, role: Role.ADMIN, tokenHash: hashInvitationToken(token), expiresAt: new Date(Date.now() + 60_000) } });
+    const row = await db.invitation.create({
+      data: {
+        tenantId: a.id,
+        email: member.email,
+        role: Role.ADMIN,
+        tokenHash: hashInvitationToken(token),
+        expiresAt: new Date(Date.now() + 60_000),
+      },
+    });
     const memberCookie = await cookieFor(member);
     const res = await accept({ token }, { cookie: memberCookie });
     expect(res.status).toBe(409);

@@ -75,23 +75,26 @@ test.describe("devToolsAccess / devToolsEnabled", () => {
     const TOOLS = [undefined, "true", "false", "1"];
     const TOKENS = [undefined, "", "t"];
     let combos = 0;
-    for (const APP_ENV of APP_ENVS) for (const NODE_ENV of NODE_ENVS) for (const VERCEL_ENV of VERCELS)
-      for (const DEV_TOOLS of TOOLS) for (const DEV_TOOLS_TOKEN of TOKENS) {
-        combos++;
-        const env = { APP_ENV, NODE_ENV, VERCEL_ENV, DEV_TOOLS, DEV_TOOLS_TOKEN };
-        const label = JSON.stringify(env);
-        const kind = appEnv(env);
-        const enabled = devToolsEnabled(env);
-        if (VERCEL_ENV === "production") expect(enabled, label).toBe(false);
-        if (kind === "production") expect(enabled, label).toBe(false);
-        const access = devToolsAccess(env);
-        expect(enabled, label).toBe(access.kind !== "off");
-        if (access.kind === "token") {
-          expect(kind, label).toBe("staging");
-          expect(DEV_TOOLS === "true" && Boolean(DEV_TOOLS_TOKEN), label).toBe(true);
-        }
-        if (access.kind === "open") expect(kind, label).toBe("development"); // never open anywhere else
-      }
+    for (const APP_ENV of APP_ENVS)
+      for (const NODE_ENV of NODE_ENVS)
+        for (const VERCEL_ENV of VERCELS)
+          for (const DEV_TOOLS of TOOLS)
+            for (const DEV_TOOLS_TOKEN of TOKENS) {
+              combos++;
+              const env = { APP_ENV, NODE_ENV, VERCEL_ENV, DEV_TOOLS, DEV_TOOLS_TOKEN };
+              const label = JSON.stringify(env);
+              const kind = appEnv(env);
+              const enabled = devToolsEnabled(env);
+              if (VERCEL_ENV === "production") expect(enabled, label).toBe(false);
+              if (kind === "production") expect(enabled, label).toBe(false);
+              const access = devToolsAccess(env);
+              expect(enabled, label).toBe(access.kind !== "off");
+              if (access.kind === "token") {
+                expect(kind, label).toBe("staging");
+                expect(DEV_TOOLS === "true" && Boolean(DEV_TOOLS_TOKEN), label).toBe(true);
+              }
+              if (access.kind === "open") expect(kind, label).toBe("development"); // never open anywhere else
+            }
     expect(combos).toBe(1344);
   });
 });

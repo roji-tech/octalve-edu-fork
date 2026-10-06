@@ -67,7 +67,9 @@ export function SessionsPanel() {
     if (reply.ok) {
       const count = typeof reply.data?.revoked === "number" ? reply.data.revoked : 0;
       setLoad((prev) => (prev.state === "ready" ? { state: "ready", sessions: prev.sessions.filter((s) => s.current) } : prev));
-      setNotice(count === 0 ? "There were no other devices signed in." : `Signed out of ${count} other ${count === 1 ? "device" : "devices"}.`);
+      setNotice(
+        count === 0 ? "There were no other devices signed in." : `Signed out of ${count} other ${count === 1 ? "device" : "devices"}.`,
+      );
       heading.current?.focus();
     } else failure(reply.status, reply.code);
   }
@@ -76,7 +78,11 @@ export function SessionsPanel() {
 
   return (
     <div className="mt-4 space-y-4">
-      <h3 ref={heading} tabIndex={-1} className="sr-only focus:not-sr-only focus:text-base focus:font-semibold focus:text-fg focus:outline-none">
+      <h3
+        ref={heading}
+        tabIndex={-1}
+        className="sr-only focus:not-sr-only focus:text-base focus:font-semibold focus:text-fg focus:outline-none"
+      >
         Devices signed in to your account
       </h3>
       {notice && <Alert variant="success">{notice}</Alert>}
@@ -91,7 +97,13 @@ export function SessionsPanel() {
       {load.state === "error" && (
         <div className="space-y-3">
           <Alert variant="error">{load.message}</Alert>
-          <Button variant="secondary" onClick={() => { setLoad({ state: "loading" }); void refresh(); }}>
+          <Button
+            variant="secondary"
+            onClick={() => {
+              setLoad({ state: "loading" });
+              void refresh();
+            }}
+          >
             Try again
           </Button>
         </div>
@@ -101,7 +113,12 @@ export function SessionsPanel() {
         <>
           <ul className="divide-y divide-line rounded-xl border border-line" aria-label="Signed-in devices">
             {load.sessions.map((s) => (
-              <li key={s.id} className="flex flex-wrap items-center gap-x-4 gap-y-3 p-4" data-testid="session-row" data-current={s.current || undefined}>
+              <li
+                key={s.id}
+                className="flex flex-wrap items-center gap-x-4 gap-y-3 p-4"
+                data-testid="session-row"
+                data-current={s.current || undefined}
+              >
                 <span aria-hidden="true" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-surface-2 text-fg-2">
                   <MonitorIcon className="h-5 w-5" />
                 </span>
@@ -115,9 +132,15 @@ export function SessionsPanel() {
                     )}
                   </p>
                   <p className="mt-0.5 text-xs text-fg-muted">
-                    Signed in <time dateTime={s.createdAt} title={new Date(s.createdAt).toLocaleString()}>{relativeTime(s.createdAt)}</time>
+                    Signed in{" "}
+                    <time dateTime={s.createdAt} title={new Date(s.createdAt).toLocaleString()}>
+                      {relativeTime(s.createdAt)}
+                    </time>
                     {" · "}
-                    Active <time dateTime={s.lastUsedAt} title={new Date(s.lastUsedAt).toLocaleString()}>{relativeTime(s.lastUsedAt)}</time>
+                    Active{" "}
+                    <time dateTime={s.lastUsedAt} title={new Date(s.lastUsedAt).toLocaleString()}>
+                      {relativeTime(s.lastUsedAt)}
+                    </time>
                     {s.keptSignedIn && " · Kept signed in"}
                   </p>
                 </div>

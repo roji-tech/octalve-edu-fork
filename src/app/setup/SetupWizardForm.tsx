@@ -104,9 +104,8 @@ export function SetupWizardForm({ requiresToken, insecureBaseUrl }: SetupWizardF
           </span>
           <h1 className="mt-5 text-2xl font-bold tracking-tight text-fg">Setup complete</h1>
           <p className="mt-2 text-sm leading-relaxed text-fg-muted">
-            The administrator account for{" "}
-            <span className="font-medium text-fg">{createdAdminEmail}</span> has been created. This
-            setup wizard is now permanently disabled.
+            The administrator account for <span className="font-medium text-fg">{createdAdminEmail}</span> has been created. This setup
+            wizard is now permanently disabled.
           </p>
           <Button className="mt-6 w-full" onClick={() => router.push("/login")} autoFocus>
             Continue to sign in
@@ -119,24 +118,18 @@ export function SetupWizardForm({ requiresToken, insecureBaseUrl }: SetupWizardF
   return (
     <AuthShell size="md">
       <Card>
-        <p className="text-xs font-semibold tracking-wider text-brand-fg uppercase">
-          First-run setup
-        </p>
-        <h1 className="mt-1 text-2xl font-bold tracking-tight text-fg">
-          Initialize this instance
-        </h1>
+        <p className="text-xs font-semibold tracking-wider text-brand-fg uppercase">First-run setup</p>
+        <h1 className="mt-1 text-2xl font-bold tracking-tight text-fg">Initialize this instance</h1>
         <p className="mt-1.5 text-sm leading-relaxed text-fg-muted">
-          This runs once, on a fresh install. It creates your school and its first administrator
-          account, then disables itself.
+          This runs once, on a fresh install. It creates your school and its first administrator account, then disables itself.
         </p>
 
         <div className="mt-6 space-y-4 empty:mt-0">
           {insecureBaseUrl && (
             <Alert variant="warning" title="This instance isn't served over HTTPS">
-              Sign-in will work on a trusted local network, but sessions aren&apos;t protected in
-              transit. Put this behind HTTPS (and set <code className="font-mono">APP_URL</code> to
-              your <strong className="font-semibold">https</strong> address) before exposing it to
-              the internet.
+              Sign-in will work on a trusted local network, but sessions aren&apos;t protected in transit. Put this behind HTTPS (and set{" "}
+              <code className="font-mono">APP_URL</code> to your <strong className="font-semibold">https</strong> address) before exposing
+              it to the internet.
             </Alert>
           )}
           {errorMessage && (
@@ -233,10 +226,7 @@ export function SetupWizardForm({ requiresToken, insecureBaseUrl }: SetupWizardF
             />
           </div>
 
-          <ul
-            aria-label="Password requirements"
-            className="space-y-1.5 rounded-xl border border-line bg-field p-3 text-xs"
-          >
+          <ul aria-label="Password requirements" className="space-y-1.5 rounded-xl border border-line bg-field p-3 text-xs">
             {[
               { met: hasMinLength, text: "At least 8 characters" },
               { met: hasLetter && hasNumber, text: "Contains both letters and numbers" },

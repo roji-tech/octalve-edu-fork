@@ -118,7 +118,14 @@ test.describe("PATCH /account/profile", () => {
   test("it edits the CALLER's name only — extra fields (id, email, passwordHash) are ignored, never mass-assigned", async () => {
     const person = await signedIn();
     const victim = await createUser({ name: "Victim" });
-    const res = await patch(person, { name: "Mine", id: victim.id, userId: victim.id, email: "evil@x.test", passwordHash: "x", role: "ADMIN" });
+    const res = await patch(person, {
+      name: "Mine",
+      id: victim.id,
+      userId: victim.id,
+      email: "evil@x.test",
+      passwordHash: "x",
+      role: "ADMIN",
+    });
     expect(res.status).toBe(200);
     expect((await db.user.findUniqueOrThrow({ where: { id: victim.id } })).name).toBe("Victim");
     const mine = await db.user.findUniqueOrThrow({ where: { id: person.user.id } });
@@ -154,14 +161,19 @@ test.describe("PATCH /account/profile", () => {
 // --- Active sessions ---------------------------------------------------------------------------------------
 
 test.describe("sessions", () => {
-  const UA_PHONE = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1";
+  const UA_PHONE =
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1";
 
   /// A second device for the same person: another sign-in, with its own user agent.
   async function secondDevice(user: { email: string; password: string }, userAgent = UA_PHONE) {
     const res = await loginAs(user, { headers: { "user-agent": userAgent } });
-    return { cookie: cookieHeader(res.token!), id: (await db.session.findFirstOrThrow({ where: { tokenHash: sha256Hex(res.token!) } })).id };
+    return {
+      cookie: cookieHeader(res.token!),
+      id: (await db.session.findFirstOrThrow({ where: { tokenHash: sha256Hex(res.token!) } })).id,
+    };
   }
-  const current = async (person: Person) => (await api(SESSIONS, { cookie: person.cookie })).json.data.sessions.find((s: { current: boolean }) => s.current);
+  const current = async (person: Person) =>
+    (await api(SESSIONS, { cookie: person.cookie })).json.data.sessions.find((s: { current: boolean }) => s.current);
 
   test("GET lists the caller's own sessions with the current one flagged and described; never a token or an IP", async () => {
     const person = await signedIn();
@@ -447,7 +459,12 @@ test.describe("POST /email-change/confirm", () => {
     expect(res.status).toBe(200);
     expect(res.json).toEqual({ data: { changed: true }, meta: {}, error: null });
     expect(res.headers.get("cache-control")).toBe("no-store");
-    expect(res.setCookies.map(parseSetCookie).find((c) => c.name === "octalve.session-token")?.attributes.get("max-age")).toBe("0");
+    expect(
+      res.setCookies
+        .map(parseSetCookie)
+        .find((c) => c.name === "octalve.session-token")
+        ?.attributes.get("max-age"),
+    ).toBe("0");
     expect(sessionCookie(res)?.value ?? "").toBe(""); // it does NOT sign anybody in
 
     expect((await api(ME, { cookie: person.cookie })).status).toBe(401);

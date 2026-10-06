@@ -14,11 +14,7 @@
     "customer can buy any tier (core/pro/premium); this manifest only governs which FEATURES",
     "ship, not which deployment mode they run under."
   ],
-  "shared": [
-    "src/app/layout.tsx",
-    "src/app/page.tsx",
-    "src/app/globals.css"
-  ],
+  "shared": ["src/app/layout.tsx", "src/app/page.tsx", "src/app/globals.css"],
   "core": [],
   "pro": [],
   "premium": []

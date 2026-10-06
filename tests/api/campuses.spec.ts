@@ -1,7 +1,17 @@
 import "../support/env";
 import { test, expect } from "@playwright/test";
 import { SAAS_URL } from "../support/env";
-import { Role, addMembership, createTenant, createUser, db, removeCreatedTenants, seedInstance, type TestTenant, type TestUser } from "../support/db";
+import {
+  Role,
+  addMembership,
+  createTenant,
+  createUser,
+  db,
+  removeCreatedTenants,
+  seedInstance,
+  type TestTenant,
+  type TestUser,
+} from "../support/db";
 import Redis from "ioredis";
 import { TEST_REDIS_URL } from "../support/env";
 import { api, cookieHeader, loginAs } from "../support/http";
@@ -20,7 +30,8 @@ let cookies: Record<string, string>;
 
 const cookieFor = async (user: TestUser) => cookieHeader((await loginAs(user, SAAS)).token!);
 const list = (code: string, who: string, query = "") => api(`/api/v1/schools/${code}/campuses${query}`, { ...SAAS, cookie: cookies[who] });
-const create = (code: string, who: string, body: unknown, extra: object = {}) => api(`/api/v1/schools/${code}/campuses`, { ...SAAS, cookie: cookies[who], body, ...extra });
+const create = (code: string, who: string, body: unknown, extra: object = {}) =>
+  api(`/api/v1/schools/${code}/campuses`, { ...SAAS, cookie: cookies[who], body, ...extra });
 
 test.beforeAll(async () => {
   await seedInstance();
@@ -47,7 +58,11 @@ test.describe("GET /campuses", () => {
 
   test("pages are exact: limit 2 → 3 pages, no overlap, no gaps, hasNext only while there is more", async () => {
     const seen: string[] = [];
-    for (const [page, expectNext] of [[1, true], [2, true], [3, false]] as const) {
+    for (const [page, expectNext] of [
+      [1, true],
+      [2, true],
+      [3, false],
+    ] as const) {
       const res = await list(a.code, "admin", `?page=${page}&limit=2`);
       expect(res.json.meta).toEqual({ page, limit: 2, total: 5, pages: 3, hasNext: expectNext });
       seen.push(...res.json.data.campuses.map((c: { name: string }) => c.name));
@@ -160,7 +175,11 @@ test.describe("POST /campuses", () => {
     const raw = await api(`/api/v1/schools/${a.code}/campuses`, { ...SAAS, cookie: cookies.admin, rawBody: "{nope" });
     expect(raw.status).toBe(400);
     expect(raw.json.error.code).toBe("INVALID_BODY");
-    const huge = await api(`/api/v1/schools/${a.code}/campuses`, { ...SAAS, cookie: cookies.admin, rawBody: JSON.stringify({ name: "x".repeat(1024 * 1024 + 10) }) });
+    const huge = await api(`/api/v1/schools/${a.code}/campuses`, {
+      ...SAAS,
+      cookie: cookies.admin,
+      rawBody: JSON.stringify({ name: "x".repeat(1024 * 1024 + 10) }),
+    });
     expect(huge.status).toBe(413);
     expect(huge.json.error.code).toBe("PAYLOAD_TOO_LARGE");
     const csrf = await create(a.code, "admin", { name: "Evil" }, { origin: "https://evil.example" });

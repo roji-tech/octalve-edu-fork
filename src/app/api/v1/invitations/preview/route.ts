@@ -37,5 +37,12 @@ async function handle(req: NextRequest) {
   const session = await getSessionFromRequest(req);
   const preview = await previewInvitation(parsed.data.token, session?.userId ?? null);
   if (!preview) return fail(INVALID_LINK, 400, "INVALID_TOKEN");
-  return ok({ schoolName: preview.schoolName, role: preview.role, roleLabel: ROLE_LABELS[preview.role], email: preview.maskedEmail, accountExists: preview.accountExists, viewer: preview.viewer });
+  return ok({
+    schoolName: preview.schoolName,
+    role: preview.role,
+    roleLabel: ROLE_LABELS[preview.role],
+    email: preview.maskedEmail,
+    accountExists: preview.accountExists,
+    viewer: preview.viewer,
+  });
 }

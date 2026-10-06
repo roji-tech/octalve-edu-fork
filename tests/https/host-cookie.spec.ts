@@ -21,7 +21,10 @@ const cookieNamed = async (context: import("@playwright/test").BrowserContext, n
   (await context.cookies(HTTPS_URL)).find((c) => c.name === name);
 
 test.describe("the __Host- session cookie over real HTTPS", () => {
-  test("login sets it — and Chromium accepts it, which it only does if it is Secure, Path=/ and has no Domain", async ({ page, context }) => {
+  test("login sets it — and Chromium accepts it, which it only does if it is Secure, Path=/ and has no Domain", async ({
+    page,
+    context,
+  }) => {
     const user = await createUser({ role: Role.ADMIN });
     await page.goto("/login");
     await fillCredentials(page, user.email, user.password);
@@ -46,7 +49,10 @@ test.describe("the __Host- session cookie over real HTTPS", () => {
     expect(await page.evaluate(() => document.cookie)).not.toContain("octalve");
   });
 
-  test("not remembered (the default): still a valid __Host- cookie, but a browser-session one — and the server holds the 12-hour cap", async ({ page, context }) => {
+  test("not remembered (the default): still a valid __Host- cookie, but a browser-session one — and the server holds the 12-hour cap", async ({
+    page,
+    context,
+  }) => {
     const user = await createUser({ role: Role.ADMIN });
     await page.goto("/login");
     await expect(keepSignedInBox(page)).not.toBeChecked();
@@ -85,7 +91,10 @@ test.describe("the __Host- session cookie over real HTTPS", () => {
     expect(anonymous.status()).toBe(401);
   });
 
-  test("LOGOUT ACTUALLY REMOVES the __Host- cookie from the browser (the P0 #4 check), and the session row is gone", async ({ page, context }) => {
+  test("LOGOUT ACTUALLY REMOVES the __Host- cookie from the browser (the P0 #4 check), and the session row is gone", async ({
+    page,
+    context,
+  }) => {
     const user = await createUser({ role: Role.ADMIN });
     await page.goto("/login");
     await fillCredentials(page, user.email, user.password);
@@ -105,7 +114,9 @@ test.describe("the __Host- session cookie over real HTTPS", () => {
     await expect(page).toHaveURL(/\/login$/);
   });
 
-  test("the logout response's Set-Cookie carries every attribute a browser needs to accept the clearing of a __Host- cookie", async ({ page }) => {
+  test("the logout response's Set-Cookie carries every attribute a browser needs to accept the clearing of a __Host- cookie", async ({
+    page,
+  }) => {
     const user = await createUser({ role: Role.ADMIN });
     await page.goto("/login");
     await fillCredentials(page, user.email, user.password);

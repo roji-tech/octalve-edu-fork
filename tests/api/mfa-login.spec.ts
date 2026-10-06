@@ -80,7 +80,12 @@ test.describe("step 1 — the password, for an account with two-step verificatio
     const { user, secret } = await mfaUser();
     // A pre-existing session (created while MFA was off, say).
     const old = await db.session.create({
-      data: { tokenHash: sha256Hex("old-session"), userId: user.id, expires: new Date(Date.now() + DAY_MS), absoluteExpires: new Date(Date.now() + DAY_MS) },
+      data: {
+        tokenHash: sha256Hex("old-session"),
+        userId: user.id,
+        expires: new Date(Date.now() + DAY_MS),
+        absoluteExpires: new Date(Date.now() + DAY_MS),
+      },
     });
     const challenge = await challengeFor(user, { cookie: cookieHeader("old-session") });
     expect(await db.session.count({ where: { id: old.id } })).toBe(1); // step 1 doesn't touch it
@@ -272,9 +277,7 @@ test.describe("step 2 — recovery codes", () => {
     const [mail] = await waitForMail(user.email);
     expect(mail.subject).toMatch(/recovery code was used/i);
     expect(mail.text).toContain("you have 9 left");
-    await expect
-      .poll(() => db.auditLog.count({ where: { actorUserId: user.id, action: "MFA_RECOVERY_CODE_USED" } }))
-      .toBe(1);
+    await expect.poll(() => db.auditLog.count({ where: { actorUserId: user.id, action: "MFA_RECOVERY_CODE_USED" } })).toBe(1);
   });
 
   test("lower case and a missing hyphen are fine", async () => {

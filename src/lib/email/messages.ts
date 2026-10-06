@@ -172,7 +172,14 @@ export function invitationLink(token: string): string {
 
 /// To the invited address. Says the same whether or not that address already has an account (the invitee finds out when they open
 /// it) — nothing here lets a school's administrator learn who is registered on the platform.
-export function invitationEmail(input: { to: string; token: string; schoolName: string; roleLabel: string; inviterName: string | null; days: number }) {
+export function invitationEmail(input: {
+  to: string;
+  token: string;
+  schoolName: string;
+  roleLabel: string;
+  inviterName: string | null;
+  days: number;
+}) {
   const school = oneLine(input.schoolName);
   const inviter = input.inviterName ? oneLine(input.inviterName) : "An administrator";
   return {

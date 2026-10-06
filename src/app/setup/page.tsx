@@ -24,8 +24,7 @@ export default async function SetupPage() {
   // Design §0.5.1: warn if a *production* build is configured for plain HTTP.
   // The session cookie's `Secure` flag follows the APP_URL scheme, so sign-in
   // still works on a trusted LAN — but nothing protects the session in transit.
-  const insecureBaseUrl =
-    process.env.NODE_ENV === "production" && !(process.env.APP_URL ?? "").startsWith("https://");
+  const insecureBaseUrl = process.env.NODE_ENV === "production" && !(process.env.APP_URL ?? "").startsWith("https://");
 
   return <SetupWizardForm requiresToken={requiresToken} insecureBaseUrl={insecureBaseUrl} />;
 }

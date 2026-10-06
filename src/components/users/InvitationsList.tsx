@@ -26,7 +26,10 @@ export function InvitationsList({
         return (
           <li key={invitation.id} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex min-w-0 items-start gap-3">
-              <span aria-hidden="true" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface-2 text-fg-muted">
+              <span
+                aria-hidden="true"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface-2 text-fg-muted"
+              >
                 <MailIcon className="h-4 w-4" />
               </span>
               <div className="min-w-0">
@@ -36,14 +39,29 @@ export function InvitationsList({
                   {invitation.campusName ? ` · ${invitation.campusName}` : ""}
                   {invitation.invitedByName ? ` · invited by ${invitation.invitedByName}` : ""}
                 </p>
-                <p className={`mt-0.5 text-xs font-medium ${expired ? "text-danger-text" : "text-fg-muted"}`}>{expiryText(invitation.expiresAt)}</p>
+                <p className={`mt-0.5 text-xs font-medium ${expired ? "text-danger-text" : "text-fg-muted"}`}>
+                  {expiryText(invitation.expiresAt)}
+                </p>
               </div>
             </div>
             <div className="flex shrink-0 gap-2">
-              <Button variant="secondary" className="flex-1 sm:flex-none" loading={busy} disabled={busyId !== null && !busy} onClick={() => onResend(invitation)} aria-label={`Resend the invitation to ${invitation.email}`}>
+              <Button
+                variant="secondary"
+                className="flex-1 sm:flex-none"
+                loading={busy}
+                disabled={busyId !== null && !busy}
+                onClick={() => onResend(invitation)}
+                aria-label={`Resend the invitation to ${invitation.email}`}
+              >
                 {expired ? "Send again" : "Resend"}
               </Button>
-              <Button variant="ghost" className="flex-1 sm:flex-none" disabled={busyId !== null} onClick={() => onRevoke(invitation)} aria-label={`Revoke the invitation to ${invitation.email}`}>
+              <Button
+                variant="ghost"
+                className="flex-1 sm:flex-none"
+                disabled={busyId !== null}
+                onClick={() => onRevoke(invitation)}
+                aria-label={`Revoke the invitation to ${invitation.email}`}
+              >
                 Revoke
               </Button>
             </div>

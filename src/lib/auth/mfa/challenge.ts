@@ -49,9 +49,7 @@ export async function createChallenge(userId: string, remember: boolean): Promis
 /// can't all slip under the limit), and returns whose challenge it is — or null if it is unknown,
 /// expired, used up or out of attempts (callers treat all four alike). The attempt is spent BEFORE the
 /// code is checked; a correct code then consumes the whole challenge.
-export async function spendChallengeAttempt(
-  token: string,
-): Promise<{ userId: string; remember: boolean } | null> {
+export async function spendChallengeAttempt(token: string): Promise<{ userId: string; remember: boolean } | null> {
   const tokenHash = hashToken(token);
   const spent = await prisma.mfaChallenge.updateMany({
     where: { tokenHash, expiresAt: { gt: new Date() }, attempts: { lt: CHALLENGE_MAX_ATTEMPTS } },

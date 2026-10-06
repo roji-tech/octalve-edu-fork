@@ -101,7 +101,10 @@ test.describe("resolveTenant", () => {
       const { a } = await twoSchools();
       const user = await createUser();
       await addMembership(user.id, a.id, Role.PARENT);
-      expect(await resolveTenant({ userId: user.id, code: `  ${a.code.toUpperCase()} ` })).toMatchObject({ ok: true, tenant: { tenantId: a.id } });
+      expect(await resolveTenant({ userId: user.id, code: `  ${a.code.toUpperCase()} ` })).toMatchObject({
+        ok: true,
+        tenant: { tenantId: a.id },
+      });
       expect(await resolveTenant({ userId: user.id, code: `${a.code}/extra` })).toMatchObject({ ok: false });
       expect(await resolveTenant({ userId: user.id, code: a.code.slice(0, -1) })).toMatchObject({ ok: false });
     });
@@ -139,7 +142,11 @@ test.describe("resolveTenant", () => {
         const original = console.error;
         console.error = (...args: unknown[]) => void errors.push(args);
         try {
-          expect(await resolveTenant({ userId: member.id, code: tenant.code })).toEqual({ ok: false, status: 500, code: "TENANT_MISCONFIGURED" });
+          expect(await resolveTenant({ userId: member.id, code: tenant.code })).toEqual({
+            ok: false,
+            status: 500,
+            code: "TENANT_MISCONFIGURED",
+          });
         } finally {
           console.error = original;
         }
@@ -157,7 +164,11 @@ test.describe("resolveTenant", () => {
         try {
           expect(await resolveTenant({ userId: member.id, code: tenant.code })).toMatchObject({ ok: false, status: 500 });
           for (const code of ["", "../x", "A B", "dashboard", "x".repeat(200)]) {
-            expect(await resolveTenant({ userId: member.id, code }), JSON.stringify(code)).toEqual({ ok: false, status: 403, code: "FORBIDDEN" }); // …but garbage never reaches that check
+            expect(await resolveTenant({ userId: member.id, code }), JSON.stringify(code)).toEqual({
+              ok: false,
+              status: 403,
+              code: "FORBIDDEN",
+            }); // …but garbage never reaches that check
           }
         } finally {
           console.error = original;
@@ -174,7 +185,11 @@ test.describe("resolveTenant", () => {
         const original = console.error;
         console.error = () => undefined;
         try {
-          expect(await resolveTenant({ userId: member.id, code: tenant.code })).toEqual({ ok: false, status: 500, code: "TENANT_MISCONFIGURED" });
+          expect(await resolveTenant({ userId: member.id, code: tenant.code })).toEqual({
+            ok: false,
+            status: 500,
+            code: "TENANT_MISCONFIGURED",
+          });
         } finally {
           console.error = original;
           await seedInstance(); // leave the database usable for whatever runs next
@@ -215,10 +230,13 @@ const bodyOf = async (res: Response) => ({ status: res.status, json: await res.j
 
 function tenantRoute(roles?: readonly Role[]) {
   const seen: TenantAuthContext["tenant"][] = [];
-  const route = withAuth(async (_req, auth: TenantAuthContext) => {
-    seen.push(auth.tenant);
-    return NextResponse.json({ ok: true, tenantId: auth.tenant.tenantId, role: auth.tenant.role });
-  }, { tenant: true, roles });
+  const route = withAuth(
+    async (_req, auth: TenantAuthContext) => {
+      seen.push(auth.tenant);
+      return NextResponse.json({ ok: true, tenantId: auth.tenant.tenantId, role: auth.tenant.role });
+    },
+    { tenant: true, roles },
+  );
   return { route, seen };
 }
 
@@ -260,7 +278,11 @@ test.describe("withAuth(…, { tenant: true })", () => {
       const responses = [];
       for (const code of [b.code, "no-such-school", "../x", ""]) responses.push(await route(request({ token }), params(code)));
       const bodies = await Promise.all(responses.map(bodyOf));
-      for (const body of bodies) expect(body).toEqual({ status: 403, json: { data: null, meta: {}, error: { code: "FORBIDDEN", message: "You don't have access to this school." } } });
+      for (const body of bodies)
+        expect(body).toEqual({
+          status: 403,
+          json: { data: null, meta: {}, error: { code: "FORBIDDEN", message: "You don't have access to this school." } },
+        });
       for (const res of responses) expect(res.headers.get("cache-control")).toBe("no-store");
       expect(seen).toHaveLength(0);
     });
@@ -288,7 +310,10 @@ test.describe("withAuth(…, { tenant: true })", () => {
       const { route, seen } = tenantRoute([Role.ADMIN]);
       expect((await route(request({ token: (await createSession(admin.id)).token }), params(a.code))).status).toBe(200);
       const denied = await bodyOf(await route(request({ token: (await createSession(teacher.id)).token }), params(a.code)));
-      expect(denied).toEqual({ status: 403, json: { data: null, meta: {}, error: { code: "FORBIDDEN", message: "You don't have access to this school." } } });
+      expect(denied).toEqual({
+        status: 403,
+        json: { data: null, meta: {}, error: { code: "FORBIDDEN", message: "You don't have access to this school." } },
+      });
       expect(seen).toHaveLength(1);
     });
   });
@@ -379,7 +404,9 @@ test.describe("the tenant context", () => {
 
   test("an id full of SQL is a harmless STRING, not SQL (set_config takes a parameter; SET LOCAL cannot)", async () => {
     const nasty = `x'; DROP TABLE "Campus"; --`;
-    const inside = await forTenant(trustedTenantId(nasty)).transaction((tx) => tx.$queryRawUnsafe<{ v: string }[]>(setting("app.tenant_id")));
+    const inside = await forTenant(trustedTenantId(nasty)).transaction((tx) =>
+      tx.$queryRawUnsafe<{ v: string }[]>(setting("app.tenant_id")),
+    );
     expect(inside[0].v).toBe(nasty);
     expect(await db.campus.count()).toBeGreaterThanOrEqual(0); // the table is still there
   });
@@ -391,7 +418,9 @@ test.describe("the tenant context", () => {
     }));
     expect(asUser.user).toBe("user-9");
     expect(asUser.tenant || null).toBeNull();
-    const asTenant = await forTenant(trustedTenantId("t-9")).transaction(async (tx) => (await tx.$queryRawUnsafe<{ v: string | null }[]>(setting("app.user_id")))[0].v);
+    const asTenant = await forTenant(trustedTenantId("t-9")).transaction(
+      async (tx) => (await tx.$queryRawUnsafe<{ v: string | null }[]>(setting("app.user_id")))[0].v,
+    );
     expect(asTenant || null).toBeNull();
   });
 

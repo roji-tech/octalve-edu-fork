@@ -66,9 +66,7 @@ const inboxTransport: EmailTransport = {
 let warned = false;
 
 export function getEmailTransport(): EmailTransport {
-  const chosen =
-    process.env.EMAIL_TRANSPORT ||
-    (process.env.RESEND_API_KEY ? "resend" : devToolsEnabled() ? "inbox" : "console");
+  const chosen = process.env.EMAIL_TRANSPORT || (process.env.RESEND_API_KEY ? "resend" : devToolsEnabled() ? "inbox" : "console");
   if (chosen === "console" && process.env.NODE_ENV === "production" && !warned) {
     warned = true;
     console.warn(

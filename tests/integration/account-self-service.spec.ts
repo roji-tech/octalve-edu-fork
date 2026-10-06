@@ -4,20 +4,14 @@ import crypto from "node:crypto";
 import { createUser, db, sha256Hex, uniqueEmail } from "../support/db";
 import { createSession, SESSION_ONLY_MAX_AGE_SECONDS } from "@/lib/auth/session";
 import { createResetToken, isLiveResetToken } from "@/lib/auth/password-reset";
-import {
-  EMAIL_CHANGE_TTL_MS,
-  confirmEmailChange,
-  createEmailChangeToken,
-} from "@/lib/auth/email-change";
+import { EMAIL_CHANGE_TTL_MS, confirmEmailChange, createEmailChangeToken } from "@/lib/auth/email-change";
 import { listSessions, revokeAllOtherSessions, revokeOwnSession } from "@/lib/auth/session-devices";
 
-const CHROME_WIN =
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
+const CHROME_WIN = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
 const SAFARI_IPHONE =
   "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1";
 
-const sessionIdOf = async (token: string) =>
-  (await db.session.findUniqueOrThrow({ where: { tokenHash: sha256Hex(token) } })).id;
+const sessionIdOf = async (token: string) => (await db.session.findUniqueOrThrow({ where: { tokenHash: sha256Hex(token) } })).id;
 
 test.describe("createEmailChangeToken", () => {
   test("only the SHA-256 hash is stored — the plaintext is nowhere in the database", async () => {
@@ -30,7 +24,9 @@ test.describe("createEmailChangeToken", () => {
     expect(rows[0].tokenHash).toBe(sha256Hex(token));
     expect(rows[0].newEmail).toBe(newEmail);
     expect(rows[0].usedAt).toBeNull();
-    const hits = await db.$queryRaw<{ n: number }[]>`SELECT count(*)::int AS n FROM "EmailChangeToken" t WHERE t::text LIKE ${"%" + token + "%"}`;
+    const hits = await db.$queryRaw<
+      { n: number }[]
+    >`SELECT count(*)::int AS n FROM "EmailChangeToken" t WHERE t::text LIKE ${"%" + token + "%"}`;
     expect(hits[0].n).toBe(0);
   });
 
@@ -84,7 +80,12 @@ test.describe("confirmEmailChange", () => {
     const token = await createEmailChangeToken(user.id, uniqueEmail("new"));
     // A second pending request cannot exist normally; plant one to prove the transaction sweeps "other" tokens too.
     await db.emailChangeToken.create({
-      data: { tokenHash: sha256Hex("planted"), userId: user.id, newEmail: uniqueEmail("planted"), expiresAt: new Date(Date.now() + 60_000) },
+      data: {
+        tokenHash: sha256Hex("planted"),
+        userId: user.id,
+        newEmail: uniqueEmail("planted"),
+        expiresAt: new Date(Date.now() + 60_000),
+      },
     });
     const otherChange = await createEmailChangeToken(other.id, uniqueEmail("others"));
 

@@ -38,16 +38,22 @@ export async function parseRequest<B = undefined, Q = undefined>(
       raw[key] = values.length === 1 ? values[0] : values;
     }
     const result = schemas.query.safeParse(raw);
-    if (!result.success) return { ok: false, response: fail("Some of the query parameters are not valid.", 400, "VALIDATION", issuesOf(result.error, "query")) };
+    if (!result.success)
+      return {
+        ok: false,
+        response: fail("Some of the query parameters are not valid.", 400, "VALIDATION", issuesOf(result.error, "query")),
+      };
     query = result.data;
   }
 
   let body = undefined as B;
   if (schemas.body) {
     const declared = Number(req.headers.get("content-length"));
-    if (Number.isFinite(declared) && declared > MAX_BODY_BYTES) return { ok: false, response: fail("That request is too large.", 413, "PAYLOAD_TOO_LARGE") };
+    if (Number.isFinite(declared) && declared > MAX_BODY_BYTES)
+      return { ok: false, response: fail("That request is too large.", 413, "PAYLOAD_TOO_LARGE") };
     const text = await req.text();
-    if (Buffer.byteLength(text) > MAX_BODY_BYTES) return { ok: false, response: fail("That request is too large.", 413, "PAYLOAD_TOO_LARGE") };
+    if (Buffer.byteLength(text) > MAX_BODY_BYTES)
+      return { ok: false, response: fail("That request is too large.", 413, "PAYLOAD_TOO_LARGE") };
     let json: unknown;
     try {
       json = JSON.parse(text);
@@ -55,7 +61,8 @@ export async function parseRequest<B = undefined, Q = undefined>(
       return { ok: false, response: fail("Invalid JSON body", 400, "INVALID_BODY") };
     }
     const result = schemas.body.safeParse(json);
-    if (!result.success) return { ok: false, response: fail("Some of the fields are not valid.", 400, "VALIDATION", issuesOf(result.error, "body")) };
+    if (!result.success)
+      return { ok: false, response: fail("Some of the fields are not valid.", 400, "VALIDATION", issuesOf(result.error, "body")) };
     body = result.data;
   }
   return { ok: true, input: { body, query } };

@@ -37,10 +37,13 @@ test.describe("pages", () => {
     const tags = scriptTags(res.text);
     expect(tags.length).toBeGreaterThan(3);
     for (const tag of tags) expect(tag, tag).toContain(`nonce="${nonce}"`);
-    expect(tags.some((t) => !t.includes(" src=")), "expected Next's inline bootstrap scripts").toBe(true);
+    expect(
+      tags.some((t) => !t.includes(" src=")),
+      "expected Next's inline bootstrap scripts",
+    ).toBe(true);
   });
 
-  test("no inline <style> blocks or style=\"\" attributes (so style-src needs only the nonce)", async () => {
+  test('no inline <style> blocks or style="" attributes (so style-src needs only the nonce)', async () => {
     const { text } = await api("/login");
     expect(text).not.toMatch(/<style\b(?![^>]*nonce=)/);
     expect(text).not.toMatch(/\sstyle="/);

@@ -83,15 +83,29 @@ export async function createInvitation(
       if (!campus) return { ok: false, reason: "INVALID_CAMPUS" };
     }
 
-    const member = await tx.tenantMembership.findFirst({ where: { tenantId, user: { email: input.email } }, select: { deactivatedAt: true } });
+    const member = await tx.tenantMembership.findFirst({
+      where: { tenantId, user: { email: input.email } },
+      select: { deactivatedAt: true },
+    });
     if (member) return { ok: false, reason: member.deactivatedAt ? "DEACTIVATED_MEMBER" : "ALREADY_MEMBER" };
 
     const now = new Date();
-    const earlier = await tx.invitation.findMany({ where: { tenantId, email: input.email, acceptedAt: null, revokedAt: null }, select: { id: true } });
+    const earlier = await tx.invitation.findMany({
+      where: { tenantId, email: input.email, acceptedAt: null, revokedAt: null },
+      select: { id: true },
+    });
     for (const old of earlier) {
       await tx.invitation.update({ where: { id: old.id }, data: { revokedAt: now } });
       await tx.auditLog.create({
-        data: { tenantId, actorUserId, action: "INVITATION_REVOKED", targetType: "Invitation", targetId: old.id, afterValue: { email: input.email }, reason: "replaced by a new invitation" },
+        data: {
+          tenantId,
+          actorUserId,
+          action: "INVITATION_REVOKED",
+          targetType: "Invitation",
+          targetId: old.id,
+          afterValue: { email: input.email },
+          reason: "replaced by a new invitation",
+        },
       });
     }
 
@@ -109,7 +123,14 @@ export async function createInvitation(
       select: PUBLIC_SELECT,
     });
     await tx.auditLog.create({
-      data: { tenantId, actorUserId, action: "INVITATION_CREATED", targetType: "Invitation", targetId: created.id, afterValue: { email: input.email, role: input.role, campusId: input.campusId } },
+      data: {
+        tenantId,
+        actorUserId,
+        action: "INVITATION_CREATED",
+        targetType: "Invitation",
+        targetId: created.id,
+        afterValue: { email: input.email, role: input.role, campusId: input.campusId },
+      },
     });
     return { ok: true, invitation: toPublic(created, now), token };
   });
@@ -117,10 +138,17 @@ export async function createInvitation(
 
 /// A fresh link and a fresh seven days for an invitation that is still open (pending OR expired); the earlier link stops working
 /// at once. `null` when there is no such open invitation in this school (accepted, revoked, someone else's, unknown: one answer).
-export async function resendInvitation(tenant: TenantCtx, actorUserId: string, invitationId: string): Promise<{ invitation: PublicInvitation; token: string } | null> {
+export async function resendInvitation(
+  tenant: TenantCtx,
+  actorUserId: string,
+  invitationId: string,
+): Promise<{ invitation: PublicInvitation; token: string } | null> {
   const { tenantId } = tenant;
   return tenant.run(async (tx) => {
-    const open = await tx.invitation.findFirst({ where: { id: invitationId, tenantId, acceptedAt: null, revokedAt: null }, select: { id: true, email: true } });
+    const open = await tx.invitation.findFirst({
+      where: { id: invitationId, tenantId, acceptedAt: null, revokedAt: null },
+      select: { id: true, email: true },
+    });
     if (!open) return null;
     const now = new Date();
     const token = newInvitationToken();
@@ -129,7 +157,16 @@ export async function resendInvitation(tenant: TenantCtx, actorUserId: string, i
       data: { tokenHash: hashInvitationToken(token), expiresAt: new Date(now.getTime() + INVITATION_TTL_MS) },
       select: PUBLIC_SELECT,
     });
-    await tx.auditLog.create({ data: { tenantId, actorUserId, action: "INVITATION_RESENT", targetType: "Invitation", targetId: open.id, afterValue: { email: open.email } } });
+    await tx.auditLog.create({
+      data: {
+        tenantId,
+        actorUserId,
+        action: "INVITATION_RESENT",
+        targetType: "Invitation",
+        targetId: open.id,
+        afterValue: { email: open.email },
+      },
+    });
     return { invitation: toPublic(updated, now), token };
   });
 }
@@ -139,21 +176,42 @@ export async function revokeInvitation(tenant: TenantCtx, actorUserId: string, i
   const { tenantId } = tenant;
   return tenant.run(async (tx) => {
     const target = await tx.invitation.findFirst({ where: { id: invitationId, tenantId }, select: { email: true } });
-    const claimed = await tx.invitation.updateMany({ where: { id: invitationId, tenantId, acceptedAt: null, revokedAt: null }, data: { revokedAt: new Date() } });
+    const claimed = await tx.invitation.updateMany({
+      where: { id: invitationId, tenantId, acceptedAt: null, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
     if (claimed.count !== 1) return false;
-    await tx.auditLog.create({ data: { tenantId, actorUserId, action: "INVITATION_REVOKED", targetType: "Invitation", targetId: invitationId, afterValue: { email: target?.email ?? null } } });
+    await tx.auditLog.create({
+      data: {
+        tenantId,
+        actorUserId,
+        action: "INVITATION_REVOKED",
+        targetType: "Invitation",
+        targetId: invitationId,
+        afterValue: { email: target?.email ?? null },
+      },
+    });
     return true;
   });
 }
 
 /// The school's open invitations (pending, and expired ones that can still be resent), newest first.
-export async function listOpenInvitations(tenant: TenantCtx, page: { skip: number; take: number }): Promise<{ invitations: PublicInvitation[]; total: number }> {
+export async function listOpenInvitations(
+  tenant: TenantCtx,
+  page: { skip: number; take: number },
+): Promise<{ invitations: PublicInvitation[]; total: number }> {
   const { tenantId } = tenant;
   const where: Prisma.InvitationWhereInput = { tenantId, acceptedAt: null, revokedAt: null };
   const [total, rows] = await tenant.run((tx) =>
     Promise.all([
       tx.invitation.count({ where }),
-      tx.invitation.findMany({ where, select: PUBLIC_SELECT, orderBy: [{ createdAt: "desc" }, { id: "asc" }], skip: page.skip, take: page.take }),
+      tx.invitation.findMany({
+        where,
+        select: PUBLIC_SELECT,
+        orderBy: [{ createdAt: "desc" }, { id: "asc" }],
+        skip: page.skip,
+        take: page.take,
+      }),
     ]),
   );
   const now = new Date();
@@ -163,7 +221,13 @@ export async function listOpenInvitations(tenant: TenantCtx, page: { skip: numbe
 // --- the invitee's side ---------------------------------------------------------------------------------------------------
 
 /// `viewer`: nobody signed in ("none"), signed in as the invited address's own account ("invitee"), or as someone else ("other").
-export type InvitationPreview = { schoolName: string; role: Role; maskedEmail: string; accountExists: boolean; viewer: "none" | "invitee" | "other" };
+export type InvitationPreview = {
+  schoolName: string;
+  role: Role;
+  maskedEmail: string;
+  accountExists: boolean;
+  viewer: "none" | "invitee" | "other";
+};
 
 /// What the page shows before anyone commits: the school, the role, and whether this address already has an account (which decides
 /// between "choose a password" and "sign in"). The token holder is the invitee, so this is theirs to know; the address is masked
@@ -230,7 +294,10 @@ export async function acceptInvitation(input: AcceptInvitationInput): Promise<Ac
       await setTenantContext(tx, trustedTenantId(found.tenantId));
 
       const existing = account
-        ? await tx.tenantMembership.findUnique({ where: { userId_tenantId: { userId: account.id, tenantId: found.tenantId } }, select: { id: true, deactivatedAt: true } })
+        ? await tx.tenantMembership.findUnique({
+            where: { userId_tenantId: { userId: account.id, tenantId: found.tenantId } },
+            select: { id: true, deactivatedAt: true },
+          })
         : null;
       if (existing && !existing.deactivatedAt) throw new Abort("ALREADY_MEMBER");
 
@@ -259,7 +326,10 @@ export async function acceptInvitation(input: AcceptInvitationInput): Promise<Ac
       }
 
       if (existing) {
-        await tx.tenantMembership.update({ where: { id: existing.id }, data: { role: found.role, campusId: found.campusId, deactivatedAt: null } });
+        await tx.tenantMembership.update({
+          where: { id: existing.id },
+          data: { role: found.role, campusId: found.campusId, deactivatedAt: null },
+        });
       } else {
         await tx.tenantMembership.create({ data: { userId, tenantId: found.tenantId, role: found.role, campusId: found.campusId } });
       }

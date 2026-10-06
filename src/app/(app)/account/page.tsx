@@ -31,30 +31,20 @@ export default async function AccountPage() {
 
       <Card>
         <h2 className="text-lg font-semibold text-fg">Email address</h2>
-        <p className="mt-1 text-sm text-fg-muted">
-          It&apos;s what you sign in with, and where password reset links go.
-        </p>
+        <p className="mt-1 text-sm text-fg-muted">It&apos;s what you sign in with, and where password reset links go.</p>
         <ChangeEmailPanel email={email} />
       </Card>
 
       <Card>
         <h2 className="text-lg font-semibold text-fg">Password</h2>
-        <p className="mt-1 text-sm text-fg-muted">
-          Changing it signs you out of every other device.
-        </p>
+        <p className="mt-1 text-sm text-fg-muted">Changing it signs you out of every other device.</p>
         <ChangePasswordForm />
       </Card>
 
       <Card>
         <h2 className="text-lg font-semibold text-fg">Two-step verification</h2>
-        <p className="mt-1 text-sm text-fg-muted">
-          Protect your account with a code from an authenticator app, as well as your password.
-        </p>
-        <TwoStepPanel
-          available={mfaConfigured()}
-          enabled={mfa.enabled}
-          recoveryCodesRemaining={mfa.recoveryCodesRemaining}
-        />
+        <p className="mt-1 text-sm text-fg-muted">Protect your account with a code from an authenticator app, as well as your password.</p>
+        <TwoStepPanel available={mfaConfigured()} enabled={mfa.enabled} recoveryCodesRemaining={mfa.recoveryCodesRemaining} />
       </Card>
 
       <Card>

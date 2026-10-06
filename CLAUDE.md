@@ -70,7 +70,7 @@ one-off pattern sources, referenced once for a specific technique and then done:
    actually built right now," checked against the real repo. Has a "What's real vs. what's
    designed-but-unbuilt" section specifically to prevent treating a written-down decision as done —
    read that section literally, it's not decoration.
-3. **`docs/development-history/domain-implementation-plan.md`** — the step-by-step build plan, ~1250
+3. **`docs/development-history/domain-implementation-plan.md`** — the step-by-step build plan, ~2300
    lines. Long, but organized by phase — find the current phase (check the progress tracker's "Next
    action" first) and read that section, don't read linearly front to back unless you're new to the
    whole plan.
@@ -151,13 +151,12 @@ one-off pattern sources, referenced once for a specific technique and then done:
    carried this repo's cookie name into AlEemaan (58 tests failed at once — on its live school it would have
    signed everyone out), and the normalised drift comparison had hidden it. After a port, read the *raw* diff.
 
-## Current state, as of 2026-09-30 (verify against `octalve_edu_progress.md` — it may have moved since)
+## Current state, as of 2026-10-06 (verify against `octalve_edu_progress.md` — it may have moved since)
 
 - Phase 0 (scaffold) and Phase 0.5.0 (setup wizard, Solo-only) are done and verified live.
-- **Phase 0.5.1 (auth) is BUILT AND VERIFIED, awaiting the maintainer's merge**: it lives on branch
-  `claude/auth-0.5.1-port` of the maintainer's fork `roji-tech/octalve-edu-fork` (the Claude GitHub App
-  isn't installed on `octalve-core`, so it reaches `master` by the maintainer's PR — `master` itself has
-  no auth code until then). The design went through a full two-AI security review
+- **Phase 0.5.1 (auth) is BUILT, VERIFIED AND MERGED** — it started on branch `claude/auth-0.5.1-port` of the
+  maintainer's fork `roji-tech/octalve-edu-fork` (the Claude GitHub App isn't installed on `octalve-core`, so work
+  reaches `master` by the maintainer's PR; the maintainer merges, and both masters are kept identical). The design went through a full two-AI security review
   (`docs/auth-review-2026-09-29.md`) and a second hardening pass, and was built by porting
   **AlEemaan's already-verified implementation** (a spike into adopting Better Auth instead was run and
   rejected — see "Known open items," resolved, below), with the deliberate divergences recorded in the
@@ -200,13 +199,25 @@ one-off pattern sources, referenced once for a specific technique and then done:
   (and you must add the table to its expected list); a table with **no** `tenantId` must be added to the reviewed identity-table list *on purpose*; a table that must be append-only gets no
   UPDATE/DELETE policy **and** a `REVOKE` (call `app_grant_runtime_privileges()` again); (10) the **test admin must bypass RLS** and fixtures go through `db`, never the runtime role — a negative test run as
   the owner passes vacuously; (11) a bypassing role in production is refused by `assertRlsEnforced()` (set `ALLOW_RLS_BYPASS=true` only knowingly) — **never memoise a failure**. Records:
-  `docs/development-history/phases/phase-0.5.2-tenant-boundary.md`; map: `docs/development-history/roadmap-breakdown.md`. **Next:** the app shell (0.5.2-H) and the Users pages (0.5.4) — designed in the plan; then Phase 1.
+  `docs/development-history/phases/phase-0.5.2-tenant-boundary.md`; map: `docs/development-history/roadmap-breakdown.md`. **Next:** Phase 1 (academic structure, designed first — see the plan).
 - **The app shell (0.5.2-H) is BUILT AND VERIFIED** — branch `claude/app-shell-users` (stacked on `claude/tenant-rls`). **Rules that follow:** (1) every signed-in page lives in `src/app/(app)/` (no URL change) and renders
   inside `AppShell`; the layout only **displays** — **each page still guards itself** (`requirePageSession()` / `requireTenantPage(code)`, both `cache`d per request), because a layout is not re-rendered on client navigation;
   (2) the shell learns "which school is this path in" from the person's **own** memberships (`schoolFromPath`, `ShellProvider`) — display only; a path naming a school they are not in matches nothing; (3) navigation is
   **data** (`navFor(school)` in `components/shell/nav.ts`) — sidebar, tab bar and sheet derive from it; an entry whose page is not built has `href: null` and renders as visible "Soon" text, **never a link to nothing**;
   role-hiding is a courtesy, the page and API decide; (4) a new disclosure uses `useDisclosure`; (5) in tests, `getByText` also matches the closed phone `<dialog>` — scope to `main`/`header`/a named group, and test an
   outside-click handler by clicking **inert** space (a focusable ancestor's blur path masks it). Record: `docs/development-history/phases/phase-0.5.2H-app-shell.md`.
+- **Phase 0.5.4 (Users pages and invitations) is BUILT AND VERIFIED** — branch `claude/app-shell-users`. A school's administrator lists members, invites by email, changes
+  role/campus, deactivates and reactivates; an invitee accepts at `/accept-invite`. **Rules that follow:** (1) an invitation token is 256-bit, travels in the URL **fragment**, and only
+  its SHA-256 is stored; the page **never acts on arrival** (scanners open links) — the person clicks; (2) **single use is a conditional `updateMany` whose row count decides** (a read then a
+  write lets two clicks both win); (3) the unauthenticated accept path reaches its one row through `forInvitation(hash)` (`app_invitation_hash()`, read-only RLS) — never widen it to a
+  `tenantId` lookup by email; (4) an existing account is attached to a school **only by its owner** (signed in as themselves) — an administrator can never set someone else's password or
+  attach an account for them; (5) the **last active ADMIN of a school can be neither deactivated nor demoted** (guarded with `SELECT … FOR UPDATE` on the school's admin rows), and nobody can
+  change, deactivate or reactivate **themselves** (`SELF`) — only an ADMIN of that school may use any of these routes; (6) one live invitation per (school, address): inviting is serialised by an advisory
+  lock on the pair and a partial unique index is the guarantee — re-inviting revokes the earlier open one (audited), and an address that is already a member (active or deactivated) is refused with
+  its own reason; (7) search terms go through `escapeLike()`
+  (a `%` or `_` is a character, not a wildcard); lists are paginated with the shared helpers; (8) deactivation revokes the person's sessions **in the same transaction** and keeps
+  their history; (9) no audit row carries a token, a hash or a password — every write is audited in the same transaction as the change. Test notes: `tests/support/outbox.ts` **throws** on a corrupt outbox (it used to return "no mail") and
+  the setup project empties it each run; a parallel mutation runner lives in `docs/development-history/handoff/tools/`. Record: `docs/development-history/phases/phase-0.5.4-users-invitations.md`.
 - **Phase 0.5.E (account self-service) is BUILT AND VERIFIED** — branch `claude/account-self-service`, stacked on the
   dev-inbox branch. A signed-in person can edit their name, change their email (confirmed by a link to the **new**
   address) and see / end the places they are signed in. **Rules that follow:** (1) the change-email request gives the
@@ -258,8 +269,6 @@ one-off pattern sources, referenced once for a specific technique and then done:
   that follow:** no inline `<script>` and no `style=""`/`<style>` in our markup; every page stays dynamic; new
   third-party origins are a CSP change, not a convenience. The `csp` test fixture fails any browser test that
   triggers a violation. Record: `docs/development-history/phases/phase-0.5.B-csp.md`.
-- Phase 0.5.2 (tenant-trust boundary) and 0.5.3 (shared API infra) are designed, not built, and both
-  depend on 0.5.1 landing first.
 - Phase 1 onward (Core SIS + Finance, Communication, LMS, Operations, Expansion) have schema sketches
   in the plan doc but no migrations, no API routes, no UI — 0% built.
 

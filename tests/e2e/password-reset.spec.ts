@@ -72,7 +72,9 @@ test.describe("the whole journey", () => {
 });
 
 test.describe("two reset links in one tab", () => {
-  test("opening a second link in the same tab (only the fragment changes) resets the SECOND person's password, not the first's", async ({ page }) => {
+  test("opening a second link in the same tab (only the fragment changes) resets the SECOND person's password, not the first's", async ({
+    page,
+  }) => {
     const first = await createUser({ role: Role.TEACHING_STAFF });
     const second = await createUser({ role: Role.TEACHING_STAFF });
     const firstToken = await createResetToken(first.id);

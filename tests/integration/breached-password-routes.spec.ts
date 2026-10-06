@@ -24,7 +24,9 @@ async function withBreachService<T>(fn: () => Promise<T>): Promise<T> {
   const original = globalThis.fetch;
   globalThis.fetch = (async (url: string | URL | Request) => {
     const prefix = String(url).split("/").pop();
-    return new Response(sha1(BREACHED).startsWith(prefix ?? "?") ? `${sha1(BREACHED).slice(5)}:1234\r\n` : "ABCDEF0123456789ABCDEF0123456789ABC:0\r\n");
+    return new Response(
+      sha1(BREACHED).startsWith(prefix ?? "?") ? `${sha1(BREACHED).slice(5)}:1234\r\n` : "ABCDEF0123456789ABCDEF0123456789ABC:0\r\n",
+    );
   }) as typeof fetch;
   try {
     return await withEnv({ PWNED_PASSWORD_CHECK: "on" }, fn);
@@ -37,7 +39,13 @@ const post = (handler: (req: NextRequest, ctx: never) => Promise<Response>, path
   handler(
     new NextRequest(`${HTTP_URL}${path}`, {
       method: "POST",
-      headers: { "content-type": "application/json", origin: HTTP_URL, host: `localhost:${HTTP_PORT}`, "x-real-ip": `10.8.${Math.floor(Math.random() * 250)}.${Math.floor(Math.random() * 250)}`, ...(cookie ? { cookie } : {}) },
+      headers: {
+        "content-type": "application/json",
+        origin: HTTP_URL,
+        host: `localhost:${HTTP_PORT}`,
+        "x-real-ip": `10.8.${Math.floor(Math.random() * 250)}.${Math.floor(Math.random() * 250)}`,
+        ...(cookie ? { cookie } : {}),
+      },
       body: JSON.stringify(body),
     }),
     {} as never,
@@ -64,7 +72,9 @@ test("change: a breached new password is refused and nothing changes", async () 
     const user = await createUser({ role: Role.TEACHING_STAFF });
     const { token } = await createSession(user.id);
     const cookie = `${SESSION_COOKIE_NAME}=${token}`;
-    const refused = await read(await post(change, "/api/v1/auth/change-password", { currentPassword: user.password, newPassword: BREACHED }, cookie));
+    const refused = await read(
+      await post(change, "/api/v1/auth/change-password", { currentPassword: user.password, newPassword: BREACHED }, cookie),
+    );
     expect(refused).toMatchObject({ status: 400, json: { error: { code: "VALIDATION", message: BREACHED_MESSAGE } } });
     expect(await verifyPassword(user.password, (await db.user.findUniqueOrThrow({ where: { id: user.id } })).passwordHash)).toBe(true);
   });

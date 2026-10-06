@@ -74,7 +74,11 @@ async function handle(req: NextRequest) {
     newAccount = { name: checkedName.name, passwordHash: await hashPassword(password!) };
   } else if (preview.viewer === "other") {
     await refundAttempt(ipKey);
-    return fail("This invitation is for a different email address than the account you're signed in with. Sign out, then open the link again.", 403, "WRONG_ACCOUNT");
+    return fail(
+      "This invitation is for a different email address than the account you're signed in with. Sign out, then open the link again.",
+      403,
+      "WRONG_ACCOUNT",
+    );
   }
 
   const result = await acceptInvitation({ token, viewerUserId, newAccount });
@@ -85,7 +89,11 @@ async function handle(req: NextRequest) {
         return fail("An account already exists for this address. Sign in to accept the invitation.", 409, "SIGN_IN_REQUIRED");
       case "WRONG_ACCOUNT":
         await refundAttempt(ipKey);
-        return fail("This invitation is for a different email address than the account you're signed in with. Sign out, then open the link again.", 403, "WRONG_ACCOUNT");
+        return fail(
+          "This invitation is for a different email address than the account you're signed in with. Sign out, then open the link again.",
+          403,
+          "WRONG_ACCOUNT",
+        );
       case "ALREADY_MEMBER":
         await refundAttempt(ipKey);
         return fail("You're already a member of that school.", 409, "ALREADY_MEMBER");

@@ -53,14 +53,25 @@ const toPublic = (row: MemberRow): PublicMember => ({
 /// "%" listing everyone). Backslash is Postgres' default LIKE escape: escape the three special characters and the search is text.
 const escapeLike = (value: string) => value.replace(/[\\%_]/g, "\\$&");
 
-export async function listMembers(tenant: TenantCtx, filters: MemberFilters, page: { skip: number; take: number }): Promise<{ members: PublicMember[]; total: number }> {
+export async function listMembers(
+  tenant: TenantCtx,
+  filters: MemberFilters,
+  page: { skip: number; take: number },
+): Promise<{ members: PublicMember[]; total: number }> {
   const where: Prisma.TenantMembershipWhereInput = {
     tenantId: tenant.tenantId,
     ...(filters.role ? { role: filters.role } : {}),
     ...(filters.campusId ? { campusId: filters.campusId } : {}),
     ...(filters.status === "active" ? { deactivatedAt: null } : filters.status === "deactivated" ? { deactivatedAt: { not: null } } : {}),
     ...(filters.q
-      ? { user: { OR: [{ name: { contains: escapeLike(filters.q), mode: "insensitive" as const } }, { email: { contains: escapeLike(filters.q), mode: "insensitive" as const } }] } }
+      ? {
+          user: {
+            OR: [
+              { name: { contains: escapeLike(filters.q), mode: "insensitive" as const } },
+              { email: { contains: escapeLike(filters.q), mode: "insensitive" as const } },
+            ],
+          },
+        }
       : {}),
   };
   const [total, rows] = await tenant.run((tx) =>
@@ -137,12 +148,28 @@ export async function changeMember(
     });
     if (roleChanged) {
       await tx.auditLog.create({
-        data: { tenantId, actorUserId, action: "MEMBER_ROLE_CHANGED", targetType: "User", targetId: targetUserId, beforeValue: { role: current.role }, afterValue: { role: change.role } },
+        data: {
+          tenantId,
+          actorUserId,
+          action: "MEMBER_ROLE_CHANGED",
+          targetType: "User",
+          targetId: targetUserId,
+          beforeValue: { role: current.role },
+          afterValue: { role: change.role },
+        },
       });
     }
     if (campusChanged) {
       await tx.auditLog.create({
-        data: { tenantId, actorUserId, action: "MEMBER_CAMPUS_CHANGED", targetType: "User", targetId: targetUserId, beforeValue: { campusId: current.campusId }, afterValue: { campusId: change.campusId ?? null } },
+        data: {
+          tenantId,
+          actorUserId,
+          action: "MEMBER_CAMPUS_CHANGED",
+          targetType: "User",
+          targetId: targetUserId,
+          beforeValue: { campusId: current.campusId },
+          afterValue: { campusId: change.campusId ?? null },
+        },
       });
     }
     return { ok: true, member: toPublic(updated), changed: true };
@@ -160,9 +187,20 @@ export async function deactivateMember(tenant: TenantCtx, actorUserId: string, t
     if (current.deactivatedAt) return { ok: true, member: toPublic(current), changed: false };
     if (current.role === "ADMIN" && !(await hasAnotherActiveAdmin(tx, tenantId))) return { ok: false, reason: "LAST_ADMIN" };
 
-    const updated = await tx.tenantMembership.update({ where: { id: current.id }, data: { deactivatedAt: new Date() }, select: MEMBER_SELECT });
+    const updated = await tx.tenantMembership.update({
+      where: { id: current.id },
+      data: { deactivatedAt: new Date() },
+      select: MEMBER_SELECT,
+    });
     await tx.auditLog.create({
-      data: { tenantId, actorUserId, action: "MEMBER_DEACTIVATED", targetType: "User", targetId: targetUserId, beforeValue: { role: current.role, campusId: current.campusId } },
+      data: {
+        tenantId,
+        actorUserId,
+        action: "MEMBER_DEACTIVATED",
+        targetType: "User",
+        targetId: targetUserId,
+        beforeValue: { role: current.role, campusId: current.campusId },
+      },
     });
     return { ok: true, member: toPublic(updated), changed: true };
   });
@@ -178,7 +216,14 @@ export async function reactivateMember(tenant: TenantCtx, actorUserId: string, t
 
     const updated = await tx.tenantMembership.update({ where: { id: current.id }, data: { deactivatedAt: null }, select: MEMBER_SELECT });
     await tx.auditLog.create({
-      data: { tenantId, actorUserId, action: "MEMBER_REACTIVATED", targetType: "User", targetId: targetUserId, afterValue: { role: current.role, campusId: current.campusId } },
+      data: {
+        tenantId,
+        actorUserId,
+        action: "MEMBER_REACTIVATED",
+        targetType: "User",
+        targetId: targetUserId,
+        afterValue: { role: current.role, campusId: current.campusId },
+      },
     });
     return { ok: true, member: toPublic(updated), changed: true };
   });

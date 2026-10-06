@@ -97,7 +97,10 @@ export function parseCursorPagination(params: URLSearchParams, options: Options 
 }
 
 /// Splits the `limit + 1` rows into the page and the next cursor.
-export function cursorMeta<T extends { createdAt: Date; id: string }>(rows: T[], limit: number): { items: T[]; meta: { limit: number; nextCursor: string | null } } {
+export function cursorMeta<T extends { createdAt: Date; id: string }>(
+  rows: T[],
+  limit: number,
+): { items: T[]; meta: { limit: number; nextCursor: string | null } } {
   const items = rows.slice(0, limit);
   const last = items[items.length - 1];
   const nextCursor = rows.length > limit && last ? encodeCursor({ createdAt: last.createdAt, id: last.id }) : null;

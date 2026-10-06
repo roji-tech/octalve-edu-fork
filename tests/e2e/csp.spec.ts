@@ -22,8 +22,7 @@ async function withInjectedMarkup(page: import("@playwright/test").Page, payload
     await route.fulfill({ response, body: html });
   });
 }
-const pwned = (page: import("@playwright/test").Page) =>
-  page.evaluate(() => (window as unknown as Record<string, unknown>).__pwned);
+const pwned = (page: import("@playwright/test").Page) => page.evaluate(() => (window as unknown as Record<string, unknown>).__pwned);
 
 test.describe("the policy blocks what an XSS bug would inject", () => {
   test("an injected inline <script> does not run, and the browser reports it", async ({ page, csp }) => {
@@ -50,11 +49,19 @@ test.describe("the policy blocks what an XSS bug would inject", () => {
   });
 
   test("an injected javascript: link does not run", async ({ page, csp }) => {
-    await withInjectedMarkup(page, `<a id="evil" href="javascript:window.__pwned='js url ran'">x</a>`);
+    // `void(…)`: a javascript: URL whose expression yields a string REPLACES the document with that text, which would wipe
+    // `__pwned` and make "it didn't run" true even when the policy allowed it. Returning undefined keeps the page and the evidence.
+    await withInjectedMarkup(page, `<a id="evil" href="javascript:void(window.__pwned='js url ran')">x</a>`);
     await page.goto("/login");
     await page.locator("#evil").click();
+    // The browser's report reaches us asynchronously, AFTER the click. Wait for it first: reading it immediately raced (it arrived
+    // after `take()`, leaving the fixture's own end-of-test check to fail), and checking `__pwned` before the navigation had been
+    // processed would pass whether or not the policy blocked it. Once the violation is in, the navigation has been decided.
+    const seen: { directive: string }[] = [];
+    await expect
+      .poll(() => (seen.push(...csp.take()), seen.length), { message: "the browser reports the blocked javascript: URL" })
+      .toBeGreaterThan(0);
     expect(await pwned(page)).toBeUndefined();
-    expect(csp.take().length).toBeGreaterThan(0);
   });
 
   test("a <base> can't re-root the page's relative URLs (base-uri)", async ({ page, csp }) => {
@@ -67,7 +74,10 @@ test.describe("the policy blocks what an XSS bug would inject", () => {
 });
 
 test.describe("and the app itself is unaffected", () => {
-  test("hydration works (the nonced framework scripts ran): the theme toggle responds and there are no violations", async ({ page, csp }) => {
+  test("hydration works (the nonced framework scripts ran): the theme toggle responds and there are no violations", async ({
+    page,
+    csp,
+  }) => {
     await page.goto("/login");
     await page.getByRole("button", { name: "Switch to light theme" }).click();
     await expect(page.locator("html")).toHaveAttribute("data-theme", "light");

@@ -41,7 +41,9 @@ async function linkFor(email: string, role: Role = Role.TEACHING_STAFF, opts: { 
 const heading = (page: Page, name: string | RegExp) => page.getByRole("heading", { level: 1, name });
 
 test.describe("a person with no account", () => {
-  test("sees the school, the role and a masked address; the token leaves the address bar at once; they choose a name and password, join, sign in, and are in the school", async ({ page }) => {
+  test("sees the school, the role and a masked address; the token leaves the address bar at once; they choose a name and password, join, sign in, and are in the school", async ({
+    page,
+  }) => {
     const to = uniqueEmail("newbie");
     const { url, token } = await linkFor(to, Role.TEACHING_STAFF, { campus: true });
     await page.goto(url);
@@ -72,7 +74,9 @@ test.describe("a person with no account", () => {
     expect((await db.user.findUniqueOrThrow({ where: { email: to } })).name).toBe("Nia Newbie");
   });
 
-  test("mistakes are explained next to the field, before the link is spent: blank name, weak password, mismatch — and a password found in a breach, by the server", async ({ page }) => {
+  test("mistakes are explained next to the field, before the link is spent: blank name, weak password, mismatch — and a password found in a breach, by the server", async ({
+    page,
+  }) => {
     const to = uniqueEmail("fixme");
     const { url } = await linkFor(to);
     await page.goto(url);
@@ -103,7 +107,9 @@ test.describe("a person with no account", () => {
 });
 
 test.describe("a person who already has an account", () => {
-  test("signed out: they are asked to sign in first (nothing about the account is changed), and the sign-in link works", async ({ page }) => {
+  test("signed out: they are asked to sign in first (nothing about the account is changed), and the sign-in link works", async ({
+    page,
+  }) => {
     const owner = await createUser({ name: "Olu Owner" });
     const { url } = await linkFor(owner.email, Role.PARENT);
     await page.goto(url);
@@ -148,7 +154,13 @@ test.describe("links that cannot be used", () => {
     const used = await linkFor(uniqueEmail("used"));
     await db.invitation.updateMany({ where: { tokenHash: hashInvitationToken(used.token) }, data: { acceptedAt: new Date() } });
     const expired = await linkFor(uniqueEmail("late"), Role.PARENT, { expired: true });
-    for (const url of ["/accept-invite", `/accept-invite#token=${newInvitationToken()}`, "/accept-invite#token=short", expired.url, used.url]) {
+    for (const url of [
+      "/accept-invite",
+      `/accept-invite#token=${newInvitationToken()}`,
+      "/accept-invite#token=short",
+      expired.url,
+      used.url,
+    ]) {
       await page.goto(url);
       await expect(heading(page, "This link can't be used")).toBeVisible();
       await expect(page.getByRole("link", { name: "Go to sign in" })).toBeVisible();

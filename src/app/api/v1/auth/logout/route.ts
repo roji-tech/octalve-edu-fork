@@ -1,11 +1,7 @@
 import type { NextRequest } from "next/server";
 import { ok, fail, noStore } from "@/lib/api/envelope";
 import { validateCSRF } from "@/lib/auth/csrf";
-import {
-  deleteSessionByToken,
-  clearSessionCookie,
-  SESSION_COOKIE_NAME,
-} from "@/lib/auth/session";
+import { deleteSessionByToken, clearSessionCookie, SESSION_COOKIE_NAME } from "@/lib/auth/session";
 
 /**
  * POST /api/v1/auth/logout

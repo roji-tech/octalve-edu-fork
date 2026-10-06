@@ -24,7 +24,9 @@ http
     }
     const prefix = match[1].toUpperCase();
     seen.push({ prefix, addPadding: req.headers["add-padding"] ?? null });
-    const rows = BREACHED.map(sha1).filter((h) => h.startsWith(prefix)).map((h) => `${h.slice(5)}:${1000 + h.charCodeAt(7)}`);
+    const rows = BREACHED.map(sha1)
+      .filter((h) => h.startsWith(prefix))
+      .map((h) => `${h.slice(5)}:${1000 + h.charCodeAt(7)}`);
     rows.push("0".repeat(35) + ":0"); // padding row
     res.end(rows.join("\r\n"));
   })

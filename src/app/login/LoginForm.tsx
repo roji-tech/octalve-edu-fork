@@ -137,9 +137,7 @@ export function LoginForm() {
       if (res.status === 401) {
         // One message for "no such account" and "wrong password" — the UI
         // must not re-introduce the enumeration the API carefully avoids.
-        setFormError(
-          "The email or password you entered is incorrect. Check your details and try again.",
-        );
+        setFormError("The email or password you entered is incorrect. Check your details and try again.");
         return;
       }
       setFormError("We couldn't sign you in right now. Please try again in a moment.");
@@ -154,17 +152,11 @@ export function LoginForm() {
     // The artifact draws the form directly on the page on desktop and in a card on phones.
     <div className="rounded-2xl border border-line bg-surface p-6 shadow-card sm:p-7 lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none">
       {challenge !== null ? (
-        <MfaStep
-          challenge={challenge}
-          onBack={() => leaveMfaStep(null)}
-          onExpired={(message) => leaveMfaStep(message)}
-        />
+        <MfaStep challenge={challenge} onBack={() => leaveMfaStep(null)} onExpired={(message) => leaveMfaStep(message)} />
       ) : (
         <>
           <h1 className="text-[22px] font-bold tracking-tight text-fg">Sign in to your dashboard</h1>
-          <p className="mt-1.5 text-sm leading-relaxed text-fg-muted">
-            Enter your credentials to continue.
-          </p>
+          <p className="mt-1.5 text-sm leading-relaxed text-fg-muted">Enter your credentials to continue.</p>
 
           {/* method="post": if the form is ever submitted natively (JavaScript failed to load, or the
               user hits Enter before hydration finishes) a default GET would put the password in the
@@ -218,18 +210,13 @@ export function LoginForm() {
               {formError && <Alert variant="error">{formError}</Alert>}
               {status === "paused" && (
                 <Alert variant="warning" title="Sign-in is paused for a moment">
-                  <span className="sr-only">
-                    Too many unsuccessful attempts. Please wait a moment and try again.
-                  </span>
+                  <span className="sr-only">Too many unsuccessful attempts. Please wait a moment and try again.</span>
                   <span aria-hidden="true">
-                    Too many unsuccessful attempts. For your security, please wait {secondsLeft}s and try
-                    again.
+                    Too many unsuccessful attempts. For your security, please wait {secondsLeft}s and try again.
                   </span>
                 </Alert>
               )}
-              {status === "success" && (
-                <Alert variant="success">Signed in. Taking you to your dashboard…</Alert>
-              )}
+              {status === "success" && <Alert variant="success">Signed in. Taking you to your dashboard…</Alert>}
             </div>
 
             <CheckboxField
@@ -256,9 +243,7 @@ export function LoginForm() {
             </Button>
           </form>
 
-          <p className="mt-6 text-center text-xs leading-relaxed text-fg-muted">
-            Trouble signing in? Contact your school administrator.
-          </p>
+          <p className="mt-6 text-center text-xs leading-relaxed text-fg-muted">Trouble signing in? Contact your school administrator.</p>
         </>
       )}
     </div>

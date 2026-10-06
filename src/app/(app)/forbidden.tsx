@@ -13,7 +13,8 @@ export default function Forbidden() {
         </span>
         <h1 className="mt-6 text-2xl font-bold tracking-tight text-fg">You don&apos;t have access to this school</h1>
         <p className="mt-2 text-base text-fg-muted">
-          Check the address, or ask your school administrator to invite you. If you belong to a school, you can reach it from your dashboard.
+          Check the address, or ask your school administrator to invite you. If you belong to a school, you can reach it from your
+          dashboard.
         </p>
         <Link
           href="/dashboard"

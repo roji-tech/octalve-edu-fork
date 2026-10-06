@@ -1,5 +1,15 @@
 import { test, expect } from "@playwright/test";
-import { Role as R, addMembership, createTenant, createUser, db, deactivateMembership, removeCreatedTenants, seedInstance, type TestTenant } from "../support/db";
+import {
+  Role as R,
+  addMembership,
+  createTenant,
+  createUser,
+  db,
+  deactivateMembership,
+  removeCreatedTenants,
+  seedInstance,
+  type TestTenant,
+} from "../support/db";
 import { forTenant, type Tx } from "@/lib/tenant/for-tenant";
 import { trustedTenantId } from "@/lib/tenant/verified-tenant";
 import type { TenantAuthContext } from "@/lib/auth/with-auth";
@@ -43,7 +53,12 @@ test.describe("listMembers", () => {
     const { members, total } = await listMembers(ctx(a), { status: "all" }, { skip: 0, take: 50 });
     expect(total).toBe(2);
     expect(members.map((m) => m.userId).sort()).toEqual([boss.id, teacher.id].sort());
-    expect(members.find((m) => m.userId === teacher.id)).toMatchObject({ name: "Tola Teacher", role: "TEACHING_STAFF", campusName: "Alpha North", status: "active" });
+    expect(members.find((m) => m.userId === teacher.id)).toMatchObject({
+      name: "Tola Teacher",
+      role: "TEACHING_STAFF",
+      campusName: "Alpha North",
+      status: "active",
+    });
     const dump = JSON.stringify(members);
     expect(dump).not.toMatch(/passwordHash|\$2[aby]\$/); // the person's name and address go through, nothing else of the User row
     expect(Object.keys(members[0]).sort()).toEqual(["campusId", "campusName", "email", "joinedAt", "name", "role", "status", "userId"]);
@@ -54,7 +69,8 @@ test.describe("listMembers", () => {
     const t2 = await person(a, R.TEACHING_STAFF, { name: "Uche Teacher", campus: 1 });
     const parent = await person(a, R.PARENT, { name: "Pat Parent" });
     await deactivateMembership(t2.id, a.id);
-    const ids = async (f: Parameters<typeof listMembers>[1]) => (await listMembers(ctx(a), f, { skip: 0, take: 50 })).members.map((m) => m.userId).sort();
+    const ids = async (f: Parameters<typeof listMembers>[1]) =>
+      (await listMembers(ctx(a), f, { skip: 0, take: 50 })).members.map((m) => m.userId).sort();
     expect(await ids({ status: "active" })).toEqual([t1.id, parent.id].sort());
     expect(await ids({ status: "deactivated" })).toEqual([t2.id]);
     expect(await ids({ status: "all" })).toEqual([t1.id, t2.id, parent.id].sort());
@@ -89,25 +105,44 @@ test.describe("changeMember — the authority rules", () => {
     const target = await person(a, R.TEACHING_STAFF, { campus: 0 });
     const result = await changeMember(ctx(a), boss.id, target.id, { role: R.NON_TEACHING_STAFF, campusId: a.campuses[1].id });
     expect(result).toMatchObject({ ok: true, changed: true, member: { role: "NON_TEACHING_STAFF", campusName: "Alpha South" } });
-    const audit = await db.auditLog.findMany({ where: { tenantId: a.id, targetId: target.id, action: { startsWith: "MEMBER_" } }, orderBy: { action: "asc" } });
+    const audit = await db.auditLog.findMany({
+      where: { tenantId: a.id, targetId: target.id, action: { startsWith: "MEMBER_" } },
+      orderBy: { action: "asc" },
+    });
     expect(audit.map((r) => r.action)).toEqual(["MEMBER_CAMPUS_CHANGED", "MEMBER_ROLE_CHANGED"]);
-    expect(audit.find((r) => r.action === "MEMBER_ROLE_CHANGED")).toMatchObject({ actorUserId: boss.id, beforeValue: { role: "TEACHING_STAFF" }, afterValue: { role: "NON_TEACHING_STAFF" } });
-    expect(audit.find((r) => r.action === "MEMBER_CAMPUS_CHANGED")).toMatchObject({ beforeValue: { campusId: a.campuses[0].id }, afterValue: { campusId: a.campuses[1].id } });
+    expect(audit.find((r) => r.action === "MEMBER_ROLE_CHANGED")).toMatchObject({
+      actorUserId: boss.id,
+      beforeValue: { role: "TEACHING_STAFF" },
+      afterValue: { role: "NON_TEACHING_STAFF" },
+    });
+    expect(audit.find((r) => r.action === "MEMBER_CAMPUS_CHANGED")).toMatchObject({
+      beforeValue: { campusId: a.campuses[0].id },
+      afterValue: { campusId: a.campuses[1].id },
+    });
   });
 
   test("clearing the campus is a change (null), leaving it out is not", async () => {
     const boss = await person(a, R.ADMIN);
     const target = await person(a, R.TEACHING_STAFF, { campus: 0 });
     expect(await changeMember(ctx(a), boss.id, target.id, { role: R.TEACHING_STAFF })).toMatchObject({ ok: true, changed: false });
-    expect(await changeMember(ctx(a), boss.id, target.id, { campusId: null })).toMatchObject({ ok: true, changed: true, member: { campusId: null } });
+    expect(await changeMember(ctx(a), boss.id, target.id, { campusId: null })).toMatchObject({
+      ok: true,
+      changed: true,
+      member: { campusId: null },
+    });
   });
 
   test("a no-op writes NOTHING (no update, no audit row)", async () => {
     const boss = await person(a, R.ADMIN);
     const target = await person(a, R.TEACHING_STAFF, { campus: 0 });
     const before = await db.tenantMembership.findUniqueOrThrow({ where: { userId_tenantId: { userId: target.id, tenantId: a.id } } });
-    expect(await changeMember(ctx(a), boss.id, target.id, { role: R.TEACHING_STAFF, campusId: a.campuses[0].id })).toMatchObject({ ok: true, changed: false });
-    expect(await db.tenantMembership.findUniqueOrThrow({ where: { userId_tenantId: { userId: target.id, tenantId: a.id } } })).toEqual(before);
+    expect(await changeMember(ctx(a), boss.id, target.id, { role: R.TEACHING_STAFF, campusId: a.campuses[0].id })).toMatchObject({
+      ok: true,
+      changed: false,
+    });
+    expect(await db.tenantMembership.findUniqueOrThrow({ where: { userId_tenantId: { userId: target.id, tenantId: a.id } } })).toEqual(
+      before,
+    );
     expect(await db.auditLog.count({ where: { tenantId: a.id, targetId: target.id, action: { startsWith: "MEMBER_" } } })).toBe(0);
   });
 
@@ -118,7 +153,9 @@ test.describe("changeMember — the authority rules", () => {
     expect(await changeMember(ctx(a), boss.id, "no-such-user", { role: R.ADMIN })).toEqual({ ok: false, reason: "NOT_FOUND" });
     expect(await deactivateMember(ctx(a), boss.id, theirs.id)).toEqual({ ok: false, reason: "NOT_FOUND" });
     expect(await reactivateMember(ctx(a), boss.id, theirs.id)).toEqual({ ok: false, reason: "NOT_FOUND" });
-    expect((await db.tenantMembership.findUniqueOrThrow({ where: { userId_tenantId: { userId: theirs.id, tenantId: b.id } } })).role).toBe("TEACHING_STAFF");
+    expect((await db.tenantMembership.findUniqueOrThrow({ where: { userId_tenantId: { userId: theirs.id, tenantId: b.id } } })).role).toBe(
+      "TEACHING_STAFF",
+    );
   });
 
   test("nobody changes, deactivates or reactivates THEMSELVES — even an administrator with a colleague to spare", async () => {
@@ -127,7 +164,9 @@ test.describe("changeMember — the authority rules", () => {
     expect(await changeMember(ctx(a), boss.id, boss.id, { role: R.PARENT })).toEqual({ ok: false, reason: "SELF" });
     expect(await deactivateMember(ctx(a), boss.id, boss.id)).toEqual({ ok: false, reason: "SELF" });
     expect(await reactivateMember(ctx(a), boss.id, boss.id)).toEqual({ ok: false, reason: "SELF" });
-    expect((await db.tenantMembership.findUniqueOrThrow({ where: { userId_tenantId: { userId: boss.id, tenantId: a.id } } })).role).toBe("ADMIN");
+    expect((await db.tenantMembership.findUniqueOrThrow({ where: { userId_tenantId: { userId: boss.id, tenantId: a.id } } })).role).toBe(
+      "ADMIN",
+    );
   });
 
   test("a campus of another school — or one that does not exist — is refused alike", async () => {
@@ -137,7 +176,9 @@ test.describe("changeMember — the authority rules", () => {
     for (const campusId of [theirs.id, "no-such-campus"]) {
       expect(await changeMember(ctx(a), boss.id, target.id, { campusId })).toEqual({ ok: false, reason: "INVALID_CAMPUS" });
     }
-    expect((await db.tenantMembership.findUniqueOrThrow({ where: { userId_tenantId: { userId: target.id, tenantId: a.id } } })).campusId).toBe(a.campuses[0].id);
+    expect(
+      (await db.tenantMembership.findUniqueOrThrow({ where: { userId_tenantId: { userId: target.id, tenantId: a.id } } })).campusId,
+    ).toBe(a.campuses[0].id);
   });
 
   test("a deactivated member cannot be changed until reactivated", async () => {
@@ -154,7 +195,9 @@ test.describe("changeMember — the authority rules", () => {
     expect(await changeMember(ctx(a), actor.id, sole.id, { role: R.PARENT })).toMatchObject({ ok: true }); // two admins → one may go
     expect(await changeMember(ctx(a), actor.id, boss.id, { role: R.PARENT })).toEqual({ ok: false, reason: "LAST_ADMIN" });
     expect(await deactivateMember(ctx(a), actor.id, boss.id)).toEqual({ ok: false, reason: "LAST_ADMIN" });
-    expect((await db.tenantMembership.findUniqueOrThrow({ where: { userId_tenantId: { userId: boss.id, tenantId: a.id } } })).role).toBe("ADMIN");
+    expect((await db.tenantMembership.findUniqueOrThrow({ where: { userId_tenantId: { userId: boss.id, tenantId: a.id } } })).role).toBe(
+      "ADMIN",
+    );
     // a deactivated administrator is not an active one: with Bea deactivated (not just demoted) Ada is still the last
     await changeMember(ctx(a), actor.id, sole.id, { role: R.ADMIN });
     await deactivateMember(ctx(a), actor.id, sole.id); // two admins → allowed
@@ -174,15 +217,43 @@ test.describe("changeMember — the authority rules", () => {
     const first = await person(a, R.ADMIN, { name: "Ada" });
     const second = await person(a, R.ADMIN, { name: "Bea" });
     for (let round = 0; round < 5; round++) {
-      await db.tenantMembership.updateMany({ where: { tenantId: a.id, userId: { in: [first.id, second.id] } }, data: { role: R.ADMIN, deactivatedAt: null } });
+      await db.tenantMembership.updateMany({
+        where: { tenantId: a.id, userId: { in: [first.id, second.id] } },
+        data: { role: R.ADMIN, deactivatedAt: null },
+      });
       const results = await Promise.all([
         changeMember(ctx(a), second.id, first.id, { role: R.PARENT }),
         changeMember(ctx(a), first.id, second.id, { role: R.PARENT }),
       ]);
-      expect(results.filter((r) => r.ok), `round ${round}`).toHaveLength(1);
-      expect(results.filter((r) => !r.ok && r.reason === "LAST_ADMIN"), `round ${round}`).toHaveLength(1);
+      expect(
+        results.filter((r) => r.ok),
+        `round ${round}`,
+      ).toHaveLength(1);
+      expect(
+        results.filter((r) => !r.ok && r.reason === "LAST_ADMIN"),
+        `round ${round}`,
+      ).toHaveLength(1);
       expect(await db.tenantMembership.count({ where: { tenantId: a.id, role: "ADMIN", deactivatedAt: null } }), `round ${round}`).toBe(1);
     }
+  });
+});
+
+test.describe("listMembers — paging", () => {
+  test("people with the SAME name are ordered by address then id, so a page never repeats or loses anyone (found by mutation M16)", async () => {
+    await person(a, R.ADMIN, { name: "Aaa Admin" });
+    // inserted in REVERSE address order: only an explicit tiebreak puts them back in order
+    const emails = ["zed", "yan", "xia", "wes", "van"].map((n) => `${n}@twin.test`);
+    for (const address of emails) {
+      const user = await createUser({ name: "Twin Person", email: address });
+      await addMembership(user.id, a.id, R.PARENT, null);
+    }
+    const seen: string[] = [];
+    for (let skip = 0; skip < 6; skip += 2) {
+      const { members } = await listMembers(ctx(a), { status: "all" }, { skip, take: 2 });
+      seen.push(...members.map((m) => m.email ?? ""));
+    }
+    expect(seen.slice(1)).toEqual([...emails].sort()); // all five, once each, by address
+    expect(new Set(seen).size).toBe(seen.length);
   });
 });
 
@@ -191,12 +262,30 @@ test.describe("deactivate and reactivate", () => {
     const boss = await person(a, R.ADMIN);
     const target = await person(a, R.TEACHING_STAFF, { campus: 1 });
     const before = await db.tenantMembership.findUniqueOrThrow({ where: { userId_tenantId: { userId: target.id, tenantId: a.id } } });
-    expect(await deactivateMember(ctx(a), boss.id, target.id)).toMatchObject({ ok: true, changed: true, member: { status: "deactivated" } });
+    expect(await deactivateMember(ctx(a), boss.id, target.id)).toMatchObject({
+      ok: true,
+      changed: true,
+      member: { status: "deactivated" },
+    });
     expect((await db.tenantMembership.findUniqueOrThrow({ where: { id: before.id } })).deactivatedAt).not.toBeNull();
-    expect(await reactivateMember(ctx(a), boss.id, target.id)).toMatchObject({ ok: true, changed: true, member: { status: "active", role: "TEACHING_STAFF", campusName: "Alpha South" } });
-    expect(await db.tenantMembership.findUniqueOrThrow({ where: { id: before.id } })).toMatchObject({ deactivatedAt: null, role: "TEACHING_STAFF", campusId: a.campuses[1].id });
-    const actions = (await db.auditLog.findMany({ where: { tenantId: a.id, targetId: target.id }, orderBy: { createdAt: "asc" } })).map((r) => r.action);
+    expect(await reactivateMember(ctx(a), boss.id, target.id)).toMatchObject({
+      ok: true,
+      changed: true,
+      member: { status: "active", role: "TEACHING_STAFF", campusName: "Alpha South" },
+    });
+    expect(await db.tenantMembership.findUniqueOrThrow({ where: { id: before.id } })).toMatchObject({
+      deactivatedAt: null,
+      role: "TEACHING_STAFF",
+      campusId: a.campuses[1].id,
+    });
+    const actions = (await db.auditLog.findMany({ where: { tenantId: a.id, targetId: target.id }, orderBy: { createdAt: "asc" } })).map(
+      (r) => r.action,
+    );
     expect(actions).toEqual(["MEMBER_DEACTIVATED", "MEMBER_REACTIVATED"]);
+    // what the person WAS is on the record (found by mutation M19): a later reader can see who lost access, and at which role and campus
+    expect(
+      await db.auditLog.findFirstOrThrow({ where: { tenantId: a.id, targetId: target.id, action: "MEMBER_DEACTIVATED" } }),
+    ).toMatchObject({ actorUserId: boss.id, beforeValue: { role: "TEACHING_STAFF", campusId: a.campuses[1].id } });
   });
 
   test("both are idempotent: doing it twice is a quiet success that writes no second audit row", async () => {

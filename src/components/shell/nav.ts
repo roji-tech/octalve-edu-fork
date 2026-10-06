@@ -24,7 +24,10 @@ export function navFor(school: ShellSchool | null): NavItem[] {
   if (!school) return [{ label: "Your schools", href: "/dashboard", icon: HomeIcon, exact: true }];
   const items: NavItem[] = [{ label: "Overview", href: `/schools/${school.code}`, icon: HomeIcon, exact: true }];
   if (school.role === "ADMIN") {
-    items.push({ label: "Users", href: `/schools/${school.code}/users`, icon: UsersIcon }, { label: "Settings", href: null, icon: SlidersIcon });
+    items.push(
+      { label: "Users", href: `/schools/${school.code}/users`, icon: UsersIcon },
+      { label: "Settings", href: null, icon: SlidersIcon },
+    );
   }
   return items;
 }

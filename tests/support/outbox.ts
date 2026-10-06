@@ -7,12 +7,32 @@ import { EMAIL_FILE } from "./env";
 export type SentEmail = { to: string; subject: string; text: string; at: string };
 
 export async function readOutbox(): Promise<SentEmail[]> {
+  let raw: string;
   try {
-    const raw = await fs.readFile(EMAIL_FILE, "utf8");
-    return raw.split("\n").filter(Boolean).map((line) => JSON.parse(line) as SentEmail);
-  } catch {
-    return []; // nothing sent yet
+    raw = await fs.readFile(EMAIL_FILE, "utf8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return []; // nothing sent yet
+    throw error;
   }
+  // A line that is not JSON means the file is corrupt (e.g. torn by a crash mid-append). Say so — returning "no mail" here once made
+  // every mail test in a run fail with a misleading "found 0" after one bad line.
+  return raw
+    .split("\n")
+    .filter(Boolean)
+    .map((line, i) => {
+      try {
+        return JSON.parse(line) as SentEmail;
+      } catch {
+        throw new Error(
+          `${EMAIL_FILE} is corrupt (entry ${i + 1} is not JSON: ${JSON.stringify(line.slice(0, 40))}…). Delete it and re-run.`,
+        );
+      }
+    });
+}
+
+/// A run starts from an empty outbox (the setup project calls this), so a stale or torn file from an earlier run cannot matter.
+export async function resetOutbox(): Promise<void> {
+  await fs.rm(EMAIL_FILE, { force: true });
 }
 
 export const mailTo = async (to: string) => (await readOutbox()).filter((m) => m.to === to);

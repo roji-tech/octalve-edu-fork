@@ -8,13 +8,7 @@ import { brand } from "@/lib/brand";
 /// colour, faint grid, headline, three points) beside the form; on small ones a compact
 /// centred brand header above it. The panel is decorative (aria-hidden) — the form side is
 /// the only landmark that matters to assistive tech. `size` picks the form column's width.
-export function AuthShell({
-  children,
-  size = "sm",
-}: {
-  children: ReactNode;
-  size?: "sm" | "md";
-}) {
+export function AuthShell({ children, size = "sm" }: { children: ReactNode; size?: "sm" | "md" }) {
   return (
     <div className="min-h-screen bg-canvas text-fg lg:flex">
       <aside
@@ -56,10 +50,7 @@ export function AuthShell({
         <div className="flex flex-1 items-center justify-center px-4 pt-4 pb-14 sm:px-8">
           <div className={`w-full ${size === "md" ? "max-w-[30rem]" : "max-w-[24rem]"}`}>
             <div className="mb-8 flex flex-col items-center text-center lg:hidden">
-              <span
-                aria-hidden="true"
-                className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand text-white"
-              >
+              <span aria-hidden="true" className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand text-white">
                 <GraduationCapIcon className="h-5 w-5" />
               </span>
               <p className="mt-3 text-xl font-bold tracking-tight text-fg">{brand.name}</p>

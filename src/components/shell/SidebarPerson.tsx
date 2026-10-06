@@ -11,7 +11,10 @@ export function SidebarPerson({ name, email }: { name: string | null; email: str
 
   return (
     <div role="group" aria-label="Signed in as" className="flex items-center gap-3 border-t border-line p-4">
-      <span aria-hidden="true" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-strong text-xs font-bold text-white">
+      <span
+        aria-hidden="true"
+        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-strong text-xs font-bold text-white"
+      >
         {initialsOf(name, email)}
       </span>
       <div className="min-w-0">

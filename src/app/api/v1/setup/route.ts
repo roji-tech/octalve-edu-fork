@@ -82,11 +82,7 @@ export async function POST(req: NextRequest) {
   const clientIp = getClientIp(req);
   const limitKey = `setup:${clientIp}`;
   if (!(await reserveAttempt(limitKey))) {
-    return fail(
-      "Too many setup attempts from this IP. Please try again later.",
-      429,
-      "RATE_LIMITED",
-    );
+    return fail("Too many setup attempts from this IP. Please try again later.", 429, "RATE_LIMITED");
   }
 
   let body: unknown;
@@ -114,16 +110,10 @@ export async function POST(req: NextRequest) {
     const expectedBuf = Buffer.from(expectedToken);
     const providedBuf = Buffer.from(providedToken);
 
-    const isValidToken =
-      expectedBuf.length === providedBuf.length &&
-      crypto.timingSafeEqual(expectedBuf, providedBuf);
+    const isValidToken = expectedBuf.length === providedBuf.length && crypto.timingSafeEqual(expectedBuf, providedBuf);
 
     if (!isValidToken) {
-      return fail(
-        "Invalid or missing setup token. Check your server environment settings.",
-        401,
-        "BAD_SETUP_TOKEN",
-      );
+      return fail("Invalid or missing setup token. Check your server environment settings.", 401, "BAD_SETUP_TOKEN");
     }
   }
 

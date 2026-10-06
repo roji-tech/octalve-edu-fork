@@ -8,7 +8,8 @@ import { TextField } from "@/components/ui/TextField";
 import { RESET_LINK_MINUTES } from "@/lib/auth/reset-constants";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const LINK = "inline-flex min-h-11 items-center font-semibold text-brand-fg hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring rounded-md";
+const LINK =
+  "inline-flex min-h-11 items-center font-semibold text-brand-fg hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring rounded-md";
 
 /// Step 1 of "I forgot my password". The confirmation is the same whether or not the address has an
 /// account (the server answers identically), and says so in those words.
@@ -52,8 +53,8 @@ export function ForgotPasswordForm() {
         <div>
           <h1 className="text-[22px] font-bold tracking-tight text-fg">Check your email</h1>
           <Alert variant="success" className="mt-4">
-            If an account exists for <strong className="font-semibold">{sentTo}</strong>, we&apos;ve sent a link to
-            reset its password. It works for {RESET_LINK_MINUTES} minutes.
+            If an account exists for <strong className="font-semibold">{sentTo}</strong>, we&apos;ve sent a link to reset its password. It
+            works for {RESET_LINK_MINUTES} minutes.
           </Alert>
           <p className="mt-4 text-sm leading-relaxed text-fg-muted">
             Nothing arrived? Check your spam folder, or ask for another link — only the newest one works.

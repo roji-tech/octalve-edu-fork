@@ -40,9 +40,7 @@ const MAX_USER_AGENT_LENGTH = 255;
 // "production" mode would otherwise get a 200 from login and no cookie ever
 // set, since browsers silently refuse a Secure cookie over HTTP.
 const isHttps = (process.env.APP_URL ?? "").startsWith("https://");
-export const SESSION_COOKIE_NAME = isHttps
-  ? "__Host-octalve.session-token"
-  : "octalve.session-token";
+export const SESSION_COOKIE_NAME = isHttps ? "__Host-octalve.session-token" : "octalve.session-token";
 const COOKIE_OPTIONS = {
   httpOnly: true,
   sameSite: "lax" as const,
@@ -80,13 +78,9 @@ export async function createSession(
 
   const now = Date.now();
   const modeSeconds = persistent ? SESSION_ABSOLUTE_MAX_AGE_SECONDS : SESSION_ONLY_MAX_AGE_SECONDS;
-  const absoluteSeconds = opts.admin
-    ? Math.min(modeSeconds, ADMIN_SESSION_ABSOLUTE_MAX_AGE_SECONDS)
-    : modeSeconds;
+  const absoluteSeconds = opts.admin ? Math.min(modeSeconds, ADMIN_SESSION_ABSOLUTE_MAX_AGE_SECONDS) : modeSeconds;
   const absoluteExpires = new Date(now + absoluteSeconds * 1000);
-  const expires = new Date(
-    Math.min(now + SESSION_MAX_AGE_SECONDS * 1000, absoluteExpires.getTime()),
-  );
+  const expires = new Date(Math.min(now + SESSION_MAX_AGE_SECONDS * 1000, absoluteExpires.getTime()));
 
   await prisma.$transaction(async (tx) => {
     // Bounded growth: this user's already-dead rows are removed in the same
@@ -187,12 +181,8 @@ async function resolveToken(token: string): Promise<ResolvedSession | null> {
   // effort: a failed touch must never fail the request it rides along with —
   // e.g. the row deleted by a concurrent logout between the read and here.
   if (now.getTime() - session.lastUsedAt.getTime() > TOUCH_INTERVAL_MS) {
-    const idleExpiry = new Date(
-      Math.min(now.getTime() + SESSION_MAX_AGE_SECONDS * 1000, session.absoluteExpires.getTime()),
-    );
-    await prisma.session
-      .update({ where: { id: session.id }, data: { lastUsedAt: now, expires: idleExpiry } })
-      .catch(() => undefined);
+    const idleExpiry = new Date(Math.min(now.getTime() + SESSION_MAX_AGE_SECONDS * 1000, session.absoluteExpires.getTime()));
+    await prisma.session.update({ where: { id: session.id }, data: { lastUsedAt: now, expires: idleExpiry } }).catch(() => undefined);
   }
 
   return { sessionId: session.id, userId: session.userId, user: session.user };
@@ -200,11 +190,7 @@ async function resolveToken(token: string): Promise<ResolvedSession | null> {
 
 /// `expires` null → a browser-session cookie (no Expires / Max-Age attribute): the
 /// "not remembered" mode. The server-side cap in createSession bounds it anyway.
-export function setSessionCookie(
-  response: NextResponse,
-  token: string,
-  expires: Date | null,
-): NextResponse {
+export function setSessionCookie(response: NextResponse, token: string, expires: Date | null): NextResponse {
   response.cookies.set(SESSION_COOKIE_NAME, token, {
     ...COOKIE_OPTIONS,
     ...(expires ? { expires } : {}),

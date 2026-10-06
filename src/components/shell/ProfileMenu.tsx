@@ -31,7 +31,10 @@ export function ProfileMenu({ name, email }: { name: string | null; email: strin
         className={`flex h-11 items-center gap-2.5 rounded-xl px-1.5 text-left transition-colors hover:bg-surface-2 sm:pr-3 ${FOCUS_RING}`}
       >
         <span className="sr-only">Account menu for {displayName}</span>
-        <span aria-hidden="true" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-strong text-xs font-bold text-white">
+        <span
+          aria-hidden="true"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-strong text-xs font-bold text-white"
+        >
           {initialsOf(name, email)}
         </span>
         <span aria-hidden="true" className="hidden max-w-40 truncate text-sm font-medium text-fg sm:block">
@@ -45,7 +48,11 @@ export function ProfileMenu({ name, email }: { name: string | null; email: strin
           <div className="px-3 py-2.5">
             <p className="truncate text-sm font-semibold text-fg">{displayName}</p>
             {name?.trim() && email && <p className="truncate text-xs text-fg-muted">{email}</p>}
-            {home && <p className="mt-1 text-xs font-medium text-brand-fg">{ROLE_LABELS[home.role]} · {home.name}</p>}
+            {home && (
+              <p className="mt-1 text-xs font-medium text-brand-fg">
+                {ROLE_LABELS[home.role]} · {home.name}
+              </p>
+            )}
           </div>
           <div className="my-1 h-px bg-line" />
 

@@ -9,15 +9,48 @@ import { displayName, type Member } from "./model";
 
 /// The one destructive-feeling action gets a confirmation that says what it does and what it does not: access ends on their next request;
 /// nothing they did is deleted; it can be undone.
-export function DeactivateDialog({ member, onClose, schoolCode, schoolName, onDone }: { member: Member | null; onClose: () => void; schoolCode: string; schoolName: string; onDone: (member: Member) => void }) {
+export function DeactivateDialog({
+  member,
+  onClose,
+  schoolCode,
+  schoolName,
+  onDone,
+}: {
+  member: Member | null;
+  onClose: () => void;
+  schoolCode: string;
+  schoolName: string;
+  onDone: (member: Member) => void;
+}) {
   return (
     <Dialog open={member !== null} onClose={onClose} title={member ? `Deactivate ${displayName(member)}?` : "Deactivate"}>
-      {member && <DeactivateBody key={member.userId} member={member} onClose={onClose} schoolCode={schoolCode} schoolName={schoolName} onDone={onDone} />}
+      {member && (
+        <DeactivateBody
+          key={member.userId}
+          member={member}
+          onClose={onClose}
+          schoolCode={schoolCode}
+          schoolName={schoolName}
+          onDone={onDone}
+        />
+      )}
     </Dialog>
   );
 }
 
-function DeactivateBody({ member, onClose, schoolCode, schoolName, onDone }: { member: Member; onClose: () => void; schoolCode: string; schoolName: string; onDone: (member: Member) => void }) {
+function DeactivateBody({
+  member,
+  onClose,
+  schoolCode,
+  schoolName,
+  onDone,
+}: {
+  member: Member;
+  onClose: () => void;
+  schoolCode: string;
+  schoolName: string;
+  onDone: (member: Member) => void;
+}) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -37,7 +70,8 @@ function DeactivateBody({ member, onClose, schoolCode, schoolName, onDone }: { m
   return (
     <div className="space-y-4">
       <p className="text-sm leading-relaxed text-fg-2">
-        They lose access to {schoolName} on their next request. Nothing they did is deleted, and you can reactivate them later with the same role and campus.
+        They lose access to {schoolName} on their next request. Nothing they did is deleted, and you can reactivate them later with the same
+        role and campus.
       </p>
       {error && <Alert variant="error">{error}</Alert>}
       <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">

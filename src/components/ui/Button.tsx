@@ -8,11 +8,9 @@ const VARIANTS: Record<Variant, string> = {
   // (not its lighter accent) and hover/active darken instead of lightening.
   primary:
     "bg-brand-strong text-white shadow-lg shadow-brand-strong/25 hover:bg-brand-strong-hover active:bg-brand-strong-hover disabled:bg-surface-2 disabled:text-fg-muted disabled:shadow-none",
-  secondary:
-    "border border-line-strong bg-surface text-fg hover:bg-surface-2 disabled:text-fg-muted",
+  secondary: "border border-line-strong bg-surface text-fg hover:bg-surface-2 disabled:text-fg-muted",
   ghost: "text-fg-2 hover:bg-surface-2 hover:text-fg disabled:text-fg-muted",
-  danger:
-    "border border-danger-line bg-danger-bg text-danger-fg hover:border-danger-icon disabled:text-fg-muted",
+  danger: "border border-danger-line bg-danger-bg text-danger-fg hover:border-danger-icon disabled:text-fg-muted",
 };
 
 export function Button({

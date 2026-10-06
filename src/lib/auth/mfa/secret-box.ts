@@ -55,9 +55,7 @@ export function encryptSecret(plaintext: Buffer, aad: string, env: Env = process
   cipher.setAAD(Buffer.from(aad));
   const ciphertext = Buffer.concat([cipher.update(plaintext), cipher.final()]);
   const tag = cipher.getAuthTag();
-  return [VERSION, iv, ciphertext, tag]
-    .map((part) => (typeof part === "string" ? part : part.toString("base64url")))
-    .join(".");
+  return [VERSION, iv, ciphertext, tag].map((part) => (typeof part === "string" ? part : part.toString("base64url"))).join(".");
 }
 
 /// Throws MfaUnavailableError on a malformed box, the wrong key, the wrong `aad`, or any tampering (GCM

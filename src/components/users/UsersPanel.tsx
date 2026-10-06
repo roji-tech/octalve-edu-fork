@@ -22,12 +22,28 @@ const ROW = "md:grid md:grid-cols-[minmax(0,2.2fr)_9rem_minmax(0,1.2fr)_6.5rem_a
 type Notice = { variant: "success" | "error"; text: string } | null;
 
 const failureText = (status: number, message?: string) =>
-  status === 401 ? SESSION_ENDED : status === 429 ? RATE_LIMITED : status === 0 ? NETWORK_ERROR : (message ?? "That didn't work. Please try again in a moment.");
+  status === 401
+    ? SESSION_ENDED
+    : status === 429
+      ? RATE_LIMITED
+      : status === 0
+        ? NETWORK_ERROR
+        : (message ?? "That didn't work. Please try again in a moment.");
 
 /// The Users page (plan §0.5.4): the school's people with filters and paging, the open invitations, and the four things an administrator does —
 /// invite, change role/campus, deactivate, reactivate. Everything goes through the API (which enforces who may do what); this only shows the
 /// answer. Results are announced in one polite live region, and focus is never left on a control that has just disappeared.
-export function UsersPanel({ schoolCode, schoolName, campuses, currentUserId }: { schoolCode: string; schoolName: string; campuses: CampusOption[]; currentUserId: string }) {
+export function UsersPanel({
+  schoolCode,
+  schoolName,
+  campuses,
+  currentUserId,
+}: {
+  schoolCode: string;
+  schoolName: string;
+  campuses: CampusOption[];
+  currentUserId: string;
+}) {
   const [searchText, setSearchText] = useState("");
   const [q, setQ] = useState("");
   const [role, setRole] = useState("");
@@ -107,7 +123,10 @@ export function UsersPanel({ schoolCode, schoolName, campuses, currentUserId }: 
   }, [loadInvitations]);
 
   /// Reloads both lists and resolves when they are in the DOM.
-  const refresh = useCallback(() => Promise.all([loadMembers(undefined, true), loadInvitations(undefined, true)]).then(() => undefined), [loadMembers, loadInvitations]);
+  const refresh = useCallback(
+    () => Promise.all([loadMembers(undefined, true), loadInvitations(undefined, true)]).then(() => undefined),
+    [loadMembers, loadInvitations],
+  );
 
   /// After a change that may have removed the control that had focus (a deactivated person's row, a revoked invitation, the closed dialog's
   /// opener): wait until the lists are refreshed — and in the DOM — and only then, if focus has fallen to <body>, park it on the page summary.
@@ -169,7 +188,11 @@ export function UsersPanel({ schoolCode, schoolName, campuses, currentUserId }: 
   return (
     <div className="mt-8 space-y-10">
       <div role="status" aria-live="polite" className="empty:hidden">
-        {notice && notice.variant === "success" && <Alert variant="success" announce={false}>{notice.text}</Alert>}
+        {notice && notice.variant === "success" && (
+          <Alert variant="success" announce={false}>
+            {notice.text}
+          </Alert>
+        )}
       </div>
       {notice && notice.variant === "error" && <Alert variant="error">{notice.text}</Alert>}
 
@@ -191,9 +214,27 @@ export function UsersPanel({ schoolCode, schoolName, campuses, currentUserId }: 
         </div>
 
         <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <TextField label="Search" type="search" value={searchText} onChange={(e) => setSearchText(e.target.value)} placeholder="Name or email" autoComplete="off" maxLength={64} />
-          <SelectField label="Role" value={role} onChange={(e) => (setRole(e.target.value), setPage(1))} options={[{ value: "", label: "All roles" }, ...ROLE_OPTIONS]} />
-          <SelectField label="Campus" value={campusId} onChange={(e) => (setCampusId(e.target.value), setPage(1))} options={[{ value: "", label: "All campuses" }, ...campuses.map((c) => ({ value: c.id, label: c.name }))]} />
+          <TextField
+            label="Search"
+            type="search"
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+            placeholder="Name or email"
+            autoComplete="off"
+            maxLength={64}
+          />
+          <SelectField
+            label="Role"
+            value={role}
+            onChange={(e) => (setRole(e.target.value), setPage(1))}
+            options={[{ value: "", label: "All roles" }, ...ROLE_OPTIONS]}
+          />
+          <SelectField
+            label="Campus"
+            value={campusId}
+            onChange={(e) => (setCampusId(e.target.value), setPage(1))}
+            options={[{ value: "", label: "All campuses" }, ...campuses.map((c) => ({ value: c.id, label: c.name }))]}
+          />
           <SelectField
             label="Status"
             value={status}
@@ -232,7 +273,10 @@ export function UsersPanel({ schoolCode, schoolName, campuses, currentUserId }: 
           </div>
         ) : (
           <div className="mt-3 overflow-hidden rounded-2xl border border-line bg-surface">
-            <div aria-hidden="true" className={`hidden border-b border-line bg-surface-2 px-4 py-2.5 text-xs font-semibold tracking-wide text-fg-muted uppercase ${ROW}`}>
+            <div
+              aria-hidden="true"
+              className={`hidden border-b border-line bg-surface-2 px-4 py-2.5 text-xs font-semibold tracking-wide text-fg-muted uppercase ${ROW}`}
+            >
               <span>Person</span>
               <span>Role</span>
               <span>Campus</span>
@@ -247,13 +291,18 @@ export function UsersPanel({ schoolCode, schoolName, campuses, currentUserId }: 
                 return (
                   <li key={member.userId} className={`flex flex-col gap-3 p-4 ${ROW}`}>
                     <div className="flex min-w-0 items-center gap-3">
-                      <span aria-hidden="true" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-tint text-xs font-bold text-brand-fg">
+                      <span
+                        aria-hidden="true"
+                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-tint text-xs font-bold text-brand-fg"
+                      >
                         {initialsOf(member.name, member.email)}
                       </span>
                       <div className="min-w-0">
                         <p className="text-sm font-semibold break-words text-fg">
                           {name}
-                          {self && <span className="ml-2 rounded-full bg-surface-2 px-2 py-0.5 text-[11px] font-semibold text-fg-muted">You</span>}
+                          {self && (
+                            <span className="ml-2 rounded-full bg-surface-2 px-2 py-0.5 text-[11px] font-semibold text-fg-muted">You</span>
+                          )}
                         </p>
                         {member.name?.trim() && member.email && <p className="text-xs break-all text-fg-muted">{member.email}</p>}
                       </div>
@@ -276,15 +325,31 @@ export function UsersPanel({ schoolCode, schoolName, campuses, currentUserId }: 
                     <div className="flex gap-2 md:w-64 md:justify-end">
                       {self ? null : member.status === "active" ? (
                         <>
-                          <Button variant="secondary" className="flex-1 md:flex-none" onClick={() => setEditing(member)} aria-label={`Change role or campus for ${name}`}>
+                          <Button
+                            variant="secondary"
+                            className="flex-1 md:flex-none"
+                            onClick={() => setEditing(member)}
+                            aria-label={`Change role or campus for ${name}`}
+                          >
                             Edit
                           </Button>
-                          <Button variant="ghost" className="flex-1 md:flex-none" onClick={() => setDeactivating(member)} aria-label={`Deactivate ${name}`}>
+                          <Button
+                            variant="ghost"
+                            className="flex-1 md:flex-none"
+                            onClick={() => setDeactivating(member)}
+                            aria-label={`Deactivate ${name}`}
+                          >
                             Deactivate
                           </Button>
                         </>
                       ) : (
-                        <Button variant="secondary" className="flex-1 md:flex-none" loading={busy} onClick={() => reactivate(member)} aria-label={`Reactivate ${name}`}>
+                        <Button
+                          variant="secondary"
+                          className="flex-1 md:flex-none"
+                          loading={busy}
+                          onClick={() => reactivate(member)}
+                          aria-label={`Reactivate ${name}`}
+                        >
                           Reactivate
                         </Button>
                       )}
@@ -320,7 +385,9 @@ export function UsersPanel({ schoolCode, schoolName, campuses, currentUserId }: 
             Loading invitations…
           </p>
         ) : invitations.length === 0 ? (
-          <p className="mt-3 rounded-2xl border border-dashed border-line-strong p-6 text-center text-sm text-fg-muted">No invitations are waiting. People you invite appear here until they accept.</p>
+          <p className="mt-3 rounded-2xl border border-dashed border-line-strong p-6 text-center text-sm text-fg-muted">
+            No invitations are waiting. People you invite appear here until they accept.
+          </p>
         ) : (
           <div className="mt-3">
             <InvitationsList invitations={invitations} busyId={busyInvitation} onResend={resend} onRevoke={revoke} />
@@ -347,7 +414,12 @@ export function UsersPanel({ schoolCode, schoolName, campuses, currentUserId }: 
         campuses={campuses}
         onSaved={(member, changed) => {
           flushSync(() => setEditing(null));
-          setNotice({ variant: "success", text: changed ? `Saved. ${displayName(member)} is now ${ROLE_LABELS[member.role]}${member.campusName ? ` at ${member.campusName}` : ""}.` : "Nothing needed changing." });
+          setNotice({
+            variant: "success",
+            text: changed
+              ? `Saved. ${displayName(member)} is now ${ROLE_LABELS[member.role]}${member.campusName ? ` at ${member.campusName}` : ""}.`
+              : "Nothing needed changing.",
+          });
           void refresh();
         }}
       />

@@ -1,13 +1,37 @@
 import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
 import { test, expect } from "../support/fixtures";
-import { Role, codeFor, createUser, addMembership, createTenant, db, enableMfa, removeCreatedTenants, resetDatabase, seedInstance, uniqueEmail, uniqueIp } from "./../support/db";
+import {
+  Role,
+  codeFor,
+  createUser,
+  addMembership,
+  createTenant,
+  db,
+  enableMfa,
+  removeCreatedTenants,
+  resetDatabase,
+  seedInstance,
+  uniqueEmail,
+  uniqueIp,
+} from "./../support/db";
 import { DEVTOOLS_URL, DEV_TOOLS_TEST_TOKEN, SAAS_URL } from "../support/env";
 import { linkFrom, waitForMail } from "../support/outbox";
 import { createEmailChangeToken } from "@/lib/auth/email-change";
 import { hashInvitationToken, newInvitationToken } from "@/lib/invitations/token";
 import { base32Decode } from "@/lib/auth/mfa/base32";
-import { alerts, codeField, fillCredentials, mfaHeading, passwordField, recoveryField, signInButton, signInThroughUi, verifyButton, HOME_URL } from "./helpers";
+import {
+  alerts,
+  codeField,
+  fillCredentials,
+  mfaHeading,
+  passwordField,
+  recoveryField,
+  signInButton,
+  signInThroughUi,
+  verifyButton,
+  HOME_URL,
+} from "./helpers";
 
 // Runs on the desktop AND the phone project (see playwright.config.ts).
 //  - axe-core, WCAG 2.2 A/AA rules, on every screen and on the STATES that
@@ -50,7 +74,11 @@ async function expectComfortableTapTargets(page: Page, what: string, isMobile: b
       .filter(visible)
       .map((el) => {
         const r = el.getBoundingClientRect();
-        return { el: `${el.tagName.toLowerCase()}[${el.getAttribute("aria-label") ?? el.getAttribute("name") ?? el.textContent?.trim().slice(0, 20)}]`, w: Math.round(r.width), h: Math.round(r.height) };
+        return {
+          el: `${el.tagName.toLowerCase()}[${el.getAttribute("aria-label") ?? el.getAttribute("name") ?? el.textContent?.trim().slice(0, 20)}]`,
+          w: Math.round(r.width),
+          h: Math.round(r.height),
+        };
       })
       .filter((t) => t.w < 44 || t.h < 44);
   });
@@ -354,7 +382,11 @@ test.describe("account self-service screens (profile, email, sessions)", () => {
   const IPHONE_UA =
     "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1";
 
-  test("/account: profile editor (idle, editing, error), email card (form, errors, sent), sessions (alone, with others)", async ({ page, isMobile, browser }) => {
+  test("/account: profile editor (idle, editing, error), email card (form, errors, sent), sessions (alone, with others)", async ({
+    page,
+    isMobile,
+    browser,
+  }) => {
     test.slow(); // seven screens × both themes of axe: ~25 s on an idle machine, so it was always one busy moment from the 30 s default
     const user = await createUser({ role: Role.ADMIN, name: "Amina Yusuf" });
     await signInThroughUi(page, user);
@@ -431,7 +463,10 @@ test.describe("school pages: picker, workspace, no-access (SaaS-mode server)", (
   });
 
   test("picker, workspace (admin, staff, no campus) and the 403 view", async ({ page, isMobile }) => {
-    const a = await createTenant({ name: "Alpha School with a rather long name to prove it wraps", campuses: ["Alpha North", "Alpha South"] });
+    const a = await createTenant({
+      name: "Alpha School with a rather long name to prove it wraps",
+      campuses: ["Alpha North", "Alpha South"],
+    });
     const b = await createTenant({ name: "Beta School", campuses: ["Beta Main"] });
     const both = await createUser({ name: "Chidi Okafor" });
     await addMembership(both.id, a.id, Role.ADMIN);
@@ -524,12 +559,26 @@ test.describe("users and invitations (SaaS-mode server)", () => {
 
   async function linkFor(school: { id: string }, email: string, opts: { expired?: boolean } = {}) {
     const token = newInvitationToken();
-    await db.invitation.create({ data: { tenantId: school.id, email, role: Role.TEACHING_STAFF, tokenHash: hashInvitationToken(token), expiresAt: new Date(Date.now() + (opts.expired ? -60_000 : 3_600_000)) } });
+    await db.invitation.create({
+      data: {
+        tenantId: school.id,
+        email,
+        role: Role.TEACHING_STAFF,
+        tokenHash: hashInvitationToken(token),
+        expiresAt: new Date(Date.now() + (opts.expired ? -60_000 : 3_600_000)),
+      },
+    });
     return `/accept-invite#token=${token}`;
   }
 
-  test("the Users page: people, a pending and an expired invitation, a search with no result, and each dialog open (with its errors)", async ({ page, isMobile }) => {
-    const school = await createTenant({ name: "Alpha School with a rather long name to prove it wraps", campuses: ["Alpha North", "Alpha South"] });
+  test("the Users page: people, a pending and an expired invitation, a search with no result, and each dialog open (with its errors)", async ({
+    page,
+    isMobile,
+  }) => {
+    const school = await createTenant({
+      name: "Alpha School with a rather long name to prove it wraps",
+      campuses: ["Alpha North", "Alpha South"],
+    });
     const boss = await createUser({ name: "Amina Yusuf with a rather long name to prove it wraps too" });
     await addMembership(boss.id, school.id, Role.ADMIN);
     const tola = await createUser({ name: "Tola Teacher" });
@@ -537,8 +586,26 @@ test.describe("users and invitations (SaaS-mode server)", () => {
     const gone = await createUser({ name: "Gone Parent" });
     await addMembership(gone.id, school.id, Role.PARENT);
     await db.tenantMembership.updateMany({ where: { userId: gone.id }, data: { deactivatedAt: new Date() } });
-    await db.invitation.create({ data: { tenantId: school.id, email: "waiting.for.an.answer@example.test", role: Role.STUDENT, campusId: school.campuses[1].id, tokenHash: "a".repeat(64), invitedById: boss.id, expiresAt: new Date(Date.now() + 5 * 86_400_000) } });
-    await db.invitation.create({ data: { tenantId: school.id, email: "too.late@example.test", role: Role.PARENT, tokenHash: "b".repeat(64), expiresAt: new Date(Date.now() - 3_600_000) } });
+    await db.invitation.create({
+      data: {
+        tenantId: school.id,
+        email: "waiting.for.an.answer@example.test",
+        role: Role.STUDENT,
+        campusId: school.campuses[1].id,
+        tokenHash: "a".repeat(64),
+        invitedById: boss.id,
+        expiresAt: new Date(Date.now() + 5 * 86_400_000),
+      },
+    });
+    await db.invitation.create({
+      data: {
+        tenantId: school.id,
+        email: "too.late@example.test",
+        role: Role.PARENT,
+        tokenHash: "b".repeat(64),
+        expiresAt: new Date(Date.now() - 3_600_000),
+      },
+    });
     await signInThroughUi(page, boss);
     await page.goto(`/schools/${school.code}/users`);
     await expect(page.getByText("2 people")).toBeVisible();
@@ -576,7 +643,10 @@ test.describe("users and invitations (SaaS-mode server)", () => {
     await checkScreen(page, "/users (after an action: success notice)", isMobile);
   });
 
-  test("the accept-invite page: the new-person form (idle and with errors), sign in first, join as the signed-in invitee, a different account, a dead link, and success", async ({ page, isMobile }) => {
+  test("the accept-invite page: the new-person form (idle and with errors), sign in first, join as the signed-in invitee, a different account, a dead link, and success", async ({
+    page,
+    isMobile,
+  }) => {
     const school = await createTenant({ name: "Alpha School with a rather long name to prove it wraps", campuses: [] });
     await page.goto(await linkFor(school, "brand.new.person@example.test"));
     await expect(page.getByRole("heading", { level: 1, name: /^Join Alpha School/ })).toBeVisible();
@@ -642,9 +712,27 @@ test.describe("dev email inbox widget (the staging-mode server)", () => {
     // A list and a message, with awkward lengths: a long address, a long subject, an unbroken link.
     const now = Date.now();
     const emails = [
-      { id: "a", to: "a-rather-long-address-for-a-person@some-school-with-a-long-domain-name.example.com", subject: "Reset your Octalve Edu password — and a subject long enough to need truncating in the list", text: "Someone asked to reset the password.\n\nOpen this link within 30 minutes:\nhttps://school.example.com/reset-password#token=aVeryLongTokenWithoutAnyBreaksInItAtAllAbcdefghijklmnopqrstuvwxyz0123456789\n\nIf you didn't ask, ignore this.", sentAt: new Date(now).toISOString() },
-      { id: "b", to: "teacher@school.example", subject: "Two-step verification is on for your account", text: "Two-step verification was just turned on.", sentAt: new Date(now - 60_000).toISOString() },
-      { id: "c", to: "admin@school.example", subject: "Your password was changed", text: "The password was changed.", sentAt: new Date(now - 120_000).toISOString() },
+      {
+        id: "a",
+        to: "a-rather-long-address-for-a-person@some-school-with-a-long-domain-name.example.com",
+        subject: "Reset your Octalve Edu password — and a subject long enough to need truncating in the list",
+        text: "Someone asked to reset the password.\n\nOpen this link within 30 minutes:\nhttps://school.example.com/reset-password#token=aVeryLongTokenWithoutAnyBreaksInItAtAllAbcdefghijklmnopqrstuvwxyz0123456789\n\nIf you didn't ask, ignore this.",
+        sentAt: new Date(now).toISOString(),
+      },
+      {
+        id: "b",
+        to: "teacher@school.example",
+        subject: "Two-step verification is on for your account",
+        text: "Two-step verification was just turned on.",
+        sentAt: new Date(now - 60_000).toISOString(),
+      },
+      {
+        id: "c",
+        to: "admin@school.example",
+        subject: "Your password was changed",
+        text: "The password was changed.",
+        sentAt: new Date(now - 120_000).toISOString(),
+      },
     ];
     await page.route("**/api/v1/dev/email-inbox", (route) =>
       route.request().method() === "GET"
