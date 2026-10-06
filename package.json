@@ -23,7 +23,9 @@
     "test:https": "playwright test --project=https",
     "db:roles": "node scripts/db-roles.mjs",
     "lanes:sync": "node scripts/lanes.mjs sync",
-    "test:lanes": "node scripts/lanes.mjs test"
+    "test:lanes": "node scripts/lanes.mjs test",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "pnpm": {
     "onlyBuiltDependencies": [
@@ -53,6 +55,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.3.6",
     "jsqr": "1.4.0",
+    "prettier": "^3.9.9",
     "prisma": "6.19.3",
     "tailwindcss": "^4",
     "typescript": "^5"

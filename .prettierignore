@@ -1,0 +1,14 @@
+# generated, vendored or deliberately hand-formatted
+.next/
+node_modules/
+test-results/
+playwright-report/
+tests/.tmp/
+coverage/
+pnpm-lock.yaml
+next-env.d.ts
+# SQL migrations are immutable once applied: never reformat them
+prisma/migrations/
+# prose is wrapped by hand (long tables); formatting it would only churn
+**/*.md
+docs/
