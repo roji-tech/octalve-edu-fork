@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import { test, expect } from "@playwright/test";
-import type { Role } from "@prisma/client";
+import type { Prisma, Role } from "@prisma/client";
 import { Role as R, addMembership, createTenant, createUser, db, deactivateMembership, removeCreatedTenants, seedInstance, type TestTenant } from "../support/db";
 import { withEnv } from "../support/with-env";
 import { forTenant, type Tx } from "@/lib/tenant/for-tenant";
@@ -321,6 +321,76 @@ test.describe("accepting — a person with no account", () => {
     expect(await acceptInvitation({ token, viewerUserId: null, newAccount: { name: "Late", passwordHash: await strongHash() } })).toEqual({ ok: false, reason: "INVALID" });
     await db.invitation.update({ where: { id: invitation.id }, data: { expiresAt: new Date(Date.now() + 30_000) } });
     expect((await acceptInvitation({ token, viewerUserId: null, newAccount: { name: "On Time", passwordHash: await strongHash() } })).ok).toBe(true);
+  });
+});
+
+// A lost race, made DETERMINISTIC (found by mutations A6, A7, A8, A10: the claim's conditions only matter when something changes the
+// row AFTER the pre-read, and a plain concurrent test hits that window by luck). A second connection changes the row inside a transaction
+// it has not committed yet; `acceptInvitation` reads the still-unchanged row, then BLOCKS on the claim until the other side commits —
+// and what it does next is exactly the code under test.
+async function whileHeld<T>(hold: (tx: Prisma.TransactionClient) => Promise<unknown>, run: () => Promise<T>): Promise<T> {
+  let release!: () => void;
+  const released = new Promise<void>((resolve) => (release = resolve));
+  let held!: () => void;
+  const isHeld = new Promise<void>((resolve) => (held = resolve));
+  const other = db.$transaction(
+    async (tx) => {
+      await hold(tx);
+      held();
+      await released;
+    },
+    { timeout: 30_000 },
+  );
+  await isHeld;
+  const running = run();
+  const deadline = Date.now() + 10_000;
+  for (;;) {
+    const [{ waiting }] = await db.$queryRaw<{ waiting: bigint }[]>`SELECT count(*) AS waiting FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock'`;
+    if (Number(waiting) > 0) break;
+    if (Date.now() > deadline) throw new Error("the accept never reached the row lock — the test would prove nothing");
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  release();
+  await other;
+  return running;
+}
+
+test.describe("accepting — losing a race AFTER the link was read", () => {
+  test("the link is claimed by someone else in the meantime: INVALID, and no account and no membership appear", async () => {
+    const to = email("lostclaim");
+    const { invitation, token } = await invite(to);
+    const result = await whileHeld(
+      (tx) => tx.invitation.update({ where: { id: invitation.id }, data: { acceptedAt: new Date() } }),
+      async () => acceptInvitation({ token, viewerUserId: null, newAccount: { name: "Too Late", passwordHash: await strongHash() } }),
+    );
+    expect(result).toEqual({ ok: false, reason: "INVALID" });
+    expect(await db.user.count({ where: { email: to } })).toBe(0);
+    expect(await db.tenantMembership.count({ where: { tenantId: a.id, user: { email: to } } })).toBe(0);
+  });
+
+  test("the link is REVOKED in the meantime: INVALID — a revoked link never admits anyone", async () => {
+    const to = email("lostrevoke");
+    const { invitation, token } = await invite(to);
+    const result = await whileHeld(
+      (tx) => tx.invitation.update({ where: { id: invitation.id }, data: { revokedAt: new Date() } }),
+      async () => acceptInvitation({ token, viewerUserId: null, newAccount: { name: "Revoked", passwordHash: await strongHash() } }),
+    );
+    expect(result).toEqual({ ok: false, reason: "INVALID" });
+    expect(await db.user.count({ where: { email: to } })).toBe(0);
+    expect((await db.invitation.findUniqueOrThrow({ where: { id: invitation.id } })).acceptedAt).toBeNull();
+  });
+
+  test("an account for the address appears in the meantime: SIGN_IN_REQUIRED (not a crash), and the link is NOT spent", async () => {
+    const to = email("lostaccount");
+    const { invitation, token } = await invite(to);
+    const result = await whileHeld(
+      (tx) => tx.user.create({ data: { email: to, name: "Got There First", passwordHash: "x" } }),
+      async () => acceptInvitation({ token, viewerUserId: null, newAccount: { name: "Second", passwordHash: await strongHash() } }),
+    );
+    expect(result).toEqual({ ok: false, reason: "SIGN_IN_REQUIRED" });
+    expect(await db.user.count({ where: { email: to } })).toBe(1); // theirs, untouched
+    expect(await db.user.findUniqueOrThrow({ where: { email: to } })).toMatchObject({ name: "Got There First", passwordHash: "x" });
+    expect(await db.invitation.findUniqueOrThrow({ where: { id: invitation.id } })).toMatchObject({ acceptedAt: null, acceptedById: null });
   });
 });
 
