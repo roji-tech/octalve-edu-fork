@@ -126,7 +126,7 @@ fails otherwise. Routes are `withAuth(…, { tenant: true, roles/permissions })`
 
 | Sub-phase | Content | Depends on |
 | :-- | :-- | :-- |
-| 1.0 | `SchoolType` on `Tenant`; `SchoolSettings` auto-created with every tenant; permissions enum + `permissions` on membership (§1.7) | 0.5.2-F |
+| 1.0 | `SchoolType` on `Tenant`; `SchoolSettings` auto-created with every tenant; permissions enum + `permissions` on membership (§1.7) — **✅ built 2026-10-06** (`phases/phase-1.0-foundations.md`; full gate + mutation pass pending) | 0.5.2-F |
 | 1.1 | Academic structure: `AcademicSession`/`Period`, `ClassGroup`/`Arm`, `Subject`, `AssessmentConfig`, `GradeScale` | 1.0 |
 | 1.2 | People: `StaffRecord`, `StudentRecord`, `GuardianLink`, `StudentEnrollment` | 1.1 |
 | 1.3 | Attendance | 1.2 |

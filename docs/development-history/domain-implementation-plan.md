@@ -2149,6 +2149,11 @@ validated against the enum, strict body). Rules, in the same transaction as the 
 - the member list and the Edit dialog show/edit them (checkboxes for staff members; plain-language names and one-line meanings; the live region announces the result).
 Invitation acceptance sets none.
 
+**As built — Phase 1.0 (2026-10-06)** — record: `phases/phase-1.0-foundations.md`, migration `20261010090000_phase_1_0_foundations`. Decisions 1–6 are built as designed. Details worth knowing: (a) the trigger `tenant_creates_settings` is plain (not
+`SECURITY DEFINER`) and restores the caller's `app.tenant_id`; (b) `SchoolSettings.updatedAt` has a database default so the trigger can insert; (c) there is **no DELETE policy** on `SchoolSettings`; (d) `withAuth` validates `permissions` at construction (non-empty, real
+values, needs `tenant: true`); (e) the member list's `permissions` is always present and always in enum order; (f) ADMIN-implies-permissions is applied to the `permissions` option only (decision 5's interpretation, now tested). **Mutation pass deferred to the end of
+Phase 2 by the maintainer's decision; the list above stands as the plan for it.**
+
 ##### 1.1 — Academic structure (migration `…_phase_1_1_academic_structure`)
 All tables below: `tenantId NOT NULL`, `ENABLE`+`FORCE` RLS with `USING` and `WITH CHECK` on `"tenantId" = app_tenant_id()` in the **same migration**, composite FKs (reconciliation 2),
 `createdAt`/`updatedAt`, `archivedAt` where a later phase will reference the row (**archive, never delete**: there is no `DELETE` route for any of them). Added to the catalog guard's
