@@ -46,6 +46,15 @@ test.describe("POST /api/v1/setup — success and what it creates", () => {
     expect(memberships.map((m) => m.role)).toEqual(["ADMIN"]);
     expect((await db.systemSettings.findUniqueOrThrow({ where: { id: "global" } })).setupComplete).toBe(true);
 
+    // The school exists with its kind and its settings row — made by the database trigger, through the wizard's own code path (runtime role,
+    // tenant context not yet set): the secure defaults are in place without the wizard knowing the table exists.
+    const school = await db.tenant.findUniqueOrThrow({ where: { code: "bright-future-academy" } });
+    expect(school.schoolType).toBe("K12");
+    expect(await db.schoolSettings.findUniqueOrThrow({ where: { tenantId: school.id } })).toMatchObject({
+      resultApprovalRequired: true,
+      mfaRequiredForTeaching: true,
+    });
+
     const audit = await db.auditLog.findFirstOrThrow({ where: { action: "SETUP_WIZARD_COMPLETE" } });
     expect(audit.actorUserId).toBe(user.id);
     expect(JSON.stringify(audit)).not.toContain(body.password); // the password must never reach the audit trail

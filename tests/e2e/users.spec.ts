@@ -265,6 +265,55 @@ test.describe("changing people", () => {
     expect(school_.json.data).toMatchObject({ role: "NON_TEACHING_STAFF", campuses: [{ name: "Alpha South" }] }); // their next request already sees it
   });
 
+  test("Extra permissions: offered to staff only, ticked and saved with the role unchanged, shown in the list, and cleared — with a warning first — when the role moves to one that cannot hold them", async ({
+    page,
+  }) => {
+    const bola = await member(Role.NON_TEACHING_STAFF, "Bola Bursar", 0);
+    await signedInAdmin(page);
+    const edit = row(page, "Bola Bursar").getByRole("button", { name: "Change role or campus for Bola Bursar" });
+
+    await edit.click();
+    const group = dialog(page).getByRole("group", { name: "Extra permissions" });
+    await expect(group.getByRole("checkbox")).toHaveCount(4);
+    await expect(group.getByRole("checkbox", { checked: true })).toHaveCount(0);
+    await expect(group).toContainText("Administrators can do all of these already.");
+    await group.getByLabel("Manage fees and payments").check();
+    await group.getByLabel("Approve results").check();
+    await dialog(page).getByRole("button", { name: "Save changes" }).click();
+    await expect(dialog(page)).toBeHidden();
+    await expect(notice(page)).toContainText(
+      "Saved. Bola Bursar is now Non-teaching staff at Alpha North with extra permissions: approve results, manage fees and payments.",
+    );
+    await expect(row(page, "Bola Bursar")).toContainText("Extra: Approve results, Manage fees and payments");
+    expect((await db.tenantMembership.findFirstOrThrow({ where: { userId: bola.id } })).permissions).toEqual([
+      "CAN_APPROVE_RESULTS",
+      "CAN_MANAGE_FINANCE",
+    ]);
+
+    await edit.click(); // reopened: what they hold is ticked, and nothing else
+    await expect(dialog(page).getByLabel("Manage fees and payments")).toBeChecked();
+    await expect(dialog(page).getByLabel("Approve results")).toBeChecked();
+    await expect(dialog(page).getByLabel("Publish announcements")).not.toBeChecked();
+    await dialog(page).getByRole("button", { name: "Save changes" }).click(); // unchanged → sends nothing
+    await expect(dialog(page)).toBeHidden();
+    expect(await db.auditLog.count({ where: { tenantId: school.id, targetId: bola.id, action: "MEMBER_PERMISSIONS_CHANGED" } })).toBe(1);
+
+    await edit.click();
+    await dialog(page).getByLabel("Role").selectOption("PARENT");
+    await expect(group).toBeHidden();
+    await expect(dialog(page)).toContainText(
+      "Extra permissions can only be given to staff. Saving will remove the extra permissions Bola Bursar has now.",
+    );
+    await dialog(page).getByRole("button", { name: "Save changes" }).click();
+    await expect(dialog(page)).toBeHidden();
+    await expect(row(page, "Bola Bursar")).not.toContainText("Extra:");
+    expect(await db.tenantMembership.findFirstOrThrow({ where: { userId: bola.id } })).toMatchObject({ role: "PARENT", permissions: [] });
+    await edit.click();
+    await dialog(page).getByLabel("Role").selectOption("ADMIN");
+    await expect(dialog(page)).toContainText("Administrators can do everything, so extra permissions don't apply.");
+    await page.keyboard.press("Escape");
+  });
+
   test("Deactivate asks first and says what it does; confirming ends their access at once; Reactivate brings them back", async ({
     page,
   }) => {

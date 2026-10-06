@@ -630,7 +630,13 @@ test.describe("users and invitations (SaaS-mode server)", () => {
 
     await page.getByRole("button", { name: "Change role or campus for Tola Teacher" }).click();
     await expect(page.getByRole("dialog").getByRole("heading", { name: "Change access for Tola Teacher" })).toBeVisible();
-    await checkScreen(page, "/users (edit dialog)", isMobile);
+    await expect(page.getByRole("dialog").getByRole("group", { name: "Extra permissions" })).toBeVisible();
+    await checkScreen(page, "/users (edit dialog, staff: extra permissions offered)", isMobile);
+    await page.getByRole("dialog").getByLabel("Manage fees and payments").check();
+    await checkScreen(page, "/users (edit dialog, a permission ticked)", isMobile);
+    await page.getByRole("dialog").getByLabel("Role").selectOption("PARENT");
+    await expect(page.getByRole("dialog").getByText("Extra permissions can only be given to staff.")).toBeVisible();
+    await checkScreen(page, "/users (edit dialog, a role that cannot hold permissions)", isMobile);
     await page.keyboard.press("Escape");
 
     await page.getByRole("button", { name: "Deactivate Tola Teacher" }).click();
