@@ -27,6 +27,7 @@ const ctx = (t: TestTenant): TenantAuthContext["tenant"] => ({
   tenantName: t.name,
   role: "ADMIN",
   campusId: null,
+  permissions: [],
   run: <T>(fn: (tx: Tx) => Promise<T>) => forTenant(trustedTenantId(t.id)).transaction(fn),
 });
 

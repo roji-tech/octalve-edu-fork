@@ -18,9 +18,25 @@ test.describe("withAuth refuses options that can't be evaluated safely", () => {
     expect(() => withAuth(handler, { roles: [] } as never)).toThrow();
   });
 
-  test("`permissions` throws at construction, with or without a tenant", () => {
-    expect(() => withAuth(handler, { permissions: ["students:read"] } as never)).toThrow(/§1\.7/);
-    expect(() => withAuth(handler, { tenant: true, permissions: ["students:read"] } as never)).toThrow(/§1\.7/);
+  test("`permissions` without `tenant: true` throws at construction, like `roles` — a permission only means something against one school's membership", () => {
+    expect(() => withAuth(handler, { permissions: ["CAN_MANAGE_FINANCE"] } as never)).toThrow(/needs `tenant: true`/);
+    expect(() => withAuth(handler, { tenant: false, permissions: ["CAN_MANAGE_FINANCE"] } as never)).toThrow(/needs `tenant: true`/);
+  });
+
+  test("`permissions` must be a NON-EMPTY array of real permissions: an empty list would read as 'everyone', a typo would never match", () => {
+    for (const bad of [[], "CAN_MANAGE_FINANCE", ["CAN_MANAGE_FINANCES"], ["students:read"], [null]]) {
+      expect(() => withAuth(handler as never, { tenant: true, permissions: bad } as never), JSON.stringify(bad)).toThrow(
+        /permissions|permission/,
+      );
+    }
+    expect(typeof withAuth(handler as never, { tenant: true, permissions: ["CAN_MANAGE_FINANCE"] })).toBe("function");
+    expect(
+      typeof withAuth(handler as never, {
+        tenant: true,
+        roles: ["TEACHING_STAFF"],
+        permissions: ["CAN_APPROVE_RESULTS", "CAN_PUBLISH_CONTENT"],
+      }),
+    ).toBe("function");
   });
 
   test("`roles` that is not an array throws", () => {

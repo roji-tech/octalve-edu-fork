@@ -1,4 +1,4 @@
-import type { Role } from "@prisma/client";
+import type { Permission, Role } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { assertRlsEnforced } from "@/lib/tenant/assert-rls";
 import { forUser } from "@/lib/tenant/for-tenant";
@@ -19,6 +19,9 @@ export type TenantContext = {
   /// The campus the membership is anchored to. An ADMIN is tenant-wide whatever this is (it is bookkeeping for an
   /// admin — AlEemaan's branch rule, kept identical on purpose); other roles are scoped to it.
   campusId: string | null;
+  /// The extra capabilities the caller holds IN THIS TENANT (plan §1.7). Empty for an ADMIN (who implies them all — see
+  /// lib/auth/authorize.ts) and for anyone not granted any. Read from the same membership row as the role, on every request.
+  permissions: readonly Permission[];
 };
 
 export type ResolveResult =
@@ -77,7 +80,7 @@ export async function resolveTenant(input: { userId: string; code: string }): Pr
     tx.tenantMembership.findFirst({
       // A deactivated membership is no membership: the person was removed from this school (the row stays for history).
       where: { userId: input.userId, tenant: tenantFilter, deactivatedAt: null },
-      select: { role: true, campusId: true, tenant: { select: { id: true, code: true, name: true } } },
+      select: { role: true, campusId: true, permissions: true, tenant: { select: { id: true, code: true, name: true } } },
     }),
   );
   if (!membership) return FORBIDDEN;
@@ -90,6 +93,7 @@ export async function resolveTenant(input: { userId: string; code: string }): Pr
       tenantName: membership.tenant.name,
       role: membership.role,
       campusId: membership.campusId,
+      permissions: membership.permissions,
     },
   };
 }
