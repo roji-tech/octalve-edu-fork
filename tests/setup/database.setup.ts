@@ -3,6 +3,7 @@ import { test as setup } from "@playwright/test";
 import { PrismaClient } from "@prisma/client";
 import { APP_DB_ROLE, TEST_APP_DATABASE_URL, TEST_DATABASE_NAME, TEST_DATABASE_URL } from "../support/env";
 import { db, resetDatabase } from "../support/db";
+import { resetOutbox } from "../support/outbox";
 
 // Runs once, first, before any suite that needs a database (the other projects
 // depend on this one). Creates the *_test database if it doesn't exist yet,
@@ -70,4 +71,5 @@ setup("test database is created, migrated and empty", async () => {
 
   await resetDatabase();
   await db.$disconnect();
+  await resetOutbox();
 });
