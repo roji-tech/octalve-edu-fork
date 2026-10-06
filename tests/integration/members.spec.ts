@@ -25,6 +25,7 @@ const ctx = (t: TestTenant): TenantAuthContext["tenant"] => ({
   tenantId: trustedTenantId(t.id),
   tenantCode: t.code,
   tenantName: t.name,
+  schoolType: "K12",
   role: "ADMIN",
   campusId: null,
   permissions: [],
