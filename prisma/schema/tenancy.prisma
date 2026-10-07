@@ -19,21 +19,28 @@ model Tenant {
   schoolType SchoolType @default(K12)
   createdAt  DateTime   @default(now())
 
-  campuses    Campus[]
-  memberships TenantMembership[]
-  invitations Invitation[]
+  campuses          Campus[]
+  memberships       TenantMembership[]
+  invitations       Invitation[]
   /// Exactly one row, created by the database when the tenant is (a trigger — see the phase 1.0 migration).
-  settings    SchoolSettings?
-  sessions    AcademicSession[]
-  periods     AcademicPeriod[]
-  classGroups ClassGroup[]
-  classArms   ClassArm[]
-  subjects    Subject[]
-  offerings   SubjectOffering[]
-  schemes     AssessmentScheme[]
-  components  AssessmentComponent[]
-  gradeScales GradeScale[]
-  gradeBands  GradeBand[]
+  settings          SchoolSettings?
+  sessions          AcademicSession[]
+  periods           AcademicPeriod[]
+  classGroups       ClassGroup[]
+  classArms         ClassArm[]
+  subjects          Subject[]
+  offerings         SubjectOffering[]
+  schemes           AssessmentScheme[]
+  components        AssessmentComponent[]
+  gradeScales       GradeScale[]
+  gradeBands        GradeBand[]
+  staffRecords      StaffRecord[]
+  staffAssignments  StaffSubjectAssignment[]
+  studentRecords    StudentRecord[]
+  admissionCounters AdmissionCounter[]
+  guardianRecords   GuardianRecord[]
+  guardianLinks     GuardianLink[]
+  enrollments       StudentEnrollment[]
 }
 
 /// A branch/campus under one tenant (PRD §7) — distinct from multi-tenancy:
@@ -44,11 +51,13 @@ model Campus {
   tenantId String
   name     String
 
-  tenant      Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  memberships TenantMembership[]
-  invitations Invitation[]
-  sessions    AcademicSession[]
-  classGroups ClassGroup[]
+  tenant         Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  memberships    TenantMembership[]
+  invitations    Invitation[]
+  sessions       AcademicSession[]
+  classGroups    ClassGroup[]
+  staffRecords   StaffRecord[]
+  studentRecords StudentRecord[]
 
   /// A school cannot have two campuses of the same name (compared exactly, after the API trims it).
   @@unique([tenantId, name])
@@ -88,9 +97,13 @@ model TenantMembership {
   /// `permissions = '{}' OR role IN ('TEACHING_STAFF','NON_TEACHING_STAFF')`); ADMIN implies every permission and holds none stored.
   permissions Permission[] @default([])
 
-  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tenant Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  campus Campus? @relation(fields: [campusId], references: [id], onDelete: SetNull)
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  campus          Campus?          @relation(fields: [campusId], references: [id], onDelete: SetNull)
+  /// The records (at most one each, enforced by partial unique indexes) that name this membership's person as their sign-in account.
+  staffRecords    StaffRecord[]
+  studentRecords  StudentRecord[]
+  guardianRecords GuardianRecord[]
 
   /// Set when an administrator deactivates the person IN THIS SCHOOL. The row stays (history, reactivation) but it is no
   /// longer a membership: every reader treats a deactivated one as absent — the resolver, the person's school list, the
@@ -108,12 +121,14 @@ model TenantMembership {
 /// expiring (expiresAt). Tenant-scoped like every table with a tenantId: row-level security in the same migration, plus ONE
 /// extra read path — by the token's hash — because the invitee is not a member of anything yet when they open the link.
 model Invitation {
-  id       String  @id @default(cuid())
-  tenantId String
+  id            String  @id @default(cuid())
+  tenantId      String
   /// Lower-cased. The invitation is for whoever controls this address; opening the link is the proof.
-  email    String
-  role     Role
-  campusId String?
+  email         String
+  role          Role
+  campusId      String?
+  /// When set, accepting this invitation also links the new member to that staff record (plan 1.2, decision P5).
+  staffRecordId String?
 
   tokenHash String @unique
 
@@ -124,10 +139,11 @@ model Invitation {
   acceptedAt   DateTime?
   revokedAt    DateTime?
 
-  tenant     Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  campus     Campus? @relation(fields: [campusId], references: [id], onDelete: SetNull)
-  invitedBy  User?   @relation("InvitationsSent", fields: [invitedById], references: [id], onDelete: SetNull)
-  acceptedBy User?   @relation("InvitationsAccepted", fields: [acceptedById], references: [id], onDelete: SetNull)
+  tenant      Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  campus      Campus?      @relation(fields: [campusId], references: [id], onDelete: SetNull)
+  staffRecord StaffRecord? @relation(fields: [tenantId, staffRecordId], references: [tenantId, id], onDelete: NoAction)
+  invitedBy   User?        @relation("InvitationsSent", fields: [invitedById], references: [id], onDelete: SetNull)
+  acceptedBy  User?        @relation("InvitationsAccepted", fields: [acceptedById], references: [id], onDelete: SetNull)
 
   @@index([tenantId, email])
   @@index([tenantId, createdAt])

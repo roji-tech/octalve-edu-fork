@@ -38,11 +38,12 @@ model AcademicSession {
   createdAt          DateTime      @default(now())
   updatedAt          DateTime      @default(now()) @updatedAt
 
-  tenant     Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  campus     Campus?           @relation(fields: [tenantId, campusId], references: [tenantId, id], onDelete: NoAction)
-  copiedFrom AcademicSession?  @relation("SessionCopies", fields: [tenantId, copiedFromId], references: [tenantId, id], onDelete: NoAction)
-  copies     AcademicSession[] @relation("SessionCopies")
-  periods    AcademicPeriod[]
+  tenant      Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  campus      Campus?             @relation(fields: [tenantId, campusId], references: [tenantId, id], onDelete: NoAction)
+  copiedFrom  AcademicSession?    @relation("SessionCopies", fields: [tenantId, copiedFromId], references: [tenantId, id], onDelete: NoAction)
+  copies      AcademicSession[]   @relation("SessionCopies")
+  periods     AcademicPeriod[]
+  enrollments StudentEnrollment[]
 
   @@unique([tenantId, id])
   @@index([tenantId, status])
@@ -108,8 +109,10 @@ model ClassArm {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @default(now()) @updatedAt
 
-  tenant     Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  classGroup ClassGroup @relation(fields: [tenantId, classGroupId], references: [tenantId, id], onDelete: NoAction)
+  tenant           Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  classGroup       ClassGroup               @relation(fields: [tenantId, classGroupId], references: [tenantId, id], onDelete: NoAction)
+  enrollments      StudentEnrollment[]
+  staffAssignments StaffSubjectAssignment[]
 
   @@unique([tenantId, id])
   @@index([tenantId, classGroupId])
@@ -125,8 +128,9 @@ model Subject {
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @default(now()) @updatedAt
 
-  tenant    Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  offerings SubjectOffering[]
+  tenant           Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  offerings        SubjectOffering[]
+  staffAssignments StaffSubjectAssignment[]
 
   @@unique([tenantId, id])
   @@index([tenantId])

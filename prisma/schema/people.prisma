@@ -1,0 +1,178 @@
+// --- People and enrolment (Phase 1.2; plan "Build design — Phase 1.2", reconciliations 1–6 and decisions P2–P8) ---
+//
+// Same rules as the academic tables: every row carries its own tenantId and a composite foreign key to its parents on (tenantId, id), so a row can
+// never point at another school's parent; RLS and the rules Prisma cannot express (partial unique indexes, CHECKs) live in the migration SQL.
+// Nothing here is deleted by a request: records are ARCHIVED. There is no national-ID, gender, religion or photo column on purpose (data minimisation).
+
+enum StaffCategory {
+  TEACHING
+  NON_TEACHING
+}
+
+enum Relationship {
+  MOTHER
+  FATHER
+  GUARDIAN
+  OTHER
+}
+
+/// PENDING and REVOKED exist for later phases. In 1.2 only an administrator creates a link, and it is APPROVED; a parent can never create or approve one.
+enum GuardianLinkStatus {
+  PENDING
+  APPROVED
+  REVOKED
+}
+
+/// Only ACTIVE and WITHDRAWN are written in 1.2; the others are the year-end outcomes Phase 1.4's promotion sets.
+enum EnrollmentStatus {
+  ACTIVE
+  PROMOTED
+  REPEATED
+  WITHDRAWN
+  TRANSFERRED
+  ALUMNI
+}
+
+/// A member of staff as the SCHOOL knows them — not a sign-in account. userId is null for someone who never signs in (a security guard); when set it must
+/// be a member of this same school (composite FK to TenantMembership) and is unique per school (partial unique index).
+model StaffRecord {
+  id         String        @id @default(cuid())
+  tenantId   String
+  campusId   String?
+  userId     String?
+  category   StaffCategory
+  firstName  String
+  lastName   String
+  phone      String?
+  /// Lower-cased. Unique per school among live records when present.
+  email      String?
+  archivedAt DateTime?
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @default(now()) @updatedAt
+
+  tenant      Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  campus      Campus?                  @relation(fields: [tenantId, campusId], references: [tenantId, id], onDelete: NoAction)
+  membership  TenantMembership?        @relation(fields: [userId, tenantId], references: [userId, tenantId], onDelete: NoAction)
+  assignments StaffSubjectAssignment[]
+  invitations Invitation[]
+
+  @@unique([tenantId, id])
+  @@index([tenantId])
+}
+
+/// "This teacher teaches this subject to this arm." Real DELETE (nothing references it yet; 1.3/1.4 will decide archive-on-reference like SubjectOffering).
+model StaffSubjectAssignment {
+  id            String   @id @default(cuid())
+  tenantId      String
+  staffRecordId String
+  subjectId     String
+  classArmId    String
+  createdAt     DateTime @default(now())
+
+  tenant      Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  staffRecord StaffRecord @relation(fields: [tenantId, staffRecordId], references: [tenantId, id], onDelete: NoAction)
+  subject     Subject     @relation(fields: [tenantId, subjectId], references: [tenantId, id], onDelete: NoAction)
+  classArm    ClassArm    @relation(fields: [tenantId, classArmId], references: [tenantId, id], onDelete: NoAction)
+
+  @@unique([staffRecordId, subjectId, classArmId])
+  @@index([tenantId])
+}
+
+/// A pupil/student. admissionNo is human-facing (typed by the school or generated `YYYY/NNNN`), unique per school ignoring case INCLUDING archived records
+/// (a number is never reused) and NEVER used as a URL or lookup key by a route. userId exists for the 1.4 student sign-in; no route sets it in 1.2.
+model StudentRecord {
+  id          String    @id @default(cuid())
+  tenantId    String
+  campusId    String?
+  userId      String?
+  firstName   String
+  middleName  String?
+  lastName    String
+  dateOfBirth DateTime  @db.Date
+  admissionNo String
+  archivedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @default(now()) @updatedAt
+
+  tenant      Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  campus      Campus?             @relation(fields: [tenantId, campusId], references: [tenantId, id], onDelete: NoAction)
+  membership  TenantMembership?   @relation(fields: [userId, tenantId], references: [userId, tenantId], onDelete: NoAction)
+  enrollments StudentEnrollment[]
+  guardians   GuardianLink[]
+
+  @@unique([tenantId, id])
+  @@index([tenantId])
+}
+
+/// The next admission-number sequence for a school and calendar year. Incremented with UPDATE … RETURNING in the same transaction as the student insert.
+model AdmissionCounter {
+  tenantId String
+  year     Int
+  next     Int    @default(1)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@id([tenantId, year])
+}
+
+/// A parent/guardian as the school knows them (usually no account yet; one guardian may be linked to several children).
+model GuardianRecord {
+  id         String    @id @default(cuid())
+  tenantId   String
+  userId     String?
+  firstName  String
+  lastName   String
+  phone      String?
+  email      String?
+  archivedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @default(now()) @updatedAt
+
+  tenant     Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  membership TenantMembership? @relation(fields: [userId, tenantId], references: [userId, tenantId], onDelete: NoAction)
+  links      GuardianLink[]
+
+  @@unique([tenantId, id])
+  @@index([tenantId])
+}
+
+model GuardianLink {
+  id           String             @id @default(cuid())
+  tenantId     String
+  studentId    String
+  guardianId   String
+  relationship Relationship
+  /// At most one live primary contact per student (partial unique index).
+  isPrimary    Boolean            @default(false)
+  status       GuardianLinkStatus @default(APPROVED)
+  approvedById String?
+  createdAt    DateTime           @default(now())
+  revokedAt    DateTime?
+
+  tenant   Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  student  StudentRecord  @relation(fields: [tenantId, studentId], references: [tenantId, id], onDelete: NoAction)
+  guardian GuardianRecord @relation(fields: [tenantId, guardianId], references: [tenantId, id], onDelete: NoAction)
+
+  @@unique([studentId, guardianId])
+  @@index([tenantId, studentId])
+}
+
+/// One row per student per SESSION (a pupil keeps one class for the year). Moving arm inside the session edits the row (audited).
+model StudentEnrollment {
+  id         String           @id @default(cuid())
+  tenantId   String
+  studentId  String
+  sessionId  String
+  classArmId String
+  status     EnrollmentStatus @default(ACTIVE)
+  enrolledAt DateTime         @default(now())
+  updatedAt  DateTime         @default(now()) @updatedAt
+
+  tenant   Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  student  StudentRecord   @relation(fields: [tenantId, studentId], references: [tenantId, id], onDelete: NoAction)
+  session  AcademicSession @relation(fields: [tenantId, sessionId], references: [tenantId, id], onDelete: NoAction)
+  classArm ClassArm        @relation(fields: [tenantId, classArmId], references: [tenantId, id], onDelete: NoAction)
+
+  @@unique([tenantId, studentId, sessionId])
+  @@index([tenantId, classArmId])
+}
