@@ -220,7 +220,7 @@ test.describe("closing a session", () => {
     ).toBeLessThan(60_000);
 
     await page.getByRole("button", { name: "Cancel the planned close of 2026/2027" }).click();
-    await expect(dialog(page).getByRole("button", { name: "Cancel" })).toBeFocused(); // the safe choice has focus
+    await expect(dialog(page).getByRole("button", { name: "Cancel", exact: true })).toBeFocused(); // the safe choice has focus
     await dialog(page).getByRole("button", { name: "Cancel the close" }).click();
     await expect(notice(page)).toContainText("The planned close of 2026/2027 was cancelled.");
     await expect(item(page, "2026/2027")).not.toContainText("Closes ");

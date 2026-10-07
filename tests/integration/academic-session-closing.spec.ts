@@ -108,7 +108,7 @@ test.describe("scheduling", () => {
     expect(await closeSession(admin(), boss.id, s.id)).toMatchObject({ ok: true, changed: false });
     expect(near((await row(s.id)).closeAt, asked + MINUTE_MS)).toBe(true);
 
-    const t = await openSession("2027/2028", y2027);
+    const t = await openSession("2027/2028", y2027, a, a.campuses[0].id); // another scope: the first is still ACTIVE for its minute
     await closeSession(admin(), boss.id, t.id); // a day …
     expect(await closeSession(admin(), boss.id, t.id, { force: true })).toMatchObject({ ok: true, changed: true }); // … brought forward to a minute
     const stored = await row(t.id);
@@ -262,6 +262,8 @@ test.describe("reopening", () => {
   });
 
   test("only a CLOSED, unarchived session can be reopened", async () => {
+    const gone = await closedSession("2025/2026", { startDate: "2025-09-01", endDate: "2026-07-31" });
+    await archiveSession(admin(), boss.id, gone.id);
     const open = await openSession("2026/2027");
     expect(await reopenSession(admin(), boss.id, open.id, "It is not closed at all")).toMatchObject({ ok: false, reason: "WRONG_STATE" });
     const planned = await createSession(admin(), boss.id, { label: "Planned", ...y2027 });
@@ -270,8 +272,6 @@ test.describe("reopening", () => {
       ok: false,
       reason: "WRONG_STATE",
     });
-    const gone = await closedSession("2025/2026", { startDate: "2025-09-01", endDate: "2026-07-31" });
-    await archiveSession(admin(), boss.id, gone.id);
     expect(await reopenSession(admin(), boss.id, gone.id, "It is archived now")).toMatchObject({ ok: false, reason: "ARCHIVED" });
     expect(await reopenSession(admin(), boss.id, "no-such-session", "There is nothing here")).toEqual({ ok: false, reason: "NOT_FOUND" });
   });
