@@ -257,6 +257,8 @@ export function CopyForwardDialog({
     if (reply.ok) return setPlan(reply.data!.plan as CopyForwardPlan);
     const inline: Record<string, string> = {};
     for (const detail of reply.details ?? []) inline[detail.path.replace(/^body\./, "")] = detail.message;
+    // The server can only guess the next name from a year pair ("2026/2027"); for any other name it asks for one, and the field says so in words.
+    if (inline.label && !label.trim()) inline.label = "The next name can't be worked out from this one. Type the new session's name.";
     if (Object.keys(inline).length > 0 && reply.details?.every((d) => d.path === "body.startDate" || d.path === "body.label"))
       setFieldError(inline);
     else setPreviewError(failureText(reply.status, reply.message));
@@ -302,7 +304,7 @@ export function CopyForwardDialog({
               value={label}
               onChange={(e) => (setLabel(e.target.value), changed())}
               error={errors.label ?? fieldError.label}
-              hint="Leave empty to continue the pattern, such as 2027/2028."
+              hint="Leave empty to continue a year pair such as 2027/2028. Any other name must be typed."
               maxLength={40}
               autoComplete="off"
               disabled={pending}
