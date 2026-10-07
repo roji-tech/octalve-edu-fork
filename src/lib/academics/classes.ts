@@ -58,7 +58,7 @@ const toGroup = (row: GroupRow): ClassGroupView => ({
 });
 
 /// Which class groups this member may see (decision 7): an ADMIN every campus's; anyone else the school-wide ones and their own campus's.
-function groupsVisibleTo(tenant: TenantCtx): Prisma.ClassGroupWhereInput {
+export function groupsVisibleTo(tenant: TenantCtx): Prisma.ClassGroupWhereInput {
   if (tenant.role === "ADMIN") return {};
   return { OR: [{ campusId: null }, ...(tenant.campusId ? [{ campusId: tenant.campusId }] : [])] };
 }
