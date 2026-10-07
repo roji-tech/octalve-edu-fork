@@ -17,11 +17,36 @@ withAuth(handler, { roles: ["ADMIN"] });
 // @ts-expect-error `roles` with `tenant: false`
 withAuth(handler, { tenant: false, roles: ["ADMIN"] });
 
-// @ts-expect-error `permissions` is not available until §1.7
-withAuth(handler, { permissions: ["students:read"] });
+// `permissions`, like `roles`, needs a verified school.
+// @ts-expect-error `permissions` without `tenant: true`
+withAuth(handler, { permissions: ["CAN_MANAGE_FINANCE"] });
 
-// @ts-expect-error `permissions` is not available with a tenant either
-withAuth(handler, { tenant: true, permissions: ["students:read"] });
+// @ts-expect-error `permissions` with `tenant: false`
+withAuth(handler, { tenant: false, permissions: ["CAN_MANAGE_FINANCE"] });
+
+// A real permission is accepted — alone, or together with roles (role OR permission).
+withAuth(
+  async (_req: NextRequest, auth: TenantAuthContext, ctx: TenantRouteContext) => (
+    void auth.tenant.permissions,
+    void ctx,
+    new Response("ok")
+  ),
+  {
+    tenant: true,
+    permissions: ["CAN_MANAGE_FINANCE"],
+  },
+);
+withAuth(async (_req: NextRequest, auth: TenantAuthContext, ctx: TenantRouteContext) => (void auth, void ctx, new Response("ok")), {
+  tenant: true,
+  roles: ["TEACHING_STAFF"],
+  permissions: ["CAN_APPROVE_RESULTS", "CAN_PUBLISH_CONTENT"],
+});
+
+// @ts-expect-error not a Permission (a typo would otherwise never match)
+withAuth(async () => new Response("ok"), { tenant: true, permissions: ["CAN_MANAGE_FINANCES"] });
+
+// @ts-expect-error the old placeholder names are gone
+withAuth(async () => new Response("ok"), { tenant: true, permissions: ["students:read"] });
 
 // A tenant route's handler receives `auth.tenant`, and only a real Role is accepted.
 withAuth(

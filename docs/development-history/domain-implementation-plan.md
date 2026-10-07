@@ -166,6 +166,7 @@ one repo maps 1:1 onto the other:
 | Error codes | `INVALID_CREDENTIALS`, `RATE_LIMITED`, `CSRF`, `INVALID_BODY`, `UNAUTHENTICATED` (AlEemaan adds `FORBIDDEN`) |
 | Screens | `/login`, `/dashboard`, `/` (pure router), `/setup`; `components/ui/*`, `components/auth/*` |
 | Tests | `tests/{setup,unit,integration,api,e2e,https}`, `playwright.config.ts`, `pnpm test` — same layout and helpers in both repos (own ports and own `*_test` database each) |
+| Users and invitations (0.5.4; AlEemaan: **0.5.H**) | `lib/invitations/{token,status,service}.ts`, `lib/members/{service,http}.ts`, `POST /api/v1/invitations/{preview,accept}`, `/accept-invite`, audit actions `INVITATION_*`, `MEMBER_*` — AlEemaan **diverges** (ADR 0002 there): members are addressed by *membership* id, `branchId` for `campusId`, no RLS, and deactivating a person's last active membership also deletes their sessions (here the session lives on and resolves to no school) |
 
 Deliberately **not** synced (different concepts, not naming drift): the models `Campus`/`Branch` and
 `TenantMembership`/`Membership` (this repo has a `Tenant` above `Campus`; AlEemaan has no tenant and
@@ -2079,6 +2080,204 @@ model TenantMembership {
   invent new permissions, no per-resource/per-record ACLs, no permission inheritance hierarchy, no
   custom roles. If a school needs more granularity than these four permissions later, that's a
   deliberate future phase, not a Phase 1 scope-creep.
+
+#### Build design — Phase 1.0 (foundations) and 1.1 (academic structure) — Slice 1 (2026-10-06, written before any code)
+
+**Scope.** Roadmap sub-phases 1.0 and 1.1 only. (Numbering note: *this plan's* §1.1–§1.7 are the Phase 1 *schema sketches*; the **roadmap's** 1.0–1.8 are the *build
+order*. "1.0 / 1.1" below are the roadmap's.) The sketches in §1.1–§1.3 and §1.7 **predate** row-level security, the shell and the Users pages; where they conflict with the
+rules the project has since learned, **this section wins** and the differences are listed in "Reconciliations" so nobody has to guess. Nothing here starts 1.2 (people).
+
+##### Reconciliations with the earlier sketches (each is a deliberate change)
+1. **Every table gets its own `tenantId`** — the §1.2 sketch gave `ClassArm`, `StaffSubjectAssignment`, … none, which the catalog guard (`tests/integration/rls.spec.ts`) would
+   rightly fail, and a join through the parent is not row-level security. All Slice 1 tables carry `tenantId` and the RLS policy on it.
+2. **Composite foreign keys keep a child in its parent's school.** RLS `WITH CHECK` only inspects the new row's own `tenantId`; a foreign key is checked by the database *without*
+   row-level security, so a school-A row could name a school-B parent id (a guessable-by-leak cuid) and the constraint would be satisfied. Every child therefore references
+   `(tenantId, parentId)` → parent `(tenantId, id)` (parents get `@@unique([tenantId, id])`). The application also reads parents through the tenant context (invisible if foreign) —
+   two independent guards. Relations other than the tenant itself use `onDelete: NoAction` (not `Restrict`, which is checked per row and would break deleting a school); the school
+   cascades to everything (tests remove their schools).
+3. **"Current" is a status, not a boolean.** §1.2's `isCurrent` becomes `SessionStatus { PLANNED, ACTIVE, CLOSED }` + `archivedAt`; the period keeps a single `isCurrent` flag
+   (one per session, partial unique index) because "which term are we in" is genuinely a pointer.
+4. **A session may be school-wide or one campus's** (`campusId` nullable, null = every campus). The brief says "one active session per **campus**, not per school"; §1.2 has no campus on
+   a session. See decision 11 for the rule that makes both coexist.
+5. **`AssessmentConfig` and `GradeScale` are new** (the roadmap names them; §1.2 has only `Result.score/maxScore`). Their shapes are decisions 14–15.
+6. **Subjects are offered *to class groups*** (roadmap 1.1-T4 "subjects per class group") through a link table, rather than `Subject` standing alone as §1.2 sketched; the
+   `StaffSubjectAssignment` of §1.2 is 1.2's, not this slice's.
+7. **Permissions** follow §1.7 exactly, plus two integrity rules §1.7 did not state (decision 6) — a CHECK constraint and clearing on role change.
+
+##### 1.0 — Foundations (migration `…_phase_1_0_foundations`)
+**Decision 1 — `Tenant.schoolType`.** `enum SchoolType { K12 HIGHER_ED VOCATIONAL }`, column `NOT NULL DEFAULT 'K12'`. The default is "K12" because every school that exists today is
+one; it is additive and live-data-safe. The setup wizard does **not** ask yet (no settings UI until roadmap 1.7), so a new school is K12 until support changes the column; the field only
+decides which `PeriodKind` a school's periods have (decision 12). `Tenant` is an identity table (no RLS, no `tenantId`), unchanged in that respect.
+
+**Decision 2 — `SchoolSettings`: one row per school, exactly.** Columns and defaults are §1.3's (all ten: `resultApprovalRequired true`, `rolloverMode ADMIN_CONFIRMED`,
+`classAutoAssignment false`, `billingCycle PER_TERM`, `feeReminderEnabled true`, `discountWorkflowMode MANUAL_OVERRIDE`, `feeCostBearer SCHOOL_ABSORBS`, `multiCampusEnabled false`,
+`mfaRequiredForTeaching true`), primary key `tenantId` (so two rows cannot exist), RLS `"tenantId" = app_tenant_id()` USING + WITH CHECK, `updatedAt`. **No UI and no write path in this
+slice** (roadmap 1.7 adds them, with step-up MFA and `SettingsChangeAudit`); only a read helper `getSchoolSettings(tx)` exists, which **throws** if the row is missing rather than
+inventing defaults — a missing row is a bug to be loud about, not a state. The secure defaults are pinned by a test that spells the values out (not by reading them back).
+
+**Decision 3 — the row is created by the database, so no path can forget it.** An `AFTER INSERT ON "Tenant"` trigger inserts the `SchoolSettings` row. Because the table is under
+`FORCE` RLS and the inserting role has no tenant context yet (the setup wizard creates the tenant *then* sets the context), the trigger function sets `app.tenant_id` to the new id
+**transaction-locally for the one insert and restores the caller's previous value** (never leaves the caller in a different school's context). Every creation path — the setup wizard,
+`tests/support/db.ts#createTenant`, any future signup, a hand-run SQL `INSERT` — gets the row with no code change. The migration also **backfills** existing tenants
+(`INSERT … SELECT … ON CONFLICT DO NOTHING`, idempotent) *before* RLS is enabled on the new table. A catalog test fails if any `Tenant` lacks a row, and a second test creates tenants by
+each real path and asserts the row (the setup route over HTTP, the helper, raw SQL).
+
+**Decision 4 — `Permission` and `TenantMembership.permissions`.** `enum Permission { CAN_APPROVE_RESULTS CAN_MANAGE_FINANCE CAN_PUBLISH_CONTENT CAN_MANAGE_USERS }`,
+`permissions Permission[] NOT NULL DEFAULT '{}'`. No custom roles, no per-record ACLs, no hierarchy (§1.7's non-goals stand). Invitations still carry a role only; permissions are granted
+after joining, by an administrator.
+
+**Decision 5 — `withAuth({ tenant: true, roles?, permissions? })`.** The rule, evaluated on the server from the **membership in the verified school** on every request:
+- neither option → any active member passes (unchanged);
+- `roles` only → the member's role must be listed (unchanged — an `ADMIN` is **not** implicitly in a route's `roles: ["TEACHING_STAFF"]`; today's behaviour and tests stay);
+- `permissions` given (with or without `roles`) → passes if the role is in `roles` **or** the member is an `ADMIN` (ADMIN implies every permission) **or** holds at least one listed
+  permission. *Interpretation to flag:* the brief's "ADMIN implies every permission" is applied to the `permissions` option only, never to `roles` — implying roles would silently open
+  every teacher-only route to administrators and change behaviour that is tested today;
+- `permissions: []` or a non-array is a programming error and throws at construction (a route that lists no permission would otherwise read as "everyone");
+- the refusal is the same single 403 body as every other (`NO_ACCESS`); `TenantContext` gains `permissions` (read by `resolveTenant` from the same membership row, filtered
+  `deactivatedAt: null`, so a deactivated member has none). `tests/unit/with-auth.types.ts` gains the compile-time cases (`permissions` legal only with `tenant: true`; wrong enum value
+  is a type error).
+
+**Decision 6 — granting and revoking permissions (Users page).** `PATCH /api/v1/schools/[code]/members/[userId]` accepts `permissions?: Permission[]` (the **full desired set**, deduplicated,
+validated against the enum, strict body). Rules, in the same transaction as the write, audited as `MEMBER_PERMISSIONS_CHANGED` with `before`/`after`:
+- **only an `ADMIN` of that school** may call the route (it stays `roles: ["ADMIN"]`; **never** `permissions: ["CAN_MANAGE_USERS"]` — a delegable "grant permissions" power is an escalation path, so
+  `CAN_MANAGE_USERS` is *stored* in this slice but consumed by no route yet; when a later slice lets it open parts of the Users page it must still never reach the permission/role endpoints);
+- not yourself (`SELF`, as role changes already are);
+- permissions are meaningful only on staff roles: **`TEACHING_STAFF` / `NON_TEACHING_STAFF`**. Setting any on an `ADMIN` (already implies all), `STUDENT` or `PARENT` is refused
+  (`PERMISSIONS_NOT_APPLICABLE`), and **changing a member's role to a non-staff role or to `ADMIN` clears their permissions in that same transaction** (audited in the same entry) — so a parent
+  can never silently hold `CAN_MANAGE_FINANCE`, and a demoted administrator does not come back with stale grants. A `CHECK` constraint states the invariant in the database:
+  `permissions = '{}' OR role IN ('TEACHING_STAFF','NON_TEACHING_STAFF')`;
+- a no-op (the same set) writes nothing and audits nothing (as the role/campus no-ops already behave); a deactivated member's permissions cannot be edited (as roles can't);
+- the member list and the Edit dialog show/edit them (checkboxes for staff members; plain-language names and one-line meanings; the live region announces the result).
+Invitation acceptance sets none.
+
+**As built — Phase 1.0 (2026-10-06)** — record: `phases/phase-1.0-foundations.md`, migration `20261010090000_phase_1_0_foundations`. Decisions 1–6 are built as designed. Details worth knowing: (a) the trigger `tenant_creates_settings` is plain (not
+`SECURITY DEFINER`) and restores the caller's `app.tenant_id`; (b) `SchoolSettings.updatedAt` has a database default so the trigger can insert; (c) there is **no DELETE policy** on `SchoolSettings`; (d) `withAuth` validates `permissions` at construction (non-empty, real
+values, needs `tenant: true`); (e) the member list's `permissions` is always present and always in enum order; (f) ADMIN-implies-permissions is applied to the `permissions` option only (decision 5's interpretation, now tested). **Mutation pass deferred to the end of
+Phase 2 by the maintainer's decision; the list above stands as the plan for it.**
+
+**As built — Phase 1.1 (2026-10-07)** — record: `phases/phase-1.1-academic-structure.md`; migrations `20261011090000_phase_1_1a_sessions_periods`, `20261012090000_phase_1_1b_classes_subjects`, `20261013090000_phase_1_1c_assessment_grading` (one per family, RLS in the same file as its tables); 34 routes under `/academics/…`; screens at `/schools/[code]/academics`.
+Decisions 7–17 are built as designed. Deviations, all deliberate: (a) **composite foreign keys use `ON DELETE NO ACTION`** (a school delete cascades through `tenantId`); (b) **locks are database triggers** (`assessment_scheme_locked`, `assessment_component_locked`, `grade_scale_locked`, `grade_band_locked`) — not only the service — and `pg_trigger_depth() > 1` lets a whole-school cascade through;
+(c) **a new version archives its predecessor in the same transaction** (decision 14 said "until activated"); (d) **decision 18 narrowed:** the page is administrators-only (the staff read API exists and is tested, no staff screen yet), sections are real links (`?section=`) rather than a tab widget, and the nav label is "Academics"; (e) copy-forward needs a typed name when the label is not a year pair;
+(f) **new rule found by the tests: a refusal that can follow a write must roll the transaction back** (`refuseAndRollBack` / `rollingBack`) — a returned refusal commits what came before it; (g) dates are spelled by a table, not `Intl`. **Mutation pass pending — end of Phase 2** (the "1.1" paragraph of the plan's "Mutation plan" below is the work).
+
+##### 1.1 — Academic structure (migration `…_phase_1_1_academic_structure`)
+All tables below: `tenantId NOT NULL`, `ENABLE`+`FORCE` RLS with `USING` and `WITH CHECK` on `"tenantId" = app_tenant_id()` in the **same migration**, composite FKs (reconciliation 2),
+`createdAt`/`updatedAt`, `archivedAt` where a later phase will reference the row (**archive, never delete**: there is no `DELETE` route for any of them). Added to the catalog guard's
+expected list. Naming/uniqueness rules are **partial unique indexes over non-archived rows** (an archived name can be reused) — Prisma cannot express them, so they live in the migration
+SQL, like `Invitation_one_live_per_address`.
+
+**Decision 7 — who may do what.** Reads: `ADMIN`, `TEACHING_STAFF`, `NON_TEACHING_STAFF` (`STUDENT`/`PARENT` get the one 403). Writes: `ADMIN` only (no permission is defined for academic
+structure, and §1.7 forbids inventing one). **Campus scope:** a non-admin staff member whose membership names a campus sees rows with `campusId IS NULL` (school-wide) or their own campus,
+filtered in the query *and* asserted by a cross-campus test; an `ADMIN` sees every campus. (Rows reference a campus through `(tenantId, campusId)` composite FK to `Campus`.)
+
+**Decision 8 — audit.** One `AuditLog` row per change, written in the same transaction, `action` in a closed set (`SESSION_CREATED|UPDATED|ACTIVATED|CLOSED|ARCHIVED|COPIED_FORWARD`,
+`PERIOD_CREATED|UPDATED|SET_CURRENT|ARCHIVED`, `CLASS_GROUP_*`, `CLASS_ARM_*`, `SUBJECT_*`, `SUBJECT_OFFERING_*`, `ASSESSMENT_SCHEME_*`, `GRADE_SCALE_*`), `afterValue` (and `beforeValue` on
+updates) carrying only the changed fields — no PII exists in this slice, but the habit is the same.
+
+**Decision 9 — `AcademicSession`.** `{ id, tenantId, campusId?, label, startDate @db.Date, endDate @db.Date, status SessionStatus @default(PLANNED), copiedFromId?, archivedAt?, … }`.
+- `endDate > startDate` (CHECK); label 1–40 characters, trimmed, **unique per (school, campus-scope) among non-archived** (partial index on `(tenantId, COALESCE(campusId,''), label)`);
+- **no overlap** between two non-archived sessions of the same scope: validated by a pure function and enforced in the write transaction under a per-(school, scope) advisory lock
+  (an `EXCLUDE` constraint would need the `btree_gist` extension — not worth a new extension for one rule; the lock makes the check-then-write race-free and a two-simultaneous-creates test proves it);
+- `CLOSED` is terminal and a `CLOSED`/archived session's dates and label are read-only (history that results will reference must not move).
+
+**Decision 10 — activating a session.** **One `ACTIVE` session per scope**, guaranteed by a partial unique index `(tenantId, COALESCE(campusId,'')) WHERE status='ACTIVE'`. `POST …/activate`
+runs a **conditional update** (`WHERE id = $1 AND status = 'PLANNED'`, row count decides). If another session in that scope is active the request is **refused with `SESSION_ALREADY_ACTIVE`
+naming it** — nothing is deactivated silently. The explicit alternative is the body `{ closeCurrent: true }`, which closes the active one and opens this one **in one transaction**, audited as
+two entries. (Chosen over "close and open" as the only mode because closing a session is the consequential act: it must be named by the person doing it.)
+
+**Decision 11 — school-wide vs campus sessions.** `campusId IS NULL` means "every campus". A campus's **current session** is its own `ACTIVE` session if it has one, else the school-wide `ACTIVE`
+one, else none — one pure function (`currentSessionFor(campusId, sessions)`), the only definition any later phase may use. A school with one campus (or none) simply uses school-wide sessions.
+*(Open question for the maintainer: is "a campus session shadows the school-wide one" the wanted rule, or should a school choose one mode? The shape supports both; the function is the only place to change.)*
+
+**Decision 12 — `AcademicPeriod`.** `{ id, tenantId, sessionId, kind PeriodKind, ordinal Int, label, startDate, endDate?, isCurrent, archivedAt? }`.
+- `kind` is **derived from the school's `schoolType`** (`K12→TERM`, `HIGHER_ED→SEMESTER`, `VOCATIONAL→COHORT`) on the server and not accepted from the client; `endDate` is required for `TERM`/`SEMESTER`,
+  optional for `COHORT` (a running intake). A period lies inside its session (`COHORT` may extend the session only if it has no end); `TERM`/`SEMESTER` periods of one session do not overlap;
+  `COHORT`s may overlap (concurrent intakes). `ordinal` unique per session among non-archived; label unique per session among non-archived;
+- **at most one current period per session** (partial unique index `(sessionId) WHERE "isCurrent"`); `POST …/current` is a conditional transaction that moves the pointer, only for an `ACTIVE` session,
+  and a period of a closed/archived session cannot become current. Archiving the current period clears the pointer.
+
+**Decision 13 — `ClassGroup`, `ClassArm`, `Subject`, offering.**
+- `ClassGroup { tenantId, campusId?, name, sortOrder, archivedAt? }` — name unique per (school, campus-scope) non-archived. `sortOrder` is the progression order promotion will use in 1.4.
+  A group is **admin-configurable on every campus** (the legacy primary-only inconsistency the AlEemaan audit found does not exist here).
+- `ClassArm { tenantId, classGroupId, name, capacity Int?, archivedAt? }` — `capacity >= 1` (CHECK) or null = uncapped (display-only in the MVP, as §1.2 decided); name unique per group non-archived.
+  An arm cannot be created in an archived group; archiving a group archives nothing silently — it is **refused while it has non-archived arms** (`HAS_ACTIVE_ARMS`), the administrator archives the arms first.
+- `Subject { tenantId, name, code?, archivedAt? }` — name unique per school non-archived; `code` upper-cased, unique per school when present.
+- `SubjectOffering { tenantId, classGroupId, subjectId }` unique `(classGroupId, subjectId)`: "this class group studies this subject". Created/removed by `PUT …/class-groups/[id]/subjects`
+  with the full desired set (idempotent). **Removing an offering is a real delete in this slice** because nothing references it yet; 1.4 must replace that with archive-on-reference
+  (a `// TODO(1.4)` guard is a test: `SubjectOffering` has no inbound FKs yet, asserted by the catalog so the day one appears the test fails and forces the decision).
+
+**Decision 14 — `AssessmentScheme` (the shape results will snapshot).** `{ tenantId, classGroupId?, name, totalMax Decimal(6,2) default 100, examMax Decimal(6,2), version Int, lockedAt?, supersedesId?, archivedAt? }`
+with `AssessmentComponent { tenantId, schemeId, name, maxScore Decimal(6,2), sortOrder }` (e.g. `CA1 10`, `CA2 10`, `Test 20`, `Exam 60`'s 60 being `examMax`).
+- **Rule (one pure function, unit-tested at its boundaries, and re-run by the API inside the write transaction — the scheme and its components are written together, so the sum cannot be a DB constraint):**
+  every `maxScore > 0` and `examMax >= 0`; component names unique (case-insensitive) within the scheme; **`Σ components + examMax = totalMax`** exactly (decimal arithmetic on integers of hundredths — never floats);
+  1–10 components.
+- `classGroupId` null = the school default; at most one **active (non-archived, latest-version)** scheme per class-group scope (partial unique index).
+- **Versioning so history cannot be rewritten.** A scheme is edited **in place only while `lockedAt IS NULL`**. `lockedAt` is set — by a function 1.4 will call, `lockScheme(tx, id)` — the first time a
+  result references it; from then on edits are refused (`SCHEME_LOCKED`) and the only change is `POST …/new-version`, which copies it as `version+1`, `supersedesId` set, and archives nothing until the new
+  one is activated by being the latest. The **snapshot** a result stores is a pure function `snapshotScheme(scheme)` → canonical JSON `{ totalMax, examMax, components:[{name,maxScore}] }` plus its SHA-256, so
+  1.4 can store the JSON on the `Result` and prove later it still matches. Slice 1 builds `snapshotScheme`, `lockScheme` and tests both (lock set directly in the test).
+
+**Decision 15 — `GradeScale` (band → letter → remark, as data).** `GradeScale { tenantId, name, isDefault, version, lockedAt?, supersedesId?, archivedAt? }` with
+`GradeBand { tenantId, scaleId, minScore Decimal(5,2), maxScore Decimal(5,2), letter, remark, sortOrder }`.
+- **Bands are half-open and contiguous:** `[min, max)` except the top band, which is closed at 100. A valid scale **starts at 0, ends at 100, and each band's `min` equals the previous band's `max`** — so there
+  is no gap and no overlap *for any decimal score*, which a "75–100 / 70–74" integer table cannot promise (74.5 would belong to nothing). The UI shows "from 70 up to (not including) 75" and offers whole
+  numbers by default; the legacy A1–F9 table fits exactly (`75,70,65,60,55,50,45,40,0`). Validated by one pure function (unit tests: 0, 100, adjacent, inverted, equal, decimals, a single band 0–100, > 12 bands,
+  duplicate letters), re-run by the API in the write transaction; `min < max` and `0 <= min`, `max <= 100` are also CHECK constraints.
+- Exactly **one default scale per school** (partial unique index on `isDefault` among non-archived). The same lock/new-version rule as schemes (decision 14). Per-class-group scales are **not** in this slice
+  (one default per school; noted for 1.4).
+- `gradeFor(scale, score)` — a pure function, and the only way a score becomes a letter; tested at every band edge. (Its consumer is 1.4.)
+
+**Decision 16 — copy-forward.** `POST …/sessions/[id]/copy-forward { label, dryRun? }` creates the **next** session from `[id]`: dates shifted by the whole-year difference to the new start date the
+administrator gives, periods copied with the same shifted dates (ordinals and labels kept), status `PLANNED`, `copiedFromId = [id]`. Class groups, subjects, schemes and scales are school-level and **not**
+session-scoped, so there is nothing else to copy (stated so nobody expects it). **Idempotent:** a partial unique index on `(tenantId, copiedFromId)` where not archived — a second run is refused with
+`ALREADY_COPIED` naming the existing session (or, with `dryRun`, reports it) and creates nothing. `dryRun: true` returns the summary (`{ session: {label, start, end}, periods: n, conflicts: [...] }`) and
+writes **nothing** (asserted by row counts). One transaction, audited `SESSION_COPIED_FORWARD`.
+
+**Decision 17 — API.** All under `/api/v1/schools/[code]/academics/…` (so the route-discovery guard in `tests/api/tenant-boundary.spec.ts` covers them): `sessions` (GET list `?status=planned|active|closed|archived|all`
+default *not archived*, paginated · POST) · `sessions/[id]` (GET · PATCH) · `sessions/[id]/activate|close|archive|copy-forward` (POST) · `sessions/[id]/periods` (GET · POST) · `periods/[id]` (PATCH) ·
+`periods/[id]/current|archive` (POST) · `class-groups` (GET · POST) · `class-groups/[id]` (GET · PATCH) · `class-groups/[id]/archive` (POST) · `class-groups/[id]/arms` (GET · POST) · `arms/[id]` (PATCH) ·
+`arms/[id]/archive` (POST) · `class-groups/[id]/subjects` (GET · PUT) · `subjects` (GET · POST) · `subjects/[id]` (PATCH) · `subjects/[id]/archive` (POST) · `assessment-schemes` (GET · POST) ·
+`assessment-schemes/[id]` (GET · PATCH · and `…/new-version` · `…/archive` POST) · `grade-scales` (same shape). Every write: `validate({ body })` (strict — unknown keys **refused** here, not stripped, via `.strict()`)
+inside `withAuth(…, { tenant: true, roles })`, audit in the same transaction, a per-administrator rate limit on writes (the existing limiter, `refund` on a refused-by-validation request), an unknown or foreign id answers
+the **same 404** `NOT_FOUND`, and a request for an archived row answers normally for GET but 409 `ARCHIVED` for any write. Lists use the shared pagination helpers.
+
+**Decision 18 — screens.** One new area **"Academic setup"** at `/schools/[code]/academics` (admin and staff read; admin writes), added to `navFor` (visible "Soon" until it ships), with four sections in a
+tab-like list that works with the keyboard and on a phone (cards below `md`): *Sessions and terms* (list → create/edit → detail with its periods; activate / close / archive with confirmation `Dialog`s that say
+what they do; copy-forward with its dry-run summary shown first), *Classes and subjects* (groups with their arms and offered subjects), *Assessment* (the scheme editor with a live "components + exam = total" readout), *Grading*
+(band table with live gap/overlap feedback). Reuses `Dialog`, `SelectField`, `TextField`, one polite live region, focus placed after the refresh (no timers), tap targets ≥ 44 px. A non-admin sees the same pages read-only (no buttons,
+not merely disabled). Every state and open dialog is checked with axe in both themes.
+
+##### Tests (written with the code, not after)
+- **1.0 — unit:** `with-auth` options rule table (every role × every `roles`/`permissions` combination, ADMIN-implies only for `permissions`, empty array throws); `with-auth.types.ts` compile-time cases. **integration (as `app_user`):**
+  `SchoolSettings` RLS (no context = no rows; A never sees B; WITH CHECK on insert/move with statements that read nothing); the trigger fires for every creation path and **restores the caller's tenant context**; backfill idempotent
+  (run its SQL twice); pinned secure defaults; `getSchoolSettings` throws when the row is absent; permissions: only ADMIN grants, not self, staff roles only, role change clears them in the same transaction (rolled back with it on failure),
+  the CHECK constraint refuses a raw `UPDATE` that violates it, deactivated member holds none, a permission held in school A is **not** honoured in school B. **api (SaaS server):** a route guarded by `permissions` — the matrix; the member
+  PATCH validation (unknown permission, duplicate, wrong role, no-op writes nothing); the route-discovery guard still passes. **e2e:** the Edit dialog's checkboxes, announced result, focus return; axe both themes.
+- **1.1 — unit (pure):** period-kind mapping; session overlap; `currentSessionFor`; period-inside-session and overlap rules; scheme sum rule at the boundaries (hundredths, no float drift: 0.1+0.2); `snapshotScheme` canonicality and hash
+  stability; grade-scale validation (list in decision 15) and `gradeFor` at every edge; label/name normalisation; copy-forward date shifting (leap day 29 Feb → 28/29). **integration:** RLS for every table incl. write-check-alone tests;
+  composite FK refuses a foreign parent id **even through the owner role** (so it is the constraint, not RLS, that holds); partial unique indexes (active session, current period, default scale, active scheme, copy-forward) each hit by a raw
+  statement; **two-simultaneous-requests tests** for create-overlap, activate (exactly one wins), set-current, copy-forward twice, default-scale swap; archive-not-delete (no route and no service function deletes; `HAS_ACTIVE_ARMS`);
+  campus scope (campus staff vs admin; cross-campus); audit row exists with the right action in the same transaction (and none when the write fails). **api (SaaS server):** role matrix per route (ADMIN / TEACHING_STAFF / NON_TEACHING_STAFF /
+  PARENT / STUDENT / deactivated / another school's admin), strict-body refusal, 404-sameness for foreign ids, pagination errors name the field. **e2e (desktop and phone) + axe both themes** for every screen and open dialog.
+- The file-system route guard is **extended only by running** (it discovers routes); the catalog guard's expected list gains each table.
+
+##### Mutation plan (≥ 25 per sub-phase; the survivors become tests, equivalents are justified in the phase record)
+*1.0:* `withAuth` ignores `permissions` / treats ADMIN as passing `roles`-only routes / lets a permission from another school through / accepts `permissions: []` / returns 500 or a different body on refusal; resolver forgets `deactivatedAt` for
+permissions; PATCH grants to a PARENT / to an ADMIN / to yourself / without the audit row / audits a no-op / forgets to clear on role change / role-change clear not in the same transaction / non-ADMIN may call it; CHECK constraint dropped;
+trigger not firing / not restoring the context / leaving the caller in the new school's context; backfill not idempotent; `SchoolSettings` RLS `WITH CHECK` dropped / policy on the wrong column / not `FORCE`d; a secure default flipped
+(`resultApprovalRequired`, `mfaRequiredForTeaching`); `getSchoolSettings` returns defaults instead of throwing; `schoolType` default changed; UI shows permission boxes for a PARENT.
+*1.1:* a role check removed on each write route (sampled across all families); a read opened to PARENT; campus filter dropped / inverted; tenant taken from the body; `WITH CHECK` dropped on each new table; composite FK downgraded to a plain FK;
+foreign parent accepted by the service; overlap check skipped / off-by-one at the boundary day; advisory lock removed; activate ignores the unique guard / deactivates silently / `closeCurrent` closes without auditing / `status` not conditional;
+current-period pointer not unique / allowed on a closed session; period kind taken from the client; `endDate` optional for TERM; archive implemented as DELETE; archived row editable; `HAS_ACTIVE_ARMS` skipped; capacity 0 accepted; scheme sum off
+by one hundredth / compared with floats; locked scheme editable; `snapshotScheme` order-dependent; scale gap/overlap accepted at each edge (0, 100, adjacent); `gradeFor` boundary inclusive on the wrong side; second default scale accepted; copy-forward
+not idempotent / dry run writes / shifts dates wrongly / skips periods; audit omitted or wrong action on each family; an unknown id answers a different status than a foreign id; validation lets unknown keys through; list default includes archived;
+pagination cap removed on a list.
+
+##### Order of work and definition of done
+1.0: this design (committed alone) → migration + schema + trigger + RLS + catalog/RLS tests → `with-auth` + resolver + unit/types tests → member permissions service + route + tests → UI + e2e/axe → mutation pass → one-lane green →
+docs/trackers → push. 1.1: same, in five commits by family (sessions+periods → classes/arms/subjects → assessment → grading → copy-forward) with the UI after each, one mutation pass at the end. Done = the brief's §6 checklist, evidenced in
+`docs/development-history/handoff/phase-1-slice-1.md`. **Open questions for the maintainer** (carried to the hand-off): (1) campus session shadows school-wide (decision 11); (2) K12 default for `schoolType` and no wizard question until
+Settings (decision 1); (3) `CLOSED` is terminal — is a "reopen" ever wanted (decision 9); (4) half-open bands (decision 15) rather than the printed "70–74" style; (5) scale per class group deferred.
 
 ---
 

@@ -1,0 +1,233 @@
+// --- Academic structure (Phase 1.1; plan "Build design — Phase 1.0 and 1.1", decisions 9–16) ---
+//
+// Every table carries its own tenantId and a composite foreign key to its parent on (tenantId, id), so a row can never point at another
+// school's parent even though a foreign key is checked without row-level security. Rules Prisma's schema language cannot express (partial
+// unique indexes, CHECK constraints, RLS) live in the migration SQL. Nothing here is ever deleted by a request: rows are ARCHIVED.
+
+enum SessionStatus {
+  PLANNED
+  ACTIVE
+  CLOSED
+}
+
+/// How a school divides its year: TERM (K12), SEMESTER (higher education), COHORT (vocational: a running intake). Derived from
+/// Tenant.schoolType on the server; never accepted from a client.
+enum PeriodKind {
+  TERM
+  SEMESTER
+  COHORT
+}
+
+/// One academic year/session. campusId null = every campus; set = that campus's own calendar (a campus's own ACTIVE session shadows the school-wide one).
+model AcademicSession {
+  id           String        @id @default(cuid())
+  tenantId     String
+  campusId     String?
+  label        String
+  startDate    DateTime      @db.Date
+  endDate      DateTime      @db.Date
+  status       SessionStatus @default(PLANNED)
+  /// Set when this session was created by copy-forward from another; at most one live copy per source (partial unique index).
+  copiedFromId String?
+  archivedAt   DateTime?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @default(now()) @updatedAt
+
+  tenant     Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  campus     Campus?           @relation(fields: [tenantId, campusId], references: [tenantId, id], onDelete: NoAction)
+  copiedFrom AcademicSession?  @relation("SessionCopies", fields: [tenantId, copiedFromId], references: [tenantId, id], onDelete: NoAction)
+  copies     AcademicSession[] @relation("SessionCopies")
+  periods    AcademicPeriod[]
+
+  @@unique([tenantId, id])
+  @@index([tenantId, status])
+}
+
+/// A term / semester / cohort inside a session. The "current" one is a pointer (isCurrent), at most one per session.
+model AcademicPeriod {
+  id         String     @id @default(cuid())
+  tenantId   String
+  sessionId  String
+  kind       PeriodKind
+  /// 1-based position inside the session (1st term, 2nd term…); unique among live periods of the session.
+  ordinal    Int
+  label      String
+  startDate  DateTime   @db.Date
+  /// Required for TERM and SEMESTER; a COHORT may run without a fixed end.
+  endDate    DateTime?  @db.Date
+  isCurrent  Boolean    @default(false)
+  archivedAt DateTime?
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @default(now()) @updatedAt
+
+  tenant  Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  session AcademicSession @relation(fields: [tenantId, sessionId], references: [tenantId, id], onDelete: NoAction)
+
+  @@unique([tenantId, id])
+  @@index([tenantId, sessionId])
+}
+
+// --- Classes, arms and subjects (Phase 1.1, family B; decision 13) ---
+
+/// A class group ("JSS1", "Year 10", "Cohort A"). campusId null = offered on every campus; admin-configurable on every campus.
+model ClassGroup {
+  id         String    @id @default(cuid())
+  tenantId   String
+  campusId   String?
+  name       String
+  /// The progression order promotion will use (1.4). Not unique: two groups may share a rung (parallel streams).
+  sortOrder  Int       @default(0)
+  archivedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @default(now()) @updatedAt
+
+  tenant    Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  campus    Campus?            @relation(fields: [tenantId, campusId], references: [tenantId, id], onDelete: NoAction)
+  arms      ClassArm[]
+  offerings SubjectOffering[]
+  schemes   AssessmentScheme[]
+
+  @@unique([tenantId, id])
+  @@index([tenantId])
+}
+
+/// An arm of a class group ("A", "B"). Capacity lives on the arm, not the group ("JSS1 is full" is not a real statement; "JSS1-A is full" is).
+model ClassArm {
+  id           String    @id @default(cuid())
+  tenantId     String
+  classGroupId String
+  name         String
+  /// null = uncapped. Display-only in the MVP (nothing automates on it yet).
+  capacity     Int?
+  archivedAt   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @default(now()) @updatedAt
+
+  tenant     Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  classGroup ClassGroup @relation(fields: [tenantId, classGroupId], references: [tenantId, id], onDelete: NoAction)
+
+  @@unique([tenantId, id])
+  @@index([tenantId, classGroupId])
+}
+
+model Subject {
+  id         String    @id @default(cuid())
+  tenantId   String
+  name       String
+  /// Upper-cased; unique per school among live subjects when present.
+  code       String?
+  archivedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @default(now()) @updatedAt
+
+  tenant    Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  offerings SubjectOffering[]
+
+  @@unique([tenantId, id])
+  @@index([tenantId])
+}
+
+/// "This class group studies this subject." Removing one is a real DELETE in this slice because nothing references it yet; the day a later
+/// phase adds a foreign key to it, a test fails and forces archive-on-reference (see tests/integration/academic-structure.spec.ts).
+model SubjectOffering {
+  id           String   @id @default(cuid())
+  tenantId     String
+  classGroupId String
+  subjectId    String
+  createdAt    DateTime @default(now())
+
+  tenant     Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  classGroup ClassGroup @relation(fields: [tenantId, classGroupId], references: [tenantId, id], onDelete: NoAction)
+  subject    Subject    @relation(fields: [tenantId, subjectId], references: [tenantId, id], onDelete: NoAction)
+
+  @@unique([classGroupId, subjectId])
+  @@index([tenantId])
+}
+
+// --- Assessment schemes and grade scales (Phase 1.1, families C and D; decisions 14 and 15) ---
+//
+// Both are VERSIONED so history cannot be rewritten: they are edited in place only while `lockedAt` is null; the first time a result references one
+// (a function Phase 1.4 will call) it is locked — a database trigger then refuses any change to it or its children — and a change after that is a NEW VERSION
+// that supersedes it. The canonical snapshot a result stores is `snapshotScheme()` in lib/academics/scoring.ts.
+
+/// How a mark is built: continuous-assessment components plus the exam, summing exactly to totalMax. classGroupId null = the school default.
+model AssessmentScheme {
+  id           String    @id @default(cuid())
+  tenantId     String
+  classGroupId String?
+  name         String
+  totalMax     Decimal   @default(100) @db.Decimal(6, 2)
+  examMax      Decimal   @db.Decimal(6, 2)
+  version      Int       @default(1)
+  /// Set (once, never cleared) the first time a result references this scheme; from then on it and its components are immutable.
+  lockedAt     DateTime?
+  supersedesId String?
+  archivedAt   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @default(now()) @updatedAt
+
+  tenant     Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  classGroup ClassGroup?           @relation(fields: [tenantId, classGroupId], references: [tenantId, id], onDelete: NoAction)
+  supersedes AssessmentScheme?     @relation("SchemeVersions", fields: [tenantId, supersedesId], references: [tenantId, id], onDelete: NoAction)
+  successors AssessmentScheme[]    @relation("SchemeVersions")
+  components AssessmentComponent[]
+
+  @@unique([tenantId, id])
+  @@index([tenantId])
+}
+
+model AssessmentComponent {
+  id        String  @id @default(cuid())
+  tenantId  String
+  schemeId  String
+  name      String
+  maxScore  Decimal @db.Decimal(6, 2)
+  sortOrder Int
+
+  tenant Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  scheme AssessmentScheme @relation(fields: [tenantId, schemeId], references: [tenantId, id], onDelete: NoAction)
+
+  @@unique([tenantId, id])
+  @@index([tenantId, schemeId])
+}
+
+/// A grade scale as data: bands of score → letter → remark. Exactly one live DEFAULT per school (partial unique index).
+model GradeScale {
+  id           String    @id @default(cuid())
+  tenantId     String
+  name         String
+  isDefault    Boolean   @default(false)
+  version      Int       @default(1)
+  lockedAt     DateTime?
+  supersedesId String?
+  archivedAt   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @default(now()) @updatedAt
+
+  tenant     Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  supersedes GradeScale?  @relation("ScaleVersions", fields: [tenantId, supersedesId], references: [tenantId, id], onDelete: NoAction)
+  successors GradeScale[] @relation("ScaleVersions")
+  bands      GradeBand[]
+
+  @@unique([tenantId, id])
+  @@index([tenantId])
+}
+
+/// Half-open [minScore, maxScore), except the top band which is closed at 100; the bands of a scale are contiguous from 0 to 100 (checked by
+/// lib/academics/scoring.ts#checkBands, in the write transaction).
+model GradeBand {
+  id        String  @id @default(cuid())
+  tenantId  String
+  scaleId   String
+  minScore  Decimal @db.Decimal(5, 2)
+  maxScore  Decimal @db.Decimal(5, 2)
+  letter    String
+  remark    String
+  sortOrder Int
+
+  tenant Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  scale  GradeScale @relation(fields: [tenantId, scaleId], references: [tenantId, id], onDelete: NoAction)
+
+  @@unique([tenantId, id])
+  @@index([tenantId, scaleId])
+}

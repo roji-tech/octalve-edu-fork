@@ -1,0 +1,41 @@
+// --- School settings (plan §1.3, built in Phase 1.0 as the row and its defaults only; no write path or screen until roadmap 1.7) ---
+
+enum BillingCycle {
+  PER_TERM
+  PER_SESSION
+}
+
+enum RolloverMode {
+  AUTOMATIC
+  ADMIN_CONFIRMED
+}
+
+enum DiscountWorkflowMode {
+  MANUAL_OVERRIDE
+  APPROVAL_REQUIRED
+}
+
+enum FeeCostBearer {
+  SCHOOL_ABSORBS
+  PASSED_TO_PARENT
+}
+
+/// One row per school, BY CONSTRUCTION: the tenant id is the primary key. The row is inserted by a trigger on "Tenant", so no
+/// creation path can forget it, and the defaults below are the secure ones (results need approval; teaching staff need MFA).
+model SchoolSettings {
+  tenantId String @id
+
+  resultApprovalRequired Boolean              @default(true)
+  rolloverMode           RolloverMode         @default(ADMIN_CONFIRMED)
+  classAutoAssignment    Boolean              @default(false)
+  billingCycle           BillingCycle         @default(PER_TERM)
+  feeReminderEnabled     Boolean              @default(true)
+  discountWorkflowMode   DiscountWorkflowMode @default(MANUAL_OVERRIDE)
+  feeCostBearer          FeeCostBearer        @default(SCHOOL_ABSORBS)
+  multiCampusEnabled     Boolean              @default(false)
+  mfaRequiredForTeaching Boolean              @default(true)
+
+  updatedAt DateTime @default(now()) @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}

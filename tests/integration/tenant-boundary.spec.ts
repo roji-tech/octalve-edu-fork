@@ -41,7 +41,15 @@ test.describe("resolveTenant", () => {
       const result = await resolveTenant({ userId: user.id, code: a.code });
       expect(result).toEqual({
         ok: true,
-        tenant: { tenantId: a.id, tenantCode: a.code, tenantName: "Alpha School", role: "TEACHING_STAFF", campusId: a.campuses[0].id },
+        tenant: {
+          tenantId: a.id,
+          tenantCode: a.code,
+          tenantName: "Alpha School",
+          schoolType: "K12",
+          role: "TEACHING_STAFF",
+          campusId: a.campuses[0].id,
+          permissions: [],
+        },
       });
     });
   });

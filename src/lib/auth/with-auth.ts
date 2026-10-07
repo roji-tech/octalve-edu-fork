@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
-import type { Role } from "@prisma/client";
+import { Permission, type Role } from "@prisma/client";
 import { fail, noStore } from "@/lib/api/envelope";
+import { isAuthorized } from "@/lib/auth/authorize";
 import { validateCSRF } from "@/lib/auth/csrf";
 import { getSessionFromRequest, type ResolvedSession } from "@/lib/auth/session";
 import { forTenant, type Tx } from "@/lib/tenant/for-tenant";
@@ -16,11 +17,13 @@ import { resolveTenant, type TenantContext } from "@/lib/tenant/resolve-tenant";
 //                                                         membership (resolve-tenant.ts), with a tenant-scoped
 //                                                         database handle
 //   withAuth(handler, { tenant: true, roles: [...] })   — + the role they hold IN THAT SCHOOL is in the list
+//   withAuth(handler, { tenant: true, permissions: [...] }) — + they hold one of the permissions IN THAT SCHOOL, or are its ADMIN
+//                                                         (and `roles` too: role OR permission) — the rule is lib/auth/authorize.ts
 //
 // `roles` is only legal with `tenant: true` (a type error otherwise, and a throw at construction if the types are
 // bypassed): a role only means something against a specific, verified tenant's membership, and "any membership
 // anywhere has this role" would let an ADMIN of school A through on school B's routes — a cross-tenant privilege
-// escalation. `permissions` stays unavailable until the lightweight permission set arrives (§1.7).
+// escalation. `permissions` is held to the same rule: they are read from the membership in that school.
 
 export type AuthContext = ResolvedSession;
 
@@ -37,7 +40,7 @@ export type TenantAuthContext = AuthContext & {
 export type TenantRouteContext = { params: Promise<{ code: string }> };
 
 export type PlainOptions = { tenant?: false; roles?: never; permissions?: never };
-export type TenantOptions = { tenant: true; roles?: readonly Role[]; permissions?: never };
+export type TenantOptions = { tenant: true; roles?: readonly Role[]; permissions?: readonly Permission[] };
 export type WithAuthOptions = PlainOptions | TenantOptions;
 
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
@@ -57,10 +60,10 @@ export function withAuth(
   handler: (req: NextRequest, auth: never, routeContext: never) => Promise<Response> | Response,
   options: WithAuthOptions = {},
 ) {
-  if ("permissions" in options) {
+  if ("permissions" in options && options.tenant !== true) {
     throw new Error(
-      "withAuth: `permissions` is not available until the lightweight permission set (§1.7) — " +
-        "see domain-implementation-plan.md §0.5.1, divergence #1.",
+      "withAuth: `permissions` needs `tenant: true` — a permission only means something against a specific verified school's " +
+        "membership (domain-implementation-plan.md §1.7).",
     );
   }
   if ("roles" in options && options.tenant !== true) {
@@ -72,6 +75,15 @@ export function withAuth(
   const tenantOptions = options.tenant === true ? options : null;
   if (tenantOptions?.roles !== undefined && !Array.isArray(tenantOptions.roles)) {
     throw new Error("withAuth: `roles` must be an array");
+  }
+  if (tenantOptions?.permissions !== undefined) {
+    const wanted = tenantOptions.permissions;
+    // An empty list would read as "everyone" to a reader of the route; an unknown value is a typo that would never match.
+    if (!Array.isArray(wanted) || wanted.length === 0) throw new Error("withAuth: `permissions` must be a non-empty array");
+    for (const permission of wanted) {
+      if (!(Object.values(Permission) as string[]).includes(permission))
+        throw new Error(`withAuth: unknown permission "${String(permission)}"`);
+    }
   }
 
   return async (req: NextRequest, routeContext: unknown): Promise<Response> => {
@@ -100,9 +112,9 @@ export function withAuth(
         );
       }
       const { tenant } = resolved;
-      // `.some()`-style on purpose: if a person can ever hold several roles in a school this keeps working, where
-      // `.includes(role)` against a value that became an array would silently never match.
-      if (tenantOptions.roles && ![tenant.role].some((held) => tenantOptions.roles!.includes(held))) {
+      // The decision is lib/auth/authorize.ts (role OR permission; an ADMIN implies every permission) — the same one 403 body
+      // whichever way it refuses, so the response never says whether a role or a permission was the problem.
+      if (!isAuthorized(tenant, { roles: tenantOptions.roles, permissions: tenantOptions.permissions })) {
         return noStore(fail(NO_ACCESS, 403, "FORBIDDEN"));
       }
       auth = { ...session, tenant: { ...tenant, run: (fn) => forTenant(tenant.tenantId).transaction(fn) } };

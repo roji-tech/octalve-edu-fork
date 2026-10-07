@@ -41,9 +41,9 @@ against the real repo, not what a plan says should exist.
   both depending on §0.5.1 landing first. Nothing in Phase 1 should start before this phase's own
   verification gate (negative-test suite for cross-tenant/IDOR access, run as the `app_user` role)
   passes in CI.
-- **Phase 1 — MVP: Core SIS + Finance**: **0% — not started.** Full schema designed
-  (`sis.prisma`/`finance.prisma` in the plan doc, with every model's reasoning traced to a PRD
-  section or a specific security-audit finding) but no migration written, no API routes, no UI.
+- **Phase 1 — MVP: Core SIS + Finance**: **IN PROGRESS — Slice 1 built (roadmap 1.0 foundations and 1.1 academic structure, 2026-10-06/07)**; 1.2 onward (people and enrolment, attendance, results, fees, parent/student views, settings) **not started**. Records:
+  `phases/phase-1.0-foundations.md`, `phases/phase-1.1-academic-structure.md`; hand-off `handoff/phase-1-slice-1.md`. The remaining schema is designed
+  (`sis.prisma`/`finance.prisma` in the plan doc) but not migrated. Mutation passes for Phases 1 and 2 are **pending (end of Phase 2)**.
 - **Phase 2 — Communication**: **0% — not started.** Schema designed (`comms.prisma`).
 - **Phase 3 — LMS**: **0% — not started.** Schema designed (`lms.prisma`).
 - **Phase 4 — Operations**: **0% — not started.** Schema deliberately thin per the plan's own
@@ -306,7 +306,7 @@ plan docs (§0.5.1.6 there, the shared-names table here).
 
 Then, in order: ~~the Phase 0.5 addenda~~ (0.5.B–0.5.F, all built), ~~the tenant-trust-boundary resolver and `forTenant()`~~ and ~~its explicit RLS role setup~~ (§0.5.2 — built, verified as `app_user`),
 ~~the shared API helpers and the Redis-backed rate limiter~~ (§0.5.3 — built), ~~this repo's app shell (§0.5.2-H)~~ (built, verified), ~~the Users pages with invitations (§0.5.4)~~ (built, verified, documented — `phases/phase-0.5.4-users-invitations.md`; the survivors' mutation re-check is deferred to the end of Phase 2);
-**now: Phase 1 slice 1 — 1.0 foundations and 1.1 academic structure** (design committed on `claude/phase-1-0-1-1`: plan "Build design — Phase 1.0 and 1.1"; every new table with its RLS policy in the same migration). **Maintainer's decision (2026-10-06): mutation
+**now: Phase 1 slice 1 — 1.0 foundations (✅ built 2026-10-06: `phases/phase-1.0-foundations.md`) and 1.1 academic structure (✅ built 2026-10-07: `phases/phase-1.1-academic-structure.md`; slice hand-off `handoff/phase-1-slice-1.md`)** (design committed on `claude/phase-1-0-1-1`: plan "Build design — Phase 1.0 and 1.1"; every new table with its RLS policy in the same migration). **Maintainer's decision (2026-10-06): mutation
 passes for Phases 1 and 2 run together at the end of Phase 2, not per sub-phase.** Then the AlEemaan port of the Users pages and invitations.
 
 **Hand-over (this session):** development was handed to a **local Claude Code session** (see [`handoff/TAKEOVER.md`](handoff/TAKEOVER.md)); its status and evidence are in `handoff/takeover-report.md`. The 0.5.4 mutation set (122 mutations) and the serial and parallel runners are in `handoff/tools/`.

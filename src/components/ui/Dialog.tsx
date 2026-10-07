@@ -12,12 +12,15 @@ export function Dialog({
   title,
   description,
   children,
+  wide = false,
 }: {
   open: boolean;
   onClose: () => void;
   title: string;
   description?: ReactNode;
   children: ReactNode;
+  /// A roomier panel for a form with a table of rows in it (assessment components, grade bands).
+  wide?: boolean;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
@@ -45,7 +48,7 @@ export function Dialog({
       aria-labelledby={titleId}
       aria-describedby={description ? descriptionId : undefined}
       onClose={onClose}
-      className="fixed inset-0 m-auto max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-lg overflow-y-auto rounded-2xl border border-line bg-surface p-0 text-fg shadow-menu backdrop:bg-black/60"
+      className={`fixed inset-0 m-auto max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] ${wide ? "max-w-3xl" : "max-w-lg"} overflow-y-auto rounded-2xl border border-line bg-surface p-0 text-fg shadow-menu backdrop:bg-black/60`}
     >
       {open && (
         <div className="p-5 sm:p-6">

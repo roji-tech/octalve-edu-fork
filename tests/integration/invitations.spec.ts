@@ -51,8 +51,10 @@ const ctx = (t: TestTenant): TenantAuthContext["tenant"] => ({
   tenantId: trustedTenantId(t.id),
   tenantCode: t.code,
   tenantName: t.name,
+  schoolType: "K12",
   role: "ADMIN",
   campusId: null,
+  permissions: [],
   run: <T>(fn: (tx: Tx) => Promise<T>) => forTenant(trustedTenantId(t.id)).transaction(fn),
 });
 const email = (label: string) => `${label}-${crypto.randomBytes(3).toString("hex")}@invite.test`;
