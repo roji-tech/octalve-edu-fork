@@ -530,6 +530,65 @@ async function armForEnrolment(tx: Tx, tenant: TenantCtx, studentCampusId: strin
 
 const enrolmentRow = (tx: Tx, id: string) => tx.studentEnrollment.findUniqueOrThrow({ where: { id }, include: ENROLMENT_INCLUDE });
 
+/// Enrols a student INSIDE the caller's transaction (the CSV import calls this per row). Assumes the student was read through the caller's visibility and is
+/// live. Same rules as `enrolStudent`; callers wrap in `rollingBack` (a lost race is refused by throwing).
+export async function enrolWithin(
+  tx: Tx,
+  tenant: TenantCtx,
+  actorUserId: string,
+  student: { id: string; campusId: string | null },
+  input: { sessionId: string; classArmId: string },
+  now: Date,
+): Promise<PeopleResult<{ enrolment: EnrolmentView; reenrolled: boolean }>> {
+  const { tenantId } = tenant;
+  const studentId = student.id;
+  const session = await sessionForEnrolment(tx, tenant, student.campusId, input.sessionId, now);
+  if (!session.ok) return session;
+  const arm = await armForEnrolment(tx, tenant, student.campusId, input.classArmId);
+  if (!arm.ok) return arm;
+  await lockStudent(tx, tenantId, studentId);
+  const existing = await tx.studentEnrollment.findFirst({
+    where: { tenantId, studentId, sessionId: input.sessionId },
+    include: ENROLMENT_INCLUDE,
+  });
+  if (existing && existing.status !== "WITHDRAWN") {
+    return refuse("ALREADY_ENROLLED", {
+      classArmId: existing.classArmId,
+      armName: existing.classArm.name,
+      className: existing.classArm.classGroup.name,
+    });
+  }
+  if (existing) {
+    // A withdrawn student coming back into the same session: the row (one per student per session) is reactivated, not duplicated.
+    const done = await tx.studentEnrollment.updateMany({
+      where: { id: existing.id, tenantId, status: "WITHDRAWN" },
+      data: { status: "ACTIVE", classArmId: arm.arm.id },
+    });
+    if (done.count !== 1) return refuseAndRollBack("WRONG_STATE");
+    await auditPeople(
+      tx,
+      tenantId,
+      actorUserId,
+      "StudentEnrollment",
+      "ENROLMENT_REACTIVATED",
+      existing.id,
+      { status: "WITHDRAWN", classArmId: existing.classArmId },
+      { status: "ACTIVE", classArmId: arm.arm.id, studentId, sessionId: input.sessionId },
+    );
+    return { ok: true as const, enrolment: toEnrolment(await enrolmentRow(tx, existing.id)), reenrolled: true };
+  }
+  const created = await tx.studentEnrollment.create({
+    data: { tenantId, studentId, sessionId: input.sessionId, classArmId: arm.arm.id },
+    include: ENROLMENT_INCLUDE,
+  });
+  await auditPeople(tx, tenantId, actorUserId, "StudentEnrollment", "ENROLMENT_CREATED", created.id, undefined, {
+    studentId,
+    sessionId: input.sessionId,
+    classArmId: arm.arm.id,
+  });
+  return { ok: true as const, enrolment: toEnrolment(created), reenrolled: false };
+}
+
 export async function enrolStudent(
   tenant: TenantCtx,
   actorUserId: string,
@@ -537,62 +596,12 @@ export async function enrolStudent(
   input: { sessionId: string; classArmId: string },
   now: Date = new Date(),
 ): Promise<PeopleResult<{ enrolment: EnrolmentView; reenrolled: boolean }>> {
-  const { tenantId } = tenant;
   return rollingBack(() =>
     tenant.run(async (tx) => {
       const student = await findStudent(tx, tenant, studentId);
       if (!student) return refuse("NOT_FOUND");
       if (student.archivedAt) return refuse("ARCHIVED");
-      const session = await sessionForEnrolment(tx, tenant, student.campusId, input.sessionId, now);
-      if (!session.ok) return session;
-      const arm = await armForEnrolment(tx, tenant, student.campusId, input.classArmId);
-      if (!arm.ok) return arm;
-      await lockStudent(tx, tenantId, studentId);
-      const existing = await tx.studentEnrollment.findFirst({
-        where: { tenantId, studentId, sessionId: input.sessionId },
-        include: ENROLMENT_INCLUDE,
-      });
-      if (existing && existing.status !== "WITHDRAWN") {
-        return refuse("ALREADY_ENROLLED", {
-          classArmId: existing.classArmId,
-          armName: existing.classArm.name,
-          className: existing.classArm.classGroup.name,
-        });
-      }
-      if (existing) {
-        // A withdrawn student coming back into the same session: the row (one per student per session) is reactivated, not duplicated.
-        const done = await tx.studentEnrollment.updateMany({
-          where: { id: existing.id, tenantId, status: "WITHDRAWN" },
-          data: { status: "ACTIVE", classArmId: arm.arm.id },
-        });
-        if (done.count !== 1) return refuseAndRollBack("WRONG_STATE");
-        await auditPeople(
-          tx,
-          tenantId,
-          actorUserId,
-          "StudentEnrollment",
-          "ENROLMENT_REACTIVATED",
-          existing.id,
-          { status: "WITHDRAWN", classArmId: existing.classArmId },
-          {
-            status: "ACTIVE",
-            classArmId: arm.arm.id,
-            studentId,
-            sessionId: input.sessionId,
-          },
-        );
-        return { ok: true as const, enrolment: toEnrolment(await enrolmentRow(tx, existing.id)), reenrolled: true };
-      }
-      const created = await tx.studentEnrollment.create({
-        data: { tenantId, studentId, sessionId: input.sessionId, classArmId: arm.arm.id },
-        include: ENROLMENT_INCLUDE,
-      });
-      await auditPeople(tx, tenantId, actorUserId, "StudentEnrollment", "ENROLMENT_CREATED", created.id, undefined, {
-        studentId,
-        sessionId: input.sessionId,
-        classArmId: arm.arm.id,
-      });
-      return { ok: true as const, enrolment: toEnrolment(created), reenrolled: false };
+      return enrolWithin(tx, tenant, actorUserId, student, input, now);
     }),
   );
 }

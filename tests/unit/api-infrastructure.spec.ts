@@ -212,6 +212,29 @@ test.describe("validate()", () => {
     expect(calls).toHaveLength(0);
   });
 
+  test("one route may declare a higher body cap (the CSV import); the cap applies to that route only, and a lower or zero value never lowers the default", async () => {
+    const big = JSON.stringify({ name: "x".repeat(MAX_BODY_BYTES + 100) });
+    const roomy = validate(
+      { body: z.object({ name: z.string() }), maxBodyBytes: MAX_BODY_BYTES * 2 },
+      async (_r, _a: unknown, _c: unknown, input) => Response.json({ n: input.body.name.length }),
+    );
+    expect((await run(roomy as never, request({ body: big }))).json).toEqual({ n: MAX_BODY_BYTES + 100 });
+    const tooBig = JSON.stringify({ name: "x".repeat(MAX_BODY_BYTES * 2) });
+    expect(await run(roomy as never, request({ body: tooBig }))).toMatchObject({ status: 413 });
+    expect(await run(roomy as never, request({ body: "{}", headers: { "content-length": String(MAX_BODY_BYTES * 2 + 1) } }))).toMatchObject(
+      { status: 413 },
+    );
+    for (const maxBodyBytes of [0, 1, MAX_BODY_BYTES - 1]) {
+      const stingy = validate({ body: z.object({ name: z.string() }), maxBodyBytes }, async () => Response.json({}));
+      expect(await run(stingy as never, request({ body: JSON.stringify({ name: "x".repeat(1000) }) })), String(maxBodyBytes)).toMatchObject(
+        { status: 200 },
+      ); // not lowered
+      expect(await run(stingy as never, request({ body: big })), String(maxBodyBytes)).toMatchObject({ status: 413 });
+    }
+    const { handler } = route(); // an ordinary route is still capped at the default
+    expect(await run(handler, request({ body: big }))).toMatchObject({ status: 413 });
+  });
+
   test("a route with only a query schema never reads the body; one with only a body never reads the query", async () => {
     const onlyQuery = validate({ query: querySchema }, async (_r, _a: unknown, _c: unknown, input) => Response.json(input));
     expect((await run(onlyQuery as never, request({ query: "q=a" }))).json).toEqual({ query: { q: "a" } });

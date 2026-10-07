@@ -130,6 +130,24 @@ export function peopleFailure(reason: PeopleFailure, detail?: Record<string, unk
       return fail("Another staff record already uses that email address.", 409, "EMAIL_TAKEN", [
         { path: "body.email", message: "Another record uses this address." },
       ]);
+    case "TOO_LARGE":
+      return fail(
+        `That file is too large. A student file can be at most ${Math.round(Number(detail?.max ?? 0) / 1024)} KB.`,
+        413,
+        "TOO_LARGE",
+      );
+    case "TOO_MANY_ROWS":
+      return detail?.export
+        ? fail(
+            `There are more than ${String(detail.max)} students in that selection. Narrow the filter and export again.`,
+            400,
+            "TOO_MANY_ROWS",
+          )
+        : fail(
+            `That file has ${String(detail?.rows)} students. A file can have at most ${String(detail?.max)}; split it and import the parts.`,
+            400,
+            "TOO_MANY_ROWS",
+          );
     case "HAS_LIVE_LINKS":
       return fail("Students are still linked to this guardian. Remove those links first.", 409, "HAS_LIVE_LINKS");
     default:

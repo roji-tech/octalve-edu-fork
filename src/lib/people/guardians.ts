@@ -204,6 +204,25 @@ export async function addGuardian(
   studentId: string,
   input: AddGuardianInput,
 ): Promise<PeopleResult<{ link: GuardianLinkView; createdGuardian: boolean; reactivated: boolean }>> {
+  return rollingBack(() =>
+    tenant.run(async (tx) => {
+      const student = await findVisibleStudent(tx, tenant, studentId);
+      if (!student) return refuse("NOT_FOUND");
+      if (student.archivedAt) return refuse("ARCHIVED");
+      return addGuardianWithin(tx, tenant, actorUserId, studentId, input);
+    }),
+  );
+}
+
+/// Links a guardian INSIDE the caller's transaction (the CSV import calls this per row). Assumes the student was read through the caller's visibility and is
+/// live. Validates the input first (nothing is written for a bad one); callers wrap in `rollingBack`.
+export async function addGuardianWithin(
+  tx: Tx,
+  tenant: TenantCtx,
+  actorUserId: string,
+  studentId: string,
+  input: AddGuardianInput,
+): Promise<PeopleResult<{ link: GuardianLinkView; createdGuardian: boolean; reactivated: boolean }>> {
   if (!isRelationship(input.relationship)) return invalid("relationship");
   const relationship = input.relationship;
   const existingId = input.guardianId;
@@ -216,74 +235,64 @@ export async function addGuardian(
     contact = cleaned.value;
   }
   const { tenantId } = tenant;
-  return rollingBack(() =>
-    tenant.run(async (tx) => {
-      const student = await findVisibleStudent(tx, tenant, studentId);
-      if (!student) return refuse("NOT_FOUND");
-      if (student.archivedAt) return refuse("ARCHIVED");
-      await lockLinks(tx, tenantId, studentId);
+  await lockLinks(tx, tenantId, studentId);
 
-      let guardianId: string;
-      let createdGuardian = false;
-      if (existingId !== undefined) {
-        const guardian = await tx.guardianRecord.findFirst({ where: { id: existingId, tenantId, archivedAt: null }, select: { id: true } });
-        if (!guardian) return refuse("INVALID_GUARDIAN");
-        guardianId = guardian.id;
-      } else {
-        const made = await tx.guardianRecord.create({ data: { tenantId, ...contact! }, select: { id: true } });
-        guardianId = made.id;
-        createdGuardian = true;
-        await auditPeople(tx, tenantId, actorUserId, "GuardianRecord", "GUARDIAN_CREATED", made.id, undefined, { studentId });
-      }
+  let guardianId: string;
+  let createdGuardian = false;
+  if (existingId !== undefined) {
+    const guardian = await tx.guardianRecord.findFirst({ where: { id: existingId, tenantId, archivedAt: null }, select: { id: true } });
+    if (!guardian) return refuse("INVALID_GUARDIAN");
+    guardianId = guardian.id;
+  } else {
+    const made = await tx.guardianRecord.create({ data: { tenantId, ...contact! }, select: { id: true } });
+    guardianId = made.id;
+    createdGuardian = true;
+    await auditPeople(tx, tenantId, actorUserId, "GuardianRecord", "GUARDIAN_CREATED", made.id, undefined, { studentId });
+  }
 
-      const existingLink = await tx.guardianLink.findFirst({
-        where: { tenantId, studentId, guardianId },
-        select: { id: true, status: true },
-      });
-      if (existingLink && existingLink.status !== "REVOKED") return refuse("ALREADY_LINKED");
+  const existingLink = await tx.guardianLink.findFirst({ where: { tenantId, studentId, guardianId }, select: { id: true, status: true } });
+  if (existingLink && existingLink.status !== "REVOKED") return refuse("ALREADY_LINKED");
 
-      const liveCount = await tx.guardianLink.count({ where: { tenantId, studentId, ...LIVE } });
-      const primary = input.isPrimary === true || liveCount === 0;
-      if (primary) {
-        await tx.guardianLink.updateMany({ where: { tenantId, studentId, isPrimary: true, ...LIVE }, data: { isPrimary: false } });
-      }
-      let linkId: string;
-      let reactivated = false;
-      if (existingLink) {
-        // A removed link coming back: the row (one per student and guardian) is reactivated, not duplicated.
-        const done = await tx.guardianLink.updateMany({
-          where: { id: existingLink.id, tenantId, status: "REVOKED" },
-          data: { status: "APPROVED", revokedAt: null, relationship, isPrimary: primary, approvedById: actorUserId },
-        });
-        if (done.count !== 1) return refuseAndRollBack("WRONG_STATE");
-        linkId = existingLink.id;
-        reactivated = true;
-      } else {
-        const created = await tx.guardianLink.create({
-          data: { tenantId, studentId, guardianId, relationship, isPrimary: primary, status: "APPROVED", approvedById: actorUserId },
-          select: { id: true },
-        });
-        linkId = created.id;
-      }
-      await auditPeople(
-        tx,
-        tenantId,
-        actorUserId,
-        "GuardianLink",
-        reactivated ? "GUARDIAN_LINK_RESTORED" : "GUARDIAN_LINKED",
-        linkId,
-        undefined,
-        {
-          studentId,
-          guardianId,
-          relationship,
-          isPrimary: primary,
-        },
-      );
-      const row = await tx.guardianLink.findUniqueOrThrow({ where: { id: linkId }, include: LINK_INCLUDE });
-      return { ok: true as const, link: toLink(row), createdGuardian, reactivated };
-    }),
+  const liveCount = await tx.guardianLink.count({ where: { tenantId, studentId, ...LIVE } });
+  const primary = input.isPrimary === true || liveCount === 0;
+  if (primary) {
+    await tx.guardianLink.updateMany({ where: { tenantId, studentId, isPrimary: true, ...LIVE }, data: { isPrimary: false } });
+  }
+  let linkId: string;
+  let reactivated = false;
+  if (existingLink) {
+    // A removed link coming back: the row (one per student and guardian) is reactivated, not duplicated.
+    const done = await tx.guardianLink.updateMany({
+      where: { id: existingLink.id, tenantId, status: "REVOKED" },
+      data: { status: "APPROVED", revokedAt: null, relationship, isPrimary: primary, approvedById: actorUserId },
+    });
+    if (done.count !== 1) return refuseAndRollBack("WRONG_STATE");
+    linkId = existingLink.id;
+    reactivated = true;
+  } else {
+    const created = await tx.guardianLink.create({
+      data: { tenantId, studentId, guardianId, relationship, isPrimary: primary, status: "APPROVED", approvedById: actorUserId },
+      select: { id: true },
+    });
+    linkId = created.id;
+  }
+  await auditPeople(
+    tx,
+    tenantId,
+    actorUserId,
+    "GuardianLink",
+    reactivated ? "GUARDIAN_LINK_RESTORED" : "GUARDIAN_LINKED",
+    linkId,
+    undefined,
+    {
+      studentId,
+      guardianId,
+      relationship,
+      isPrimary: primary,
+    },
   );
+  const row = await tx.guardianLink.findUniqueOrThrow({ where: { id: linkId }, include: LINK_INCLUDE });
+  return { ok: true as const, link: toLink(row), createdGuardian, reactivated };
 }
 
 /// Changes a link's relationship and/or makes it the primary contact (demoting the current one in the same transaction). Making it NOT primary is allowed:
