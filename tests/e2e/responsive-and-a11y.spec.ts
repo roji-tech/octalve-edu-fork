@@ -795,7 +795,31 @@ test.describe("academic setup (SaaS-mode server)", () => {
     await page.keyboard.press("Escape");
 
     await page.getByRole("button", { name: `Close ${active.label}` }).click();
-    await checkScreen(page, "/academics sessions (close confirmation)", isMobile);
+    await checkScreen(page, "/academics sessions (close: the 24-hour countdown)", isMobile);
+    await dialog(page).getByLabel("Close sooner — in 1 minute instead of 24 hours").check();
+    await dialog(page).getByRole("button", { name: "Close in 1 minute" }).click();
+    await expect(dialog(page).getByText("Enter your password to confirm.")).toBeVisible();
+    await checkScreen(page, "/academics sessions (close sooner: password asked, with its error)", isMobile);
+    await page.keyboard.press("Escape");
+    await db.academicSession.update({
+      where: { id: active.id },
+      data: { closeAt: new Date(Date.now() + 86_400_000), closeRequestedById: "an-administrator", closeForced: false },
+    });
+    await page.reload();
+    await expect(page.getByRole("button", { name: `Cancel the planned close of ${active.label}` })).toBeVisible();
+    await checkScreen(page, "/academics sessions (a close is planned)", isMobile);
+    await page.getByRole("button", { name: `Cancel the planned close of ${active.label}` }).click();
+    await checkScreen(page, "/academics sessions (cancel the planned close)", isMobile);
+    await page.keyboard.press("Escape");
+    await page.getByRole("button", { name: `Close ${active.label} sooner` }).click();
+    await checkScreen(page, "/academics sessions (close sooner, from a planned close)", isMobile);
+    await page.keyboard.press("Escape");
+    await db.academicSession.update({ where: { id: active.id }, data: { closeAt: null, closeRequestedById: null } });
+    await page.reload();
+    await page.getByRole("button", { name: "Reopen 2025/2026" }).click();
+    await dialog(page).getByRole("button", { name: "Reopen session" }).click();
+    await expect(dialog(page).getByText("Give a reason of at least 5 characters.")).toBeVisible();
+    await checkScreen(page, "/academics sessions (reopen, with its error)", isMobile);
     await page.keyboard.press("Escape");
     await page.getByRole("button", { name: `Archive ${planned.label}` }).click();
     await checkScreen(page, "/academics sessions (archive confirmation)", isMobile);

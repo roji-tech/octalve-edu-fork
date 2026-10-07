@@ -155,7 +155,6 @@ test.describe("sessions and terms", () => {
     page,
   }) => {
     const admin = await signedInAdmin(page, "sessions");
-    void admin;
     await db.academicSession.create({
       data: {
         tenantId: school.id,
@@ -174,9 +173,95 @@ test.describe("sessions and terms", () => {
     await expect(dialog(page).getByText(/"2025\/2026" is already the active session/)).toBeVisible();
     await dialog(page).getByLabel("If another session is already open, close it first").check();
     await dialog(page).getByRole("button", { name: "Open session" }).click();
+    await expect(dialog(page).getByText("Enter your password to confirm.")).toBeVisible(); // ending a year on the spot asks who you are
+    await field(dialog(page), "Your password").fill("not-my-password-1");
+    await dialog(page).getByRole("button", { name: "Open session" }).click();
+    await expect(dialog(page).getByText("That password isn't right.")).toBeVisible();
+    expect((await db.academicSession.findFirstOrThrow({ where: { tenantId: school.id, label: "2025/2026" } })).status).toBe("ACTIVE");
+    await field(dialog(page), "Your password").fill(admin.password);
+    await dialog(page).getByRole("button", { name: "Open session" }).click();
     await expect(notice(page)).toContainText("2026/2027 is now open, and 2025/2026 was closed.");
     await expect(item(page, "2025/2026")).toContainText("Closed");
     await expect(item(page, "2026/2027")).toContainText("Active");
+  });
+});
+
+test.describe("closing a session", () => {
+  async function activeYear() {
+    return db.academicSession.create({
+      data: {
+        tenantId: school.id,
+        label: "2026/2027",
+        startDate: new Date("2026-09-01"),
+        endDate: new Date("2027-07-31"),
+        status: "ACTIVE",
+      },
+    });
+  }
+
+  test("Close… starts a 24-hour countdown that says what it does; the row shows when it closes; Cancel closing takes it back", async ({
+    page,
+  }) => {
+    await signedInAdmin(page, "sessions");
+    const year = await activeYear();
+    await page.reload();
+    await page.getByRole("button", { name: "Close 2026/2027" }).click();
+    const d = dialog(page);
+    await expect(d.getByRole("heading", { name: "Close 2026/2027?" })).toBeVisible();
+    await expect(d).toContainText("Closing starts a 24-hour countdown. Until it ends nothing changes, and you can cancel.");
+    await expect(d.getByLabel("Your password")).toHaveCount(0); // the slow way needs no password
+    await d.getByRole("button", { name: "Start 24-hour countdown" }).click();
+    await expect(dialog(page)).toBeHidden();
+    await expect(notice(page)).toContainText("2026/2027 will close on");
+    await expect(item(page, "2026/2027")).toContainText("Active");
+    await expect(item(page, "2026/2027")).toContainText("Closes ");
+    expect(
+      Math.abs((await db.academicSession.findUniqueOrThrow({ where: { id: year.id } })).closeAt!.getTime() - (Date.now() + 86_400_000)),
+    ).toBeLessThan(60_000);
+
+    await page.getByRole("button", { name: "Cancel the planned close of 2026/2027" }).click();
+    await expect(dialog(page).getByRole("button", { name: "Cancel" })).toBeFocused(); // the safe choice has focus
+    await dialog(page).getByRole("button", { name: "Cancel the close" }).click();
+    await expect(notice(page)).toContainText("The planned close of 2026/2027 was cancelled.");
+    await expect(item(page, "2026/2027")).not.toContainText("Closes ");
+    expect((await db.academicSession.findUniqueOrThrow({ where: { id: year.id } })).closeAt).toBeNull();
+  });
+
+  test("Close sooner asks for the password, says so in the field when it is wrong, and then closes in a minute; once due the session is Closed and can be reopened with a reason", async ({
+    page,
+  }) => {
+    const admin = await signedInAdmin(page, "sessions");
+    const year = await activeYear();
+    await page.reload();
+    await page.getByRole("button", { name: "Close 2026/2027" }).click();
+    await dialog(page).getByLabel("Close sooner — in 1 minute instead of 24 hours").check();
+    await expect(dialog(page).getByRole("button", { name: "Close in 1 minute" })).toBeVisible();
+    await dialog(page).getByRole("button", { name: "Close in 1 minute" }).click();
+    await expect(dialog(page).getByText("Enter your password to confirm.")).toBeVisible();
+    await field(dialog(page), "Your password").fill("not-my-password-1");
+    await dialog(page).getByRole("button", { name: "Close in 1 minute" }).click();
+    await expect(dialog(page).getByText("That password isn't right.")).toBeVisible();
+    expect((await db.academicSession.findUniqueOrThrow({ where: { id: year.id } })).closeAt).toBeNull();
+    await field(dialog(page), "Your password").fill(admin.password);
+    await dialog(page).getByRole("button", { name: "Close in 1 minute" }).click();
+    await expect(dialog(page)).toBeHidden();
+    await expect(notice(page)).toContainText("2026/2027 will close on");
+    const stored = await db.academicSession.findUniqueOrThrow({ where: { id: year.id } });
+    expect(stored.closeForced).toBe(true);
+    expect(Math.abs(stored.closeAt!.getTime() - (Date.now() + 60_000))).toBeLessThan(30_000);
+    await expect(page.getByRole("button", { name: "Close 2026/2027 sooner" })).toHaveCount(0); // already as soon as it gets
+
+    await db.academicSession.update({ where: { id: year.id }, data: { closeAt: new Date(Date.now() - 1000) } }); // the minute has passed
+    await page.reload();
+    await expect(item(page, "2026/2027")).toContainText("Closed");
+    await page.getByRole("button", { name: "Reopen 2026/2027" }).click();
+    await dialog(page).getByRole("button", { name: "Reopen session" }).click();
+    await expect(dialog(page).getByText("Give a reason of at least 5 characters.")).toBeVisible();
+    await field(dialog(page), "Why is it being reopened?").fill("Closed too early");
+    await dialog(page).getByRole("button", { name: "Reopen session" }).click();
+    await expect(notice(page)).toContainText("2026/2027 is open again.");
+    await expect(item(page, "2026/2027")).toContainText("Active");
+    expect(await db.auditLog.count({ where: { tenantId: school.id, targetId: year.id, action: "SESSION_REOPENED" } })).toBe(1);
   });
 });
 

@@ -45,6 +45,12 @@ const ctx = (
   run: <T>(fn: (tx: Tx) => Promise<T>) => forTenant(trustedTenantId(t.id)).transaction(fn),
 });
 const admin = (t: TestTenant = a) => ctx(t);
+/// Closing is a countdown now (plan, "closing a session takes time"); tests that only need the session CLOSED schedule it (the forced, one-minute way) and
+/// move the deadline into the past — the next service call settles it, exactly as it would a minute later.
+async function closeNow(id: string) {
+  expect(await closeSession(admin(), boss.id, id, { force: true })).toMatchObject({ ok: true });
+  await db.academicSession.update({ where: { id }, data: { closeAt: new Date(Date.now() - 1000) } });
+}
 
 test.beforeEach(async () => {
   await seedInstance();
@@ -172,7 +178,7 @@ test.describe("updating a session", () => {
       afterValue: { label: "Year 2026-27", endDate: "2027-07-30" },
     });
     await activateSession(admin(), boss.id, s.id, { closeCurrent: false });
-    await closeSession(admin(), boss.id, s.id);
+    await closeNow(s.id);
     expect(await updateSession(admin(), boss.id, s.id, { label: "Edited after closing" })).toMatchObject({
       ok: false,
       reason: "CLOSED_READONLY",
@@ -279,7 +285,7 @@ test.describe("activating, closing, archiving (decision 10)", () => {
     const s = await session("2026/2027");
     await activateSession(admin(), boss.id, s.id, { closeCurrent: false });
     expect(await activateSession(admin(), boss.id, s.id, { closeCurrent: false })).toMatchObject({ ok: false, reason: "WRONG_STATE" });
-    await closeSession(admin(), boss.id, s.id);
+    await closeNow(s.id);
     expect(await activateSession(admin(), boss.id, s.id, { closeCurrent: false })).toMatchObject({ ok: false, reason: "WRONG_STATE" }); // CLOSED is terminal
     await archiveSession(admin(), boss.id, s.id);
     expect(await activateSession(admin(), boss.id, s.id, { closeCurrent: false })).toMatchObject({ ok: false, reason: "ARCHIVED" });
@@ -291,12 +297,18 @@ test.describe("activating, closing, archiving (decision 10)", () => {
     await createPeriod(admin(), boss.id, planned.id, { label: "Term 1", startDate: "2026-09-07", endDate: "2026-12-18" });
     await activateSession(admin(), boss.id, planned.id, { closeCurrent: false });
     expect(await archiveSession(admin(), boss.id, planned.id)).toMatchObject({ ok: false, reason: "ACTIVE_CANNOT_ARCHIVE" });
-    await closeSession(admin(), boss.id, planned.id);
+    await closeNow(planned.id);
     expect(await archiveSession(admin(), boss.id, planned.id)).toMatchObject({ ok: true, changed: true, session: { archived: true } });
     expect(await archiveSession(admin(), boss.id, planned.id)).toMatchObject({ ok: true, changed: false }); // idempotent
     expect(await db.academicPeriod.count({ where: { sessionId: planned.id, archivedAt: null } })).toBe(0);
     expect(await db.academicSession.count({ where: { id: planned.id } })).toBe(1); // still there: archived, never deleted
-    expect(await actions(planned.id)).toEqual(["SESSION_CREATED", "SESSION_ACTIVATED", "SESSION_CLOSED", "SESSION_ARCHIVED"]);
+    expect(await actions(planned.id)).toEqual([
+      "SESSION_CREATED",
+      "SESSION_ACTIVATED",
+      "SESSION_CLOSE_REQUESTED",
+      "SESSION_CLOSED",
+      "SESSION_ARCHIVED",
+    ]);
   });
 
   test("the list defaults to live sessions, filters by status, hides archived ones unless asked, and pages stably", async () => {
@@ -450,7 +462,7 @@ test.describe("periods (decision 12)", () => {
     });
     const closed = await session("Closed one", { startDate: "2030-01-01", endDate: "2030-12-31" });
     await activateSession(admin(), boss.id, closed.id, { closeCurrent: true });
-    await closeSession(admin(), boss.id, closed.id);
+    await closeNow(closed.id);
     expect(
       await createPeriod(admin(), boss.id, closed.id, { label: "Late", startDate: "2030-02-01", endDate: "2030-03-01" }),
     ).toMatchObject({ ok: false, reason: "CLOSED_READONLY" });

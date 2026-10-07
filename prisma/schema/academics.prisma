@@ -20,18 +20,23 @@ enum PeriodKind {
 
 /// One academic year/session. campusId null = every campus; set = that campus's own calendar (a campus's own ACTIVE session shadows the school-wide one).
 model AcademicSession {
-  id           String        @id @default(cuid())
-  tenantId     String
-  campusId     String?
-  label        String
-  startDate    DateTime      @db.Date
-  endDate      DateTime      @db.Date
-  status       SessionStatus @default(PLANNED)
+  id                 String        @id @default(cuid())
+  tenantId           String
+  campusId           String?
+  label              String
+  startDate          DateTime      @db.Date
+  endDate            DateTime      @db.Date
+  status             SessionStatus @default(PLANNED)
   /// Set when this session was created by copy-forward from another; at most one live copy per source (partial unique index).
-  copiedFromId String?
-  archivedAt   DateTime?
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @default(now()) @updatedAt
+  copiedFromId       String?
+  archivedAt         DateTime?
+  /// A scheduled close (plan, "closing a session takes time"): while set and in the future the session is still ACTIVE; once it passes the session
+  /// is CLOSED (see `effectiveStatus`). `closeForced` = it was scheduled with the administrator's password, for one minute ahead instead of a day.
+  closeAt            DateTime?
+  closeRequestedById String?
+  closeForced        Boolean       @default(false)
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @default(now()) @updatedAt
 
   tenant     Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   campus     Campus?           @relation(fields: [tenantId, campusId], references: [tenantId, id], onDelete: NoAction)

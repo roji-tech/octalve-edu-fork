@@ -29,3 +29,4 @@ Plans and phase records link to the ADR instead of re-arguing the reason.
 | [0005](0005-marks-in-hundredths-and-half-open-bands.md) | Marks are integers of hundredths; grade bands are half-open | accepted |
 | [0006](0006-admin-implies-permissions-not-roles.md) | ADMIN implies permissions, not roles; only an ADMIN grants | accepted |
 | [0007](0007-mutation-passes-deferred-to-end-of-phase-2.md) | Mutation passes are deferred to the end of Phase 2 | accepted |
+| [0008](0008-closing-a-session-is-delayed-and-reversible.md) | Closing a session is delayed, can be forced with the password, and can be reopened | accepted |

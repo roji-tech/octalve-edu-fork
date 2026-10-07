@@ -1,5 +1,5 @@
 # 0004 — Academic records are archived, never deleted
-Status: accepted · Decided: Phase 1.1 · Recorded: 2026-10-07
+Status: accepted — except that "`CLOSED` sessions are terminal" is superseded by 0008 (closing is delayed and a closed session can be reopened) · Decided: Phase 1.1 · Recorded: 2026-10-07
 
 ## Context
 Sessions, classes, subjects, schemes and scales will be referenced by results, fees and reports. A deleted row either breaks those references or silently rewrites history.

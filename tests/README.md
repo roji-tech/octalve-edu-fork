@@ -169,3 +169,6 @@ in the app.
 - The rate limiter is in-process memory (correct for Solo and single-instance SaaS). A Redis-backed
   limiter — required before any multi-instance deployment — will need these limiter tests re-pointed
   at it.
+
+## Closing a session (added 2026-10-07)
+`integration/academic-session-closing` is the home of the countdown rules (schedule, force, cancel, settle once under concurrency, read-only when due, reopen); `closeNow(id)` in `integration/academic-sessions` is the helper other tests use to get a session CLOSED (schedule it the forced way, move `closeAt` into the past, and let the next service call settle it). API tests that call `activate` with `closeCurrent: true` must send the administrator's `password`; the `close` route needs a JSON body (`{}` is enough).

@@ -55,6 +55,9 @@ New this slice (counts are `test(` blocks): unit `academic-rules`, `scoring-rule
 6. Should staff get a read-only Academic setup screen now, or with the Phase 1.2 people pages?
 7. AlEemaan: where does the Arabic branch's data come from, and what seeds its School Settings (the setup wizard stores no school name)?
 
+## 7a. Answers received from the maintainer (2026-10-07)
+1. **Campus session shadows school-wide: keep as built.**  3. **Closed sessions:** not final any more — closing is a 24-hour countdown (1 minute with the password) and a closed session can be reopened with a reason (ADR 0008; built on this branch after the first push, see the PR).  4. **Half-open bands: keep**; whole-number rounding before grading stays an option for 1.4.  5. **One default scale per school: yes**, per-class scales later.  6. **Staff read-only screen: with Phase 1.2.**  2. **School type is not asked in the wizard**: it comes from the superadmin's settings or an environment setting at creation (proposal: `DEFAULT_SCHOOL_TYPE` for self-hosted + set when a school is created; a school's own administrator cannot change it) — to be confirmed and built with 1.2.
+
 ## 8. Five-minute verification
 ```bash
 git fetch fork && git checkout claude/phase-1-0-1-1

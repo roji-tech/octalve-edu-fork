@@ -3,9 +3,13 @@ import type { Tx } from "@/lib/tenant/for-tenant";
 import type { TenantAuthContext } from "@/lib/auth/with-auth";
 import {
   addYears,
+  CLOSE_DELAY_MS,
+  FORCE_CLOSE_DELAY_MS,
   checkPeriodDates,
   checkSessionDates,
   cleanName,
+  cleanReason,
+  effectiveStatus,
   findOverlap,
   findPeriodOverlap,
   fromIsoDate,
@@ -38,10 +42,14 @@ export type SessionView = {
   label: string;
   startDate: string;
   endDate: string;
+  /// The EFFECTIVE status: a session whose scheduled close has passed reads as CLOSED even before it has been settled in the database.
   status: SessionStatus;
   archived: boolean;
   copiedFromId: string | null;
   periodCount: number;
+  /// A close scheduled for later (ISO instant), while the session is still ACTIVE; null otherwise.
+  closeAt: string | null;
+  closeForced: boolean;
 };
 
 export type PeriodView = {
@@ -62,18 +70,23 @@ const SESSION_INCLUDE = {
 } satisfies Prisma.AcademicSessionInclude;
 type SessionRow = Prisma.AcademicSessionGetPayload<{ include: typeof SESSION_INCLUDE }>;
 
-const toSessionView = (row: SessionRow): SessionView => ({
-  id: row.id,
-  campusId: row.campusId,
-  campusName: row.campus?.name ?? null,
-  label: row.label,
-  startDate: toIsoDate(row.startDate),
-  endDate: toIsoDate(row.endDate),
-  status: row.status,
-  archived: row.archivedAt !== null,
-  copiedFromId: row.copiedFromId,
-  periodCount: row._count.periods,
-});
+const toSessionView = (row: SessionRow, now: Date = new Date()): SessionView => {
+  const status = effectiveStatus(row, now);
+  return {
+    id: row.id,
+    campusId: row.campusId,
+    campusName: row.campus?.name ?? null,
+    label: row.label,
+    startDate: toIsoDate(row.startDate),
+    endDate: toIsoDate(row.endDate),
+    status,
+    archived: row.archivedAt !== null,
+    copiedFromId: row.copiedFromId,
+    periodCount: row._count.periods,
+    closeAt: status === "ACTIVE" && row.closeAt ? row.closeAt.toISOString() : null,
+    closeForced: status === "ACTIVE" && row.closeAt !== null && row.closeForced,
+  };
+};
 
 const toPeriodView = (row: AcademicPeriod): PeriodView => ({
   id: row.id,
@@ -107,6 +120,8 @@ export type AcademicFailure =
   | "WRONG_STATE"
   | "ARCHIVED"
   | "CLOSED_READONLY"
+  /// A reopening needs a typed reason of 5–300 characters.
+  | "INVALID_REASON"
   | "ACTIVE_CANNOT_ARCHIVE"
   | "PERIODS_OUTSIDE"
   | "TOO_MANY_PERIODS"
@@ -228,8 +243,38 @@ const auditPeriod = (
     },
   });
 
-export const findVisible = (tx: Tx, tenant: TenantCtx, id: string) =>
-  tx.academicSession.findFirst({ where: { id, tenantId: tenant.tenantId, ...visibleTo(tenant) }, include: SESSION_INCLUDE });
+/// Moves every session of this school whose scheduled close has passed to CLOSED — exactly once each (a conditional update decides, so two settlers
+/// write one audit row) — attributed to the person who asked. Runs at the start of every session read and write, and there is no scheduler:
+/// `effectiveStatus` makes the session read-only the instant it is due, this only writes that down.
+export async function settleDueClosings(tx: Tx, tenantId: string, now: Date = new Date()): Promise<void> {
+  const due = await tx.academicSession.findMany({
+    where: { tenantId, status: "ACTIVE", closeAt: { lte: now } },
+    select: { id: true, closeRequestedById: true, closeForced: true, closeAt: true },
+    orderBy: { id: "asc" },
+  });
+  for (const session of due) {
+    const done = await tx.academicSession.updateMany({
+      where: { id: session.id, tenantId, status: "ACTIVE", closeAt: { lte: now } },
+      data: { status: "CLOSED" },
+    });
+    if (done.count !== 1) continue; // someone else settled it first
+    await tx.academicPeriod.updateMany({ where: { tenantId, sessionId: session.id, isCurrent: true }, data: { isCurrent: false } });
+    await audit(
+      tx,
+      tenantId,
+      session.closeRequestedById as string, // (a CHECK guarantees a scheduled close names who asked)
+      "SESSION_CLOSED",
+      session.id,
+      { status: "ACTIVE" },
+      { status: "CLOSED", scheduled: true, forced: session.closeForced, closeAt: session.closeAt?.toISOString() ?? null },
+    );
+  }
+}
+
+export const findVisible = async (tx: Tx, tenant: TenantCtx, id: string) => {
+  await settleDueClosings(tx, tenant.tenantId);
+  return tx.academicSession.findFirst({ where: { id, tenantId: tenant.tenantId, ...visibleTo(tenant) }, include: SESSION_INCLUDE });
+};
 
 const rangeOf = (row: Pick<AcademicSession, "startDate" | "endDate">) => ({ start: toIsoDate(row.startDate), end: toIsoDate(row.endDate) });
 
@@ -262,6 +307,7 @@ export async function listSessions(
       : {}),
   };
   return tenant.run(async (tx) => {
+    await settleDueClosings(tx, tenant.tenantId);
     const [total, rows] = await Promise.all([
       tx.academicSession.count({ where }),
       tx.academicSession.findMany({
@@ -273,7 +319,7 @@ export async function listSessions(
         take: page.take,
       }),
     ]);
-    return { sessions: rows.map(toSessionView), total };
+    return { sessions: rows.map((row) => toSessionView(row)), total };
   });
 }
 
@@ -438,23 +484,114 @@ export async function activateSession(
   );
 }
 
-export async function closeSession(tenant: TenantCtx, actorUserId: string, id: string): Promise<AcademicResult<{ session: SessionView }>> {
+/// Schedules the close of an ACTIVE session (plan, "closing a session takes time"): a day from now, or — when the caller has already proved who they
+/// are with their password (`force`; the ROUTE checks it) — a minute from now. Nothing closes now: until `closeAt` the session is fully ACTIVE and the
+/// administrator can cancel. Asking again while a close is scheduled keeps the sooner time and is otherwise a quiet no-op.
+export async function closeSession(
+  tenant: TenantCtx,
+  actorUserId: string,
+  id: string,
+  options: { force: boolean } = { force: false },
+): Promise<AcademicResult<{ session: SessionView; changed: boolean }>> {
   const { tenantId } = tenant;
   return tenant.run(async (tx) => {
     const target = await findVisible(tx, tenant, id);
     if (!target) return refuse("NOT_FOUND");
     if (target.archivedAt) return refuse("ARCHIVED");
+    if (target.status !== "ACTIVE") return refuse("WRONG_STATE");
     await lockScope(tx, tenantId, target.campusId);
+    const now = new Date();
+    const wanted = new Date(now.getTime() + (options.force ? FORCE_CLOSE_DELAY_MS : CLOSE_DELAY_MS));
+    if (target.closeAt && target.closeAt.getTime() <= wanted.getTime())
+      return { ok: true, session: toSessionView(target, now), changed: false };
     const done = await tx.academicSession.updateMany({
       where: { id, tenantId, status: "ACTIVE", archivedAt: null },
-      data: { status: "CLOSED" },
+      data: { closeAt: wanted, closeRequestedById: actorUserId, closeForced: options.force },
     });
     if (done.count !== 1) return refuse("WRONG_STATE");
-    await tx.academicPeriod.updateMany({ where: { tenantId, sessionId: id, isCurrent: true }, data: { isCurrent: false } });
-    await audit(tx, tenantId, actorUserId, "SESSION_CLOSED", id, { status: "ACTIVE" }, { status: "CLOSED" });
+    await audit(
+      tx,
+      tenantId,
+      actorUserId,
+      "SESSION_CLOSE_REQUESTED",
+      id,
+      { closeAt: target.closeAt?.toISOString() ?? null },
+      { closeAt: wanted.toISOString(), forced: options.force },
+    );
     const row = await tx.academicSession.findUniqueOrThrow({ where: { id }, include: SESSION_INCLUDE });
-    return { ok: true, session: toSessionView(row) };
+    return { ok: true, session: toSessionView(row, now), changed: true };
   });
+}
+
+/// Takes back a scheduled close while it is still in the future. Idempotent on a session with nothing scheduled; one that has already closed needs `reopenSession`.
+export async function cancelClose(
+  tenant: TenantCtx,
+  actorUserId: string,
+  id: string,
+): Promise<AcademicResult<{ session: SessionView; changed: boolean }>> {
+  const { tenantId } = tenant;
+  return tenant.run(async (tx) => {
+    const target = await findVisible(tx, tenant, id);
+    if (!target) return refuse("NOT_FOUND");
+    if (target.archivedAt) return refuse("ARCHIVED");
+    if (target.status !== "ACTIVE") return refuse("WRONG_STATE");
+    if (!target.closeAt) return { ok: true, session: toSessionView(target), changed: false };
+    await lockScope(tx, tenantId, target.campusId);
+    const done = await tx.academicSession.updateMany({
+      where: { id, tenantId, status: "ACTIVE", closeAt: { gt: new Date() } },
+      data: { closeAt: null, closeRequestedById: null, closeForced: false },
+    });
+    if (done.count !== 1) return refuse("WRONG_STATE"); // it came due in the meantime
+    await audit(tx, tenantId, actorUserId, "SESSION_CLOSE_CANCELLED", id, { closeAt: target.closeAt.toISOString() }, { closeAt: null });
+    const row = await tx.academicSession.findUniqueOrThrow({ where: { id }, include: SESSION_INCLUDE });
+    return { ok: true, session: toSessionView(row), changed: true };
+  });
+}
+
+/// Reopens a CLOSED session, with a typed reason (5–300 characters), when nothing else in its scope is ACTIVE. Audited with the reason. Its periods
+/// stay as they were when it closed (none current): an administrator picks the current one again.
+export async function reopenSession(
+  tenant: TenantCtx,
+  actorUserId: string,
+  id: string,
+  reasonInput: unknown,
+): Promise<AcademicResult<{ session: SessionView }>> {
+  const { tenantId } = tenant;
+  const reason = cleanReason(reasonInput);
+  if (!reason) return refuse("INVALID_REASON");
+  return rollingBack(() =>
+    tenant.run(async (tx) => {
+      const target = await findVisible(tx, tenant, id);
+      if (!target) return refuse("NOT_FOUND");
+      if (target.archivedAt) return refuse("ARCHIVED");
+      if (target.status !== "CLOSED") return refuse("WRONG_STATE");
+      await lockScope(tx, tenantId, target.campusId);
+      const active = await tx.academicSession.findFirst({
+        where: { tenantId, campusId: target.campusId, status: "ACTIVE", archivedAt: null, id: { not: id } },
+        select: { id: true, label: true },
+      });
+      if (active) return refuse("SESSION_ALREADY_ACTIVE", { sessionId: active.id, label: active.label });
+      const done = await tx.academicSession.updateMany({
+        where: { id, tenantId, status: "CLOSED", archivedAt: null },
+        data: { status: "ACTIVE", closeAt: null, closeRequestedById: null, closeForced: false },
+      });
+      if (done.count !== 1) return refuseAndRollBack("WRONG_STATE");
+      await tx.auditLog.create({
+        data: {
+          tenantId,
+          actorUserId,
+          action: "SESSION_REOPENED",
+          targetType: "AcademicSession",
+          targetId: id,
+          beforeValue: { status: "CLOSED" },
+          afterValue: { status: "ACTIVE" },
+          reason,
+        },
+      });
+      const row = await tx.academicSession.findUniqueOrThrow({ where: { id }, include: SESSION_INCLUDE });
+      return { ok: true, session: toSessionView(row) };
+    }),
+  );
 }
 
 /// Archives a PLANNED or CLOSED session and its periods (an ACTIVE one must be closed first). Archived rows stay forever; they only leave the lists.

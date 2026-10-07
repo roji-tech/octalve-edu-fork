@@ -12,14 +12,17 @@ import {
   ActivateDialog,
   ArchivePeriodDialog,
   ArchiveSessionDialog,
+  CancelCloseDialog,
   CloseSessionDialog,
   CopyForwardDialog,
   PeriodFormDialog,
+  ReopenSessionDialog,
   SessionFormDialog,
 } from "./SessionDialogs";
 import { ListState, LiveNotice, Pager, StatusPill, useDialog, type Notice } from "./parts";
 import {
   SESSION_STATUS_LABEL,
+  formatInstant,
   formatRange,
   periodWords,
   type CampusOption,
@@ -32,13 +35,16 @@ import { useAfterChange, useApi } from "./useApi";
 const PAGE_SIZE = 20;
 const ROW = "md:grid md:grid-cols-[minmax(0,2fr)_minmax(0,1.6fr)_8rem_auto] md:items-center md:gap-4";
 
-const statusPill = (session: Pick<SessionView, "status" | "archived">) =>
+const statusPill = (session: Pick<SessionView, "status" | "archived" | "closeAt">) =>
   session.archived ? (
     <StatusPill tone="neutral">Archived</StatusPill>
   ) : (
-    <StatusPill tone={session.status === "ACTIVE" ? "ok" : session.status === "PLANNED" ? "info" : "neutral"}>
-      {SESSION_STATUS_LABEL[session.status]}
-    </StatusPill>
+    <span className="flex flex-col items-start gap-1">
+      <StatusPill tone={session.status === "ACTIVE" ? "ok" : session.status === "PLANNED" ? "info" : "neutral"}>
+        {SESSION_STATUS_LABEL[session.status]}
+      </StatusPill>
+      {session.closeAt && <span className="text-xs text-fg-muted">Closes {formatInstant(session.closeAt)}</span>}
+    </span>
   );
 
 /// "Sessions & terms": the school years, each with its terms (semesters, cohorts). One session is open at a time; a copy to next year is
@@ -67,7 +73,9 @@ export function SessionsPanel({
   const [detail, setDetail] = useState<SessionView | null>(null);
   const form = useDialog<{ session: SessionView | null }>();
   const activating = useDialog<SessionView>();
-  const closing = useDialog<SessionView>();
+  const closing = useDialog<{ session: SessionView; sooner: boolean }>();
+  const cancelling = useDialog<SessionView>();
+  const reopening = useDialog<SessionView>();
   const archiving = useDialog<SessionView>();
   const copying = useDialog<SessionView>();
 
@@ -194,13 +202,42 @@ export function SessionsPanel({
                         Open
                       </Button>
                     )}
-                    {!session.archived && session.status === "ACTIVE" && (
+                    {!session.archived && session.status === "ACTIVE" && !session.closeAt && (
                       <Button
                         variant="secondary"
                         aria-label={`Close ${session.label}`}
-                        onClick={() => (setNotice(null), closing.show(session))}
+                        onClick={() => (setNotice(null), closing.show({ session, sooner: false }))}
                       >
-                        Close
+                        Close…
+                      </Button>
+                    )}
+                    {!session.archived && session.status === "ACTIVE" && session.closeAt && (
+                      <>
+                        <Button
+                          variant="secondary"
+                          aria-label={`Cancel the planned close of ${session.label}`}
+                          onClick={() => (setNotice(null), cancelling.show(session))}
+                        >
+                          Cancel closing
+                        </Button>
+                        {!session.closeForced && (
+                          <Button
+                            variant="ghost"
+                            aria-label={`Close ${session.label} sooner`}
+                            onClick={() => (setNotice(null), closing.show({ session, sooner: true }))}
+                          >
+                            Close sooner…
+                          </Button>
+                        )}
+                      </>
+                    )}
+                    {!session.archived && session.status === "CLOSED" && (
+                      <Button
+                        variant="secondary"
+                        aria-label={`Reopen ${session.label}`}
+                        onClick={() => (setNotice(null), reopening.show(session))}
+                      >
+                        Reopen…
                       </Button>
                     )}
                     {!session.archived && (
@@ -258,10 +295,36 @@ export function SessionsPanel({
         <CloseSessionDialog
           key={closing.n}
           open={closing.open}
-          session={closing.value!}
+          session={closing.value!.session}
+          sooner={closing.value!.sooner}
           onClose={closing.hide}
           schoolCode={schoolCode}
-          onDone={done(closing.hide, (answer) => `${(answer.data?.session as SessionView).label} is closed.`)}
+          onDone={done(closing.hide, (answer) => {
+            const session = answer.data?.session as SessionView;
+            return session.closeAt
+              ? `${session.label} will close on ${formatInstant(session.closeAt)}. Until then nothing changes, and you can cancel.`
+              : `${session.label} is closed.`;
+          })}
+        />
+      )}
+      {cancelling.n > 0 && (
+        <CancelCloseDialog
+          key={cancelling.n}
+          open={cancelling.open}
+          session={cancelling.value!}
+          onClose={cancelling.hide}
+          schoolCode={schoolCode}
+          onDone={done(cancelling.hide, (answer) => `The planned close of ${(answer.data?.session as SessionView).label} was cancelled.`)}
+        />
+      )}
+      {reopening.n > 0 && (
+        <ReopenSessionDialog
+          key={reopening.n}
+          open={reopening.open}
+          session={reopening.value!}
+          onClose={reopening.hide}
+          schoolCode={schoolCode}
+          onDone={done(reopening.hide, (answer) => `${(answer.data?.session as SessionView).label} is open again.`)}
         />
       )}
       {archiving.n > 0 && (

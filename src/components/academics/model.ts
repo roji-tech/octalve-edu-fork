@@ -56,6 +56,16 @@ export function plusOneYear(iso: string): string {
   return `${target}-${String(month).padStart(2, "0")}-${String(safeDay).padStart(2, "0")}`;
 }
 
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+/// An instant (a scheduled close) as the viewer's own wall clock: "Wed 8 Oct, 14:05". The school has no time-zone setting yet, so this is the browser's;
+/// spelled by tables like the dates, so a server render and a browser cannot disagree.
+export const formatInstant = (iso: string): string => {
+  const at = new Date(iso);
+  const hh = String(at.getHours()).padStart(2, "0");
+  const mm = String(at.getMinutes()).padStart(2, "0");
+  return `${WEEKDAYS[at.getDay()]} ${at.getDate()} ${MONTHS[at.getMonth()]}, ${hh}:${mm}`;
+};
+
 export const SESSION_STATUS_LABEL = { PLANNED: "Planned", ACTIVE: "Active", CLOSED: "Closed" } as const;
 
 /// A mark or band edge typed into a box: a finite number, or null when it is empty or not a number. (Precision and ranges are the server's rules,

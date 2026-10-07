@@ -2186,6 +2186,8 @@ Decisions 7–17 are built as designed. Deviations, all deliberate: (a) **compos
 
 **Open question for the maintainer.** *Year-end switch (C5):* should `activate … closeCurrent` also wait (e.g. the new session starts when the old one's timer ends), or stay immediate-with-password as designed? Immediate is simpler and is what a school does on the first day of term; a waiting switch would need a "planned to start at" feature we do not have.
 
+**As built — closing a session takes time (2026-10-07)** — Decisions C1–C10 above, on the Slice 1 branch: migration `20261014090000_session_close_timer` (three columns + a CHECK), `closeSession` now schedules (24 h, or 1 min with `{ password }`), new `cancelClose` and `reopenSession`, `settleDueClosings` + `effectiveStatus`, `lib/auth/reauth.ts` (the password proof, shared with `activate … closeCurrent`), routes `…/close` (body `{ password? }`), `…/close/cancel`, `…/reopen`, and the Sessions panel (Close… / Cancel closing / Close sooner… / Reopen…). **Deviations, deliberate:** (a) the **application's clock** (one `new Date()` per call) decides "due", not the database's `now()` — `closeAt` is a `timestamp without time zone` written by the same clock, so comparing it with `now()` would depend on the session time zone; (b) the reopen refusal reuses `SESSION_ALREADY_ACTIVE` (naming the open session) instead of a new `ANOTHER_ACTIVE` code; (c) **`activate … closeCurrent` stays immediate and now needs the password** — the open question in C5 is answered by building the design's default. Mutation pass: not run (pending, end of Phase 2); the list is in C9.
+
 ##### 1.1 — Academic structure (migration `…_phase_1_1_academic_structure`)
 All tables below: `tenantId NOT NULL`, `ENABLE`+`FORCE` RLS with `USING` and `WITH CHECK` on `"tenantId" = app_tenant_id()` in the **same migration**, composite FKs (reconciliation 2),
 `createdAt`/`updatedAt`, `archivedAt` where a later phase will reference the row (**archive, never delete**: there is no `DELETE` route for any of them). Added to the catalog guard's
@@ -2204,7 +2206,7 @@ updates) carrying only the changed fields — no PII exists in this slice, but t
 - `endDate > startDate` (CHECK); label 1–40 characters, trimmed, **unique per (school, campus-scope) among non-archived** (partial index on `(tenantId, COALESCE(campusId,''), label)`);
 - **no overlap** between two non-archived sessions of the same scope: validated by a pure function and enforced in the write transaction under a per-(school, scope) advisory lock
   (an `EXCLUDE` constraint would need the `btree_gist` extension — not worth a new extension for one rule; the lock makes the check-then-write race-free and a two-simultaneous-creates test proves it);
-- `CLOSED` is terminal and a `CLOSED`/archived session's dates and label are read-only (history that results will reference must not move).
+- `CLOSED` is terminal *(superseded 2026-10-07 — closing is now a countdown and a closed session can be reopened with a reason; see "Design change — closing a session takes time" and ADR 0008)* and a `CLOSED`/archived session's dates and label are read-only (history that results will reference must not move).
 
 **Decision 10 — activating a session.** **One `ACTIVE` session per scope**, guaranteed by a partial unique index `(tenantId, COALESCE(campusId,'')) WHERE status='ACTIVE'`. `POST …/activate`
 runs a **conditional update** (`WHERE id = $1 AND status = 'PLANNED'`, row count decides). If another session in that scope is active the request is **refused with `SESSION_ALREADY_ACTIVE`

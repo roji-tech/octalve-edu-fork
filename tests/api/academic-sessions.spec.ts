@@ -123,7 +123,9 @@ test.describe("the role matrix: every route, every kind of caller", () => {
       ["POST", sessions(), { label: "x", ...y2026 }],
       ["PATCH", `${sessions()}/${s.id}`, { label: "renamed" }],
       ["POST", `${sessions()}/${s.id}/activate`, {}],
-      ["POST", `${sessions()}/${s.id}/close`, undefined],
+      ["POST", `${sessions()}/${s.id}/close`, {}],
+      ["POST", `${sessions()}/${s.id}/close/cancel`, {}],
+      ["POST", `${sessions()}/${s.id}/reopen`, { reason: "A reason that is long enough" }],
       ["POST", `${sessions()}/${s.id}/archive`, undefined],
       ["POST", `${sessions()}/${s.id}/copy-forward`, { startDate: "2200-09-01" }],
       ["POST", `${sessions()}/${s.id}/periods`, { label: "x", startDate: "2100-10-01", endDate: "2100-11-01" }],
@@ -255,14 +257,34 @@ test.describe("activating, closing, archiving over HTTP", () => {
     const refused = await api(`${sessions()}/${two.id}/activate`, as("admin", { method: "POST", body: {} }));
     expect(refused.status).toBe(409);
     expect(refused.json.error).toMatchObject({ code: "SESSION_ALREADY_ACTIVE", message: expect.stringContaining(one.label) });
-    const swapped = await api(`${sessions()}/${two.id}/activate`, as("admin", { method: "POST", body: { closeCurrent: true } }));
+    // closing the open one on the spot needs the administrator's own password — and a wrong or missing one changes nothing
+    const noPassword = await api(`${sessions()}/${two.id}/activate`, as("admin", { method: "POST", body: { closeCurrent: true } }));
+    expect(noPassword.status).toBe(400);
+    expect(noPassword.json.error.details).toEqual([{ path: "body.password", message: "Enter your password to confirm." }]);
+    const wrong = await api(
+      `${sessions()}/${two.id}/activate`,
+      as("admin", { method: "POST", body: { closeCurrent: true, password: "not-the-password-1" } }),
+    );
+    expect(wrong.status).toBe(403);
+    expect(wrong.json.error).toMatchObject({ code: "WRONG_PASSWORD", details: [{ path: "body.password" }] });
+    expect(wrong.text).not.toContain("not-the-password-1");
+    expect((await db.academicSession.findUniqueOrThrow({ where: { id: one.id } })).status).toBe("ACTIVE"); // nothing was closed
+    const swapped = await api(
+      `${sessions()}/${two.id}/activate`,
+      as("admin", { method: "POST", body: { closeCurrent: true, password: admin.password } }),
+    );
     expect(swapped.status).toBe(200);
     expect(swapped.json.data).toMatchObject({ session: { id: two.id, status: "ACTIVE" }, closed: { id: one.id, label: one.label } });
     expect((await api(`${sessions()}/${two.id}/activate`, as("admin", { method: "POST", body: { closeCurrent: "yes" } }))).status).toBe(
       400,
     ); // a real boolean only
     expect(
-      (await api(`${sessions()}/${two.id}/activate`, as("admin", { method: "POST", body: { closeCurrent: true, extra: 1 } }))).status,
+      (
+        await api(
+          `${sessions()}/${two.id}/activate`,
+          as("admin", { method: "POST", body: { closeCurrent: true, password: admin.password, extra: 1 } }),
+        )
+      ).status,
     ).toBe(400);
   });
 
@@ -270,10 +292,16 @@ test.describe("activating, closing, archiving over HTTP", () => {
     await db.academicSession.updateMany({ where: { tenantId: a.id, campusId: null, status: "ACTIVE" }, data: { status: "CLOSED" } });
     const s = await seedSession({ label: uniqueLabel("Cycle") });
     const url = `${sessions()}/${s.id}`;
-    expect((await api(`${url}/close`, as("admin", { method: "POST" }))).json.error.code).toBe("WRONG_STATE"); // not active yet
+    expect((await api(`${url}/close`, as("admin", { method: "POST", body: {} }))).json.error.code).toBe("WRONG_STATE"); // not active yet
     await api(`${url}/activate`, as("admin", { method: "POST", body: {} }));
     expect((await api(`${url}/archive`, as("admin", { method: "POST" }))).json.error.code).toBe("ACTIVE_CANNOT_ARCHIVE");
-    expect((await api(`${url}/close`, as("admin", { method: "POST" }))).json.data.session.status).toBe("CLOSED");
+    // closing is a countdown: the session stays ACTIVE (and cannot be archived) until the time comes
+    const scheduled = await api(`${url}/close`, as("admin", { method: "POST", body: {} }));
+    expect(scheduled.json.data).toMatchObject({ changed: true, session: { status: "ACTIVE", closeForced: false } });
+    expect(Math.abs(new Date(scheduled.json.data.session.closeAt).getTime() - (Date.now() + 24 * 60 * 60 * 1000))).toBeLessThan(60_000);
+    expect((await api(`${url}/archive`, as("admin", { method: "POST" }))).json.error.code).toBe("ACTIVE_CANNOT_ARCHIVE");
+    await db.academicSession.update({ where: { id: s.id }, data: { closeAt: new Date(Date.now() - 1000) } }); // the day has passed
+    expect((await api(url, as("admin"))).json.data.session.status).toBe("CLOSED");
     expect((await api(`${url}/archive`, as("admin", { method: "POST" }))).json.data).toMatchObject({
       changed: true,
       session: { archived: true },
@@ -284,6 +312,92 @@ test.describe("activating, closing, archiving over HTTP", () => {
     const archived = await api(`${sessions()}?status=archived&limit=100`, as("admin"));
     expect(archived.json.data.sessions.some((x: { id: string }) => x.id === s.id)).toBe(true);
     expect(await db.academicSession.count({ where: { id: s.id } })).toBe(1);
+  });
+});
+
+test.describe("closing a session over HTTP (a countdown, a forced one-minute close, cancel, reopen)", () => {
+  test("close with no password schedules a day ahead; with the right password a minute ahead; the password is never echoed; a wrong one changes nothing and is counted", async () => {
+    await db.academicSession.updateMany({ where: { tenantId: a.id, campusId: null, status: "ACTIVE" }, data: { status: "CLOSED" } });
+    const s = await seedSession({ label: uniqueLabel("Countdown"), status: "ACTIVE" });
+    const url = `${sessions()}/${s.id}`;
+    const wrong = await api(`${url}/close`, as("admin", { method: "POST", body: { password: "definitely-not-it-1" } }));
+    expect(wrong.status).toBe(403);
+    expect(wrong.json.error).toMatchObject({
+      code: "WRONG_PASSWORD",
+      details: [{ path: "body.password", message: "That password isn't right." }],
+    });
+    expect(wrong.text).not.toContain("definitely-not-it-1");
+    expect((await db.academicSession.findUniqueOrThrow({ where: { id: s.id } })).closeAt).toBeNull();
+
+    const forced = await api(`${url}/close`, as("admin", { method: "POST", body: { password: admin.password } }));
+    expect(forced.status).toBe(200);
+    expect(forced.json.data).toMatchObject({ changed: true, session: { status: "ACTIVE", closeForced: true } });
+    expect(Math.abs(new Date(forced.json.data.session.closeAt).getTime() - (Date.now() + 60_000))).toBeLessThan(30_000);
+    expect(forced.text).not.toContain(admin.password);
+    const audit = await db.auditLog.findFirstOrThrow({ where: { tenantId: a.id, targetId: s.id, action: "SESSION_CLOSE_REQUESTED" } });
+    expect(JSON.stringify(audit)).not.toContain(admin.password);
+    expect(audit).toMatchObject({ actorUserId: admin.id, afterValue: { forced: true } });
+  });
+
+  test("failed password proofs are rate-limited per account (5), a success is refunded, and the strict body refuses stray keys", async () => {
+    const bossy = await createUser({ name: "Limited Admin" });
+    await addMembership(bossy.id, a.id, Role.ADMIN);
+    const bossCookie = await cookieFor(bossy);
+    await db.academicSession.updateMany({ where: { tenantId: a.id, campusId: null, status: "ACTIVE" }, data: { status: "CLOSED" } });
+    const s = await seedSession({ label: uniqueLabel("Limit"), status: "ACTIVE" });
+    const url = `${sessions()}/${s.id}/close`;
+    const attempt = (password: string) => api(url, { ...SAAS, cookie: bossCookie, method: "POST", body: { password } });
+    for (let i = 0; i < 5; i++) expect((await attempt("wrong-password-9")).status, `failure ${i + 1}`).toBe(403);
+    const blocked = await attempt(bossy.password);
+    expect(blocked.status).toBe(429); // even the right one: the account is locked out for the window
+    expect(blocked.json.error.code).toBe("RATE_LIMITED");
+    expect((await db.academicSession.findUniqueOrThrow({ where: { id: s.id } })).closeAt).toBeNull();
+    expect((await api(url, as("admin", { method: "POST", body: { password: admin.password, tenantId: b.id } }))).status).toBe(400);
+  });
+
+  test("cancel takes a planned close back (idempotent), and a closed session is reopened with a reason — refused without one, or while another is open", async () => {
+    await db.academicSession.updateMany({ where: { tenantId: a.id, campusId: null, status: "ACTIVE" }, data: { status: "CLOSED" } });
+    const s = await seedSession({ label: uniqueLabel("Reopen"), status: "ACTIVE" });
+    const url = `${sessions()}/${s.id}`;
+    await api(`${url}/close`, as("admin", { method: "POST", body: {} }));
+    const cancelled = await api(`${url}/close/cancel`, as("admin", { method: "POST", body: {} }));
+    expect(cancelled.json.data).toMatchObject({ changed: true, session: { status: "ACTIVE", closeAt: null } });
+    expect((await api(`${url}/close/cancel`, as("admin", { method: "POST", body: {} }))).json.data).toMatchObject({ changed: false });
+
+    await api(`${url}/close`, as("admin", { method: "POST", body: { password: admin.password } }));
+    await db.academicSession.update({ where: { id: s.id }, data: { closeAt: new Date(Date.now() - 1000) } });
+    expect((await api(`${url}/close/cancel`, as("admin", { method: "POST", body: {} }))).json.error.code).toBe("WRONG_STATE");
+
+    const noReason = await api(`${url}/reopen`, as("admin", { method: "POST", body: { reason: "no" } }));
+    expect(noReason.status).toBe(400);
+    expect(noReason.json.error.details).toEqual([{ path: "body.reason", message: "Give a reason of 5 to 300 characters." }]);
+    expect((await api(`${url}/reopen`, as("admin", { method: "POST", body: {} }))).status).toBe(400);
+    expect((await api(`${url}/reopen`, as("admin", { method: "POST", body: { reason: "ok reason", extra: 1 } }))).status).toBe(400);
+    const other = await seedSession({ label: uniqueLabel("Other"), status: "ACTIVE" });
+    const refused = await api(`${url}/reopen`, as("admin", { method: "POST", body: { reason: "We closed it by mistake" } }));
+    expect(refused.status).toBe(409);
+    expect(refused.json.error).toMatchObject({ code: "SESSION_ALREADY_ACTIVE", message: expect.stringContaining(other.label) });
+    await db.academicSession.update({ where: { id: other.id }, data: { status: "CLOSED" } });
+    const reopened = await api(`${url}/reopen`, as("admin", { method: "POST", body: { reason: "We closed it by mistake" } }));
+    expect(reopened.status).toBe(200);
+    expect(reopened.json.data.session).toMatchObject({ status: "ACTIVE", closeAt: null });
+    expect(await db.auditLog.findFirstOrThrow({ where: { tenantId: a.id, targetId: s.id, action: "SESSION_REOPENED" } })).toMatchObject({
+      reason: "We closed it by mistake",
+    });
+  });
+
+  test("a non-admin can read a scheduled close (the list shows it) but cannot schedule, cancel or reopen: the one 403", async () => {
+    await db.academicSession.updateMany({ where: { tenantId: a.id, campusId: null, status: "ACTIVE" }, data: { status: "CLOSED" } });
+    const s = await seedSession({ label: uniqueLabel("Visible"), status: "ACTIVE" });
+    await api(`${sessions()}/${s.id}/close`, as("admin", { method: "POST", body: {} }));
+    const seen = await api(`${sessions()}/${s.id}`, as("teacher"));
+    expect(seen.json.data.session).toMatchObject({ status: "ACTIVE", closeForced: false });
+    expect(seen.json.data.session.closeAt).toEqual(expect.any(String));
+    for (const path of ["close", "close/cancel"]) {
+      const res = await api(`${sessions()}/${s.id}/${path}`, as("teacher", { method: "POST", body: {} }));
+      expect(res.status, path).toBe(403);
+      expect(res.json, path).toEqual(NO_ACCESS);
+    }
   });
 });
 
@@ -396,8 +510,10 @@ test.describe("campus scope and 404 sameness", () => {
     for (const [method, url, body] of [
       ["GET", `${sessions()}/${theirs.id}`, undefined],
       ["PATCH", `${sessions()}/${theirs.id}`, { label: "hijack" }],
-      ["POST", `${sessions()}/${theirs.id}/activate`, { closeCurrent: true }],
-      ["POST", `${sessions()}/${theirs.id}/close`, undefined],
+      ["POST", `${sessions()}/${theirs.id}/activate`, { closeCurrent: true, password: admin.password }],
+      ["POST", `${sessions()}/${theirs.id}/close`, {}],
+      ["POST", `${sessions()}/${theirs.id}/close/cancel`, {}],
+      ["POST", `${sessions()}/${theirs.id}/reopen`, { reason: "A reason that is long enough" }],
       ["POST", `${sessions()}/${theirs.id}/archive`, undefined],
       ["POST", `${sessions()}/${theirs.id}/copy-forward`, { startDate: "2300-09-01" }],
       ["GET", `${sessions()}/${theirs.id}/periods`, undefined],

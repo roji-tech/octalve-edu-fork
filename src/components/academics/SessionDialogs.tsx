@@ -9,7 +9,16 @@ import { TextField } from "@/components/ui/TextField";
 import { sendJson, type Reply } from "@/components/auth/postJson";
 import { ConfirmDialog, FormDialog, type Outcome } from "./parts";
 import { failureText } from "./useApi";
-import { formatDate, formatRange, plusOneYear, type CampusOption, type CopyForwardPlan, type PeriodView, type SessionView } from "./model";
+import {
+  formatDate,
+  formatInstant,
+  formatRange,
+  plusOneYear,
+  type CampusOption,
+  type CopyForwardPlan,
+  type PeriodView,
+  type SessionView,
+} from "./model";
 
 const base = (schoolCode: string) => `/api/v1/schools/${schoolCode}/academics`;
 
@@ -108,7 +117,8 @@ export function SessionFormDialog({
   );
 }
 
-/// Open a session. If another one is open for the same campus (or the whole school), the person must say they want it closed — it is never closed silently.
+/// Open a session. If another one is open for the same campus (or the whole school), the person must say they want it closed — it is never closed silently,
+/// and because that ends a school year on the spot it asks for their password.
 export function ActivateDialog({
   open,
   session,
@@ -123,6 +133,7 @@ export function ActivateDialog({
   onDone: (reply: Reply) => void;
 }) {
   const [closeCurrent, setCloseCurrent] = useState(false);
+  const [password, setPassword] = useState("");
   return (
     <FormDialog
       open={open}
@@ -131,23 +142,114 @@ export function ActivateDialog({
       description="Only one session can be open at a time for the whole school (or for each campus that keeps its own calendar)."
       submitLabel="Open session"
       pendingLabel="Opening…"
-      fields={[]}
-      onSubmit={() => sendJson(`${base(schoolCode)}/sessions/${session.id}/activate`, "POST", { closeCurrent })}
+      fields={["password"]}
+      onSubmit={async () => {
+        if (closeCurrent && !password) return { errors: { password: "Enter your password to confirm." } };
+        return sendJson(
+          `${base(schoolCode)}/sessions/${session.id}/activate`,
+          "POST",
+          closeCurrent ? { closeCurrent, password } : { closeCurrent },
+        );
+      }}
       onDone={onDone}
     >
-      {(_errors, pending) => (
-        <CheckboxField
-          label="If another session is already open, close it first"
-          checked={closeCurrent}
-          onChange={(e) => setCloseCurrent(e.target.checked)}
-          disabled={pending}
-        />
+      {(errors, pending) => (
+        <>
+          <CheckboxField
+            label="If another session is already open, close it first"
+            checked={closeCurrent}
+            onChange={(e) => setCloseCurrent(e.target.checked)}
+            disabled={pending}
+          />
+          {closeCurrent && (
+            <TextField
+              label="Your password"
+              type="password"
+              autoComplete="current-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              error={errors.password}
+              hint="Closing the current session ends it straight away, so we ask you to confirm it is you."
+              disabled={pending}
+            />
+          )}
+        </>
       )}
     </FormDialog>
   );
 }
 
+/// Close a session: a countdown, not a button. By default it closes a day from now and can be cancelled until then; "Close sooner" asks for the
+/// person's password and closes it in a minute. Either way nothing happens now, and nothing is deleted.
 export function CloseSessionDialog({
+  open,
+  session,
+  onClose,
+  schoolCode,
+  onDone,
+  sooner = false,
+}: {
+  open: boolean;
+  session: SessionView;
+  onClose: () => void;
+  schoolCode: string;
+  onDone: (reply: Reply) => void;
+  /// Start with "close sooner" chosen (the row's "Close sooner…" button).
+  sooner?: boolean;
+}) {
+  const [soon, setSoon] = useState(sooner);
+  const [password, setPassword] = useState("");
+  return (
+    <FormDialog
+      open={open}
+      onClose={onClose}
+      title={`Close ${session.label}?`}
+      description={
+        session.closeAt
+          ? `A close is already planned for ${formatInstant(session.closeAt)}. You can bring it forward below, or leave it.`
+          : "Closing starts a 24-hour countdown. Until it ends nothing changes, and you can cancel."
+      }
+      submitLabel={soon ? "Close in 1 minute" : "Start 24-hour countdown"}
+      pendingLabel="Working…"
+      fields={["password"]}
+      onSubmit={async () => {
+        if (soon && !password) return { errors: { password: "Enter your password to confirm." } };
+        return sendJson(`${base(schoolCode)}/sessions/${session.id}/close`, "POST", soon ? { password } : {});
+      }}
+      onDone={onDone}
+    >
+      {(errors, pending) => (
+        <>
+          <p className="text-sm leading-relaxed text-fg-2">
+            When it closes, the session and its terms become read-only and there is no current term. Nothing is deleted, and an
+            administrator can reopen it later with a reason.
+          </p>
+          <CheckboxField
+            label="Close sooner — in 1 minute instead of 24 hours"
+            checked={soon}
+            onChange={(e) => setSoon(e.target.checked)}
+            disabled={pending}
+          />
+          {soon && (
+            <TextField
+              label="Your password"
+              type="password"
+              autoComplete="current-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              error={errors.password}
+              hint="Closing this fast is hard to take back, so we ask you to confirm it is you."
+              disabled={pending}
+            />
+          )}
+        </>
+      )}
+    </FormDialog>
+  );
+}
+
+/// Take back a planned close while it is still in the future.
+export function CancelCloseDialog({
   open,
   session,
   onClose,
@@ -164,17 +266,62 @@ export function CloseSessionDialog({
     <ConfirmDialog
       open={open}
       onClose={onClose}
-      title={`Close ${session.label}?`}
-      confirmLabel="Close session"
-      pendingLabel="Closing…"
-      onConfirm={() => sendJson(`${base(schoolCode)}/sessions/${session.id}/close`, "POST", {})}
+      title={`Cancel the planned close of ${session.label}?`}
+      confirmLabel="Cancel the close"
+      pendingLabel="Cancelling…"
+      onConfirm={() => sendJson(`${base(schoolCode)}/sessions/${session.id}/close/cancel`, "POST", {})}
       onDone={onDone}
     >
       <p>
-        The session and its terms become read-only, and there will be no current term. Nothing is deleted. A closed session cannot be opened
-        again.
+        {session.closeAt ? `It was going to close on ${formatInstant(session.closeAt)}. ` : ""}The session stays open and nothing changes.
+        You can plan a new close whenever you like.
       </p>
     </ConfirmDialog>
+  );
+}
+
+/// Reopen a closed session, with a reason that goes in the audit trail. Refused while another session is open for the same campus (or the school).
+export function ReopenSessionDialog({
+  open,
+  session,
+  onClose,
+  schoolCode,
+  onDone,
+}: {
+  open: boolean;
+  session: SessionView;
+  onClose: () => void;
+  schoolCode: string;
+  onDone: (reply: Reply) => void;
+}) {
+  const [reason, setReason] = useState("");
+  return (
+    <FormDialog
+      open={open}
+      onClose={onClose}
+      title={`Reopen ${session.label}?`}
+      description="It becomes open again and its terms can be changed. No term is current until you choose one. The reason is kept in the audit trail."
+      submitLabel="Reopen session"
+      pendingLabel="Reopening…"
+      fields={["reason"]}
+      onSubmit={async () => {
+        const text = reason.replace(/\s+/g, " ").trim();
+        if (text.length < 5) return { errors: { reason: "Give a reason of at least 5 characters." } };
+        return sendJson(`${base(schoolCode)}/sessions/${session.id}/reopen`, "POST", { reason: text });
+      }}
+      onDone={onDone}
+    >
+      {(errors, pending) => (
+        <TextField
+          label="Why is it being reopened?"
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          error={errors.reason}
+          maxLength={300}
+          disabled={pending}
+        />
+      )}
+    </FormDialog>
   );
 }
 
