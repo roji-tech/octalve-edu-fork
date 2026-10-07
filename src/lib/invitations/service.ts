@@ -60,7 +60,7 @@ const toPublic = (row: InvitationRow, now: Date = new Date()): PublicInvitation 
 
 export type CreateInvitationResult =
   | { ok: true; invitation: PublicInvitation; token: string }
-  | { ok: false; reason: "ALREADY_MEMBER" | "DEACTIVATED_MEMBER" | "INVALID_CAMPUS" };
+  | { ok: false; reason: "ALREADY_MEMBER" | "DEACTIVATED_MEMBER" | "INVALID_CAMPUS" | "INVALID_STAFF_RECORD" };
 
 /// Invites `input.email` to the school. One live invitation per (school, address): an earlier open one is revoked (and audited)
 /// first, and a partial unique index is the guarantee under concurrency — an advisory lock on the pair serialises two administrators
@@ -70,7 +70,7 @@ export type CreateInvitationResult =
 export async function createInvitation(
   tenant: TenantCtx,
   actorUserId: string,
-  input: { email: string; role: Role; campusId: string | null },
+  input: { email: string; role: Role; campusId: string | null; staffRecordId?: string | null },
 ): Promise<CreateInvitationResult> {
   const { tenantId } = tenant;
   return tenant.run(async (tx) => {
@@ -81,6 +81,15 @@ export async function createInvitation(
       // A campus of ANOTHER school is, to this one, a campus that does not exist.
       const campus = await tx.campus.findFirst({ where: { id: input.campusId, tenantId }, select: { id: true } });
       if (!campus) return { ok: false, reason: "INVALID_CAMPUS" };
+    }
+
+    // An invitation made FOR a staff record (plan 1.2, decision P5) names a live record of this school that has no account yet; acceptance links them.
+    if (input.staffRecordId) {
+      const record = await tx.staffRecord.findFirst({
+        where: { id: input.staffRecordId, tenantId, archivedAt: null, userId: null },
+        select: { id: true },
+      });
+      if (!record) return { ok: false, reason: "INVALID_STAFF_RECORD" };
     }
 
     const member = await tx.tenantMembership.findFirst({
@@ -116,6 +125,7 @@ export async function createInvitation(
         email: input.email,
         role: input.role,
         campusId: input.campusId,
+        staffRecordId: input.staffRecordId ?? null,
         tokenHash: hashInvitationToken(token),
         invitedById: actorUserId,
         expiresAt: new Date(now.getTime() + INVITATION_TTL_MS),
@@ -129,7 +139,12 @@ export async function createInvitation(
         action: "INVITATION_CREATED",
         targetType: "Invitation",
         targetId: created.id,
-        afterValue: { email: input.email, role: input.role, campusId: input.campusId },
+        afterValue: {
+          email: input.email,
+          role: input.role,
+          campusId: input.campusId,
+          ...(input.staffRecordId ? { staffRecordId: input.staffRecordId } : {}),
+        },
       },
     });
     return { ok: true, invitation: toPublic(created, now), token };
@@ -254,7 +269,7 @@ export type AcceptInvitationInput = {
 };
 
 export type AcceptInvitationResult =
-  | { ok: true; userId: string; schoolCode: string; newAccount: boolean; reactivated: boolean }
+  | { ok: true; userId: string; schoolCode: string; newAccount: boolean; reactivated: boolean; staffRecordLinked: boolean }
   /// INVALID: unknown, used, revoked or expired — one answer. SIGN_IN_REQUIRED: the address has an account and nobody is signed in.
   /// WRONG_ACCOUNT: signed in as someone else. ALREADY_MEMBER: nothing to do (the link is NOT spent). INPUT_REQUIRED: a new account
   /// needs a name and a password.
@@ -334,6 +349,21 @@ export async function acceptInvitation(input: AcceptInvitationInput): Promise<Ac
         await tx.tenantMembership.create({ data: { userId, tenantId: found.tenantId, role: found.role, campusId: found.campusId } });
       }
       await tx.invitation.update({ where: { id: found.id }, data: { acceptedById: userId } });
+
+      // An invitation made for a staff record links the new member to it in this same transaction. If the record has since been linked, archived or removed
+      // — or this person already has another record — the membership is still created and the link is skipped (and said so in the audit entry): the
+      // invitee is never stranded by something the administrator did meanwhile.
+      let staffRecordLinked = false;
+      if (found.staffRecordId) {
+        const alreadyHasRecord = await tx.staffRecord.findFirst({ where: { tenantId: found.tenantId, userId }, select: { id: true } });
+        if (!alreadyHasRecord) {
+          const linked = await tx.staffRecord.updateMany({
+            where: { id: found.staffRecordId, tenantId: found.tenantId, userId: null, archivedAt: null },
+            data: { userId },
+          });
+          staffRecordLinked = linked.count === 1;
+        }
+      }
       await tx.auditLog.create({
         data: {
           tenantId: found.tenantId,
@@ -341,12 +371,18 @@ export async function acceptInvitation(input: AcceptInvitationInput): Promise<Ac
           action: "INVITATION_ACCEPTED",
           targetType: "Invitation",
           targetId: found.id,
-          afterValue: { role: found.role, campusId: found.campusId, newAccount: !account, reactivated: Boolean(existing) },
+          afterValue: {
+            role: found.role,
+            campusId: found.campusId,
+            newAccount: !account,
+            reactivated: Boolean(existing),
+            ...(found.staffRecordId ? { staffRecordId: found.staffRecordId, staffRecordLinked } : {}),
+          },
         },
       });
 
       const school = await tx.tenant.findUniqueOrThrow({ where: { id: found.tenantId }, select: { code: true } });
-      return { ok: true, userId, schoolCode: school.code, newAccount: !account, reactivated: Boolean(existing) };
+      return { ok: true, userId, schoolCode: school.code, newAccount: !account, reactivated: Boolean(existing), staffRecordLinked };
     });
   } catch (error) {
     if (error instanceof Abort) return { ok: false, reason: error.reason };

@@ -31,17 +31,21 @@ export type PeopleFailure =
   /// A guardian cannot be archived while any student is still linked to them: remove the links first (nothing is archived silently).
   | "HAS_LIVE_LINKS"
   // --- staff ---
+  /// The chosen member of this school already has another staff record.
   | "ACCOUNT_TAKEN"
+  /// The chosen member is not an active member of this school, or their role does not match the record's category.
   | "ACCOUNT_MISMATCH"
+  /// The record already has a sign-in account (unlink it first).
   | "ALREADY_LINKED_ACCOUNT"
   | "NOT_LINKED"
   | "INVALID_SUBJECT"
   | "SUBJECT_NOT_OFFERED"
   | "ALREADY_ASSIGNED"
+  /// Archiving a staff record is refused while subjects are still assigned to them: remove the assignments first.
+  | "HAS_ASSIGNMENTS"
+  /// Inviting needs an email address on the record.
   | "EMAIL_REQUIRED"
   | "EMAIL_TAKEN"
-  | "ALREADY_MEMBER"
-  | "INVITE_FAILED"
   // --- import / export ---
   | "TOO_LARGE"
   | "TOO_MANY_ROWS"

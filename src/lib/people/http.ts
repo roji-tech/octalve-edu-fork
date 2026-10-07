@@ -93,6 +93,43 @@ export function peopleFailure(reason: PeopleFailure, detail?: Record<string, unk
       return fail("That guardian is already linked to this student.", 409, "ALREADY_LINKED", [
         { path: "body.guardianId", message: "Already linked to this student." },
       ]);
+    case "ACCOUNT_TAKEN":
+      return fail("That person already has another staff record.", 409, "ACCOUNT_TAKEN", [
+        { path: "body.userId", message: "Already linked to another record." },
+      ]);
+    case "ACCOUNT_MISMATCH":
+      return fail(
+        detail?.field === "category"
+          ? "A staff record with a sign-in account keeps its category. Unlink the account first."
+          : "Choose an active member of this school whose role fits this record (teaching staff for a teacher, non-teaching staff otherwise).",
+        409,
+        "ACCOUNT_MISMATCH",
+        detail?.field === "category" ? undefined : [{ path: "body.userId", message: "Choose a member whose role fits this record." }],
+      );
+    case "ALREADY_LINKED_ACCOUNT":
+      return fail("This record already has a sign-in account. Unlink it first.", 409, "ALREADY_LINKED_ACCOUNT");
+    case "NOT_LINKED":
+      return fail("This record has no sign-in account.", 409, "NOT_LINKED");
+    case "INVALID_SUBJECT":
+      return fail("Choose one of this school's subjects.", 400, "VALIDATION", [
+        { path: "body.subjectId", message: "Choose one of this school's subjects." },
+      ]);
+    case "SUBJECT_NOT_OFFERED":
+      return fail("That class does not study that subject. Add it to the class first.", 409, "SUBJECT_NOT_OFFERED", [
+        { path: "body.subjectId", message: "This class does not study this subject." },
+      ]);
+    case "ALREADY_ASSIGNED":
+      return fail("Already assigned to that subject in that class.", 409, "ALREADY_ASSIGNED");
+    case "HAS_ASSIGNMENTS":
+      return fail("Subjects are still assigned to this person. Remove those first.", 409, "HAS_ASSIGNMENTS");
+    case "EMAIL_REQUIRED":
+      return fail("Add an email address to this record first — the invitation is sent there.", 409, "EMAIL_REQUIRED", [
+        { path: "body.email", message: "An email address is needed to invite." },
+      ]);
+    case "EMAIL_TAKEN":
+      return fail("Another staff record already uses that email address.", 409, "EMAIL_TAKEN", [
+        { path: "body.email", message: "Another record uses this address." },
+      ]);
     case "HAS_LIVE_LINKS":
       return fail("Students are still linked to this guardian. Remove those links first.", 409, "HAS_LIVE_LINKS");
     default:
