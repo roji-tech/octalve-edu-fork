@@ -78,7 +78,8 @@ async function arm(name = "A", campusId: string | null = null, school: TestTenan
 }
 async function closeNow(id: string) {
   expect(await closeSession(admin(), boss.id, id, { force: true })).toMatchObject({ ok: true });
-  await db.academicSession.update({ where: { id }, data: { closeAt: new Date(Date.now() - 1000) } });
+  // well before both the injected clock (NOW) and the real one, so the close is due whichever the service reads
+  await db.academicSession.update({ where: { id }, data: { closeAt: new Date("2026-01-01T00:00:00.000Z") } });
 }
 const actions = async (targetId: string) =>
   (await db.auditLog.findMany({ where: { tenantId: a.id, targetId }, orderBy: { createdAt: "asc" } })).map((r) => r.action);
