@@ -66,21 +66,22 @@ one-off pattern sources, referenced once for a specific technique and then done:
 ## Read in this order, first session
 
 1. **This file.**
-2. **`docs/development-history/octalve_edu_progress.md`** — the single source of truth for "what's
+2. **`/home/rojitech/Desktop/CODEC/out/tasks.md`** — the maintainer's single task tracker for both repos (outside the repos, so it is not in git). **Check that it exists and read it at the start of every session**: it says what is done, in progress, blocked, and what the maintainer has decided. If the file does not exist, **create it first** (a legend `[x] done · [~] in progress · [ ] to do · [!] blocked / needs the maintainer`, the rules in force, then one section per repo) and fill it from the progress tracker, rather than working without one. Then continue from it.
+3. **`docs/development-history/octalve_edu_progress.md`** — the single source of truth for "what's
    actually built right now," checked against the real repo. Has a "What's real vs. what's
    designed-but-unbuilt" section specifically to prevent treating a written-down decision as done —
    read that section literally, it's not decoration.
-3. **`docs/development-history/domain-implementation-plan.md`** — the step-by-step build plan, ~2300
+4. **`docs/development-history/domain-implementation-plan.md`** — the step-by-step build plan, ~2300
    lines. Long, but organized by phase — find the current phase (check the progress tracker's "Next
    action" first) and read that section, don't read linearly front to back unless you're new to the
    whole plan.
-4. **`docs/PRD.md`** — requirements + architecture decisions with reasoning. Read the sections
+5. **`docs/PRD.md`** — requirements + architecture decisions with reasoning. Read the sections
    relevant to what you're building; §7 (tenant trust boundary, API conventions) is referenced
    constantly elsewhere and worth reading in full early.
-5. **`prisma/schema/*.prisma`** — the actual current data model. This is ground truth; if a doc and
+6. **`prisma/schema/*.prisma`** — the actual current data model. This is ground truth; if a doc and
    the schema disagree, the schema is right and the doc is stale (fix the doc).
-6. **`docs/development-history/phases/*.md`** — one completion record per finished phase.
-7. **`docs/auth-review-2026-09-29.md`** — before touching anything auth-related. Contains the
+7. **`docs/development-history/phases/*.md`** — one completion record per finished phase.
+8. **`docs/auth-review-2026-09-29.md`** — before touching anything auth-related. Contains the
    adjudicated findings from a two-AI security cross-review; several plan sections cite it directly.
    Then **`docs/auth-review-2026-09-30-verification.md`** — what happened when the design was built and
    executed: the status of each finding (P0 #4, the `__Host-` cookie, is closed — verified in real
@@ -88,6 +89,7 @@ one-off pattern sources, referenced once for a specific technique and then done:
 
 ## Files that change constantly — update these every session that changes anything real
 
+- **`/home/rojitech/Desktop/CODEC/out/tasks.md`** — the single task tracker for Octalve Edu *and* AlEemaan. Update it as work moves, not at the end: mark `[~]` when you start a task, `[x]` when it is done *and verified*, `[!]` when you are blocked on the maintainer; add every new task, open question and deferred item the moment it appears; record real numbers (tests passed/failed/not run), branch names and PR links. Never mark something done that was not run. Before a context compaction or hand-off, make sure it holds everything the next session needs.
 - **`docs/development-history/octalve_edu_progress.md`** — update its "Last Updated" date, the
   Overall Status Summary, and "Next action" after *any* real change. This is the first file any
   future session reads.
@@ -101,6 +103,7 @@ one-off pattern sources, referenced once for a specific technique and then done:
 
 ## Files that are stable reference — read once, trust, don't expect them to move
 
+- `docs/decisions/` — short ADRs (one per decision someone might reverse by mistake); read the index before changing RLS, locks, permissions, deactivation or migrations. Rules are in its README: never edit an accepted decision, supersede it.
 - `docs/PRD.md` — changes only when the canonical Claude Doc is re-synced; treat as authoritative
   between syncs.
 - `docs/branches-and-environments.md` — the `dev`/`main`/`prod` git convention. Note it documents the
@@ -112,6 +115,8 @@ one-off pattern sources, referenced once for a specific technique and then done:
   phase docs.
 
 ## Working rules in this repo (follow these without being asked)
+
+**Task tracking (applies to every session, in both repos).** Check that `/home/rojitech/Desktop/CODEC/out/tasks.md` exists before starting work (create it if it does not — see the read-order step) and update it as tasks start, finish, block or appear — it is the maintainer's view of progress, separate from the in-repo progress tracker (which records what is *built*). Note: this is the *workspace* `CODEC/out/`, not the repo's own gitignored `out/` folder.
 
 1. **Design before code.** Extend the relevant phase section in `domain-implementation-plan.md`
    first. This phase (0.5) exists specifically because the security audit found two *architectural*
@@ -212,6 +217,12 @@ one-off pattern sources, referenced once for a specific technique and then done:
   (3) permissions live on the **membership in that school** and are read on every request — a grant takes effect on the next request, a deactivated member holds none; (4) **only an ADMIN of the school may grant or revoke them, and that power is never delegable** (not even by `CAN_MANAGE_USERS`);
   (5) permissions exist only on `TEACHING_STAFF` / `NON_TEACHING_STAFF` — a CHECK constraint says so; a role change to anything else must clear them **in the same transaction**; (6) `Tenant.schoolType` defaults to K12 and decides the kind of academic period — read it, don't assume K12;
   (7) a new tenant-scoped table is added to the catalog guard's expected list in `tests/integration/rls.spec.ts` (that friction is on purpose). Gate for every change: `pnpm typecheck` → `pnpm lint` → `pnpm format:check` → `pnpm build` → tests.
+- **Phase 1.1 (academic structure) is BUILT** — branch `claude/phase-1-0-1-1`; record `docs/development-history/phases/phase-1.1-academic-structure.md`; **mutation pass pending** (end of Phase 2). **Rules that follow:**
+  (1) **a refusal that can follow a write must roll back** — never `return refuse(...)` after the first write in a `tenant.run` (it commits); check before writing, or use `refuseAndRollBack` inside `rollingBack(...)` (`lib/academics/sessions.ts`);
+  (2) every academic row names its school and points at its parents by **composite FK `(tenantId, parentId)`**; create parents then `createMany` children (Prisma cannot nest a composite tenant key); (3) **one writer per scope**: take the scope's `pg_advisory_xact_lock` before any check-then-write, and let a **conditional `updateMany` row count** decide transitions;
+  (4) **nothing academic is deleted** — archive (partial unique indexes over non-archived rows let a name be reused); the only deletes are `SubjectOffering`, an unlocked scheme's components and a scale's bands; (5) a **locked** scheme/scale (a result references it — Phase 1.4 calls `lockScheme`/`lockScale`) is immutable **in the database**; a change is `new-version`, which archives the predecessor and links `supersedesId`;
+  (6) marks and score bands are compared as **integers of hundredths** (`toHundredths`) — never floats; a grade is `gradeFor(bands, score)` only; the period kind comes from `Tenant.schoolType`, never from the client; (7) reads are ADMIN + staff (staff see school-wide rows and their own campus's), writes ADMIN only; an unknown, foreign or other-campus id is the **same 404**;
+  (8) the "Academic setup" dialogs stay mounted after closing (`useDialog`) so focus returns to the opener; remount on the next open. API and browser tests run the **production build** — `pnpm build` after changing a route or screen. Gate: `pnpm typecheck` → `pnpm lint` → `pnpm format:check` → `pnpm build` → tests.
 - **Phase 0.5.4 (Users pages and invitations) is BUILT AND VERIFIED** — branch `claude/app-shell-users`. A school's administrator lists members, invites by email, changes
   role/campus, deactivates and reactivates; an invitee accepts at `/accept-invite`. **Rules that follow:** (1) an invitation token is 256-bit, travels in the URL **fragment**, and only
   its SHA-256 is stored; the page **never acts on arrival** (scanners open links) — the person clicks; (2) **single use is a conditional `updateMany` whose row count decides** (a read then a

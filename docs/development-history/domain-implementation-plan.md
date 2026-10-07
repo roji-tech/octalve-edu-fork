@@ -166,6 +166,7 @@ one repo maps 1:1 onto the other:
 | Error codes | `INVALID_CREDENTIALS`, `RATE_LIMITED`, `CSRF`, `INVALID_BODY`, `UNAUTHENTICATED` (AlEemaan adds `FORBIDDEN`) |
 | Screens | `/login`, `/dashboard`, `/` (pure router), `/setup`; `components/ui/*`, `components/auth/*` |
 | Tests | `tests/{setup,unit,integration,api,e2e,https}`, `playwright.config.ts`, `pnpm test` — same layout and helpers in both repos (own ports and own `*_test` database each) |
+| Users and invitations (0.5.4; AlEemaan: **0.5.H**) | `lib/invitations/{token,status,service}.ts`, `lib/members/{service,http}.ts`, `POST /api/v1/invitations/{preview,accept}`, `/accept-invite`, audit actions `INVITATION_*`, `MEMBER_*` — AlEemaan **diverges** (ADR 0002 there): members are addressed by *membership* id, `branchId` for `campusId`, no RLS, and deactivating a person's last active membership also deletes their sessions (here the session lives on and resolves to no school) |
 
 Deliberately **not** synced (different concepts, not naming drift): the models `Campus`/`Branch` and
 `TenantMembership`/`Membership` (this repo has a `Tenant` above `Campus`; AlEemaan has no tenant and
@@ -2153,6 +2154,11 @@ Invitation acceptance sets none.
 `SECURITY DEFINER`) and restores the caller's `app.tenant_id`; (b) `SchoolSettings.updatedAt` has a database default so the trigger can insert; (c) there is **no DELETE policy** on `SchoolSettings`; (d) `withAuth` validates `permissions` at construction (non-empty, real
 values, needs `tenant: true`); (e) the member list's `permissions` is always present and always in enum order; (f) ADMIN-implies-permissions is applied to the `permissions` option only (decision 5's interpretation, now tested). **Mutation pass deferred to the end of
 Phase 2 by the maintainer's decision; the list above stands as the plan for it.**
+
+**As built — Phase 1.1 (2026-10-07)** — record: `phases/phase-1.1-academic-structure.md`; migrations `20261011090000_phase_1_1a_sessions_periods`, `20261012090000_phase_1_1b_classes_subjects`, `20261013090000_phase_1_1c_assessment_grading` (one per family, RLS in the same file as its tables); 34 routes under `/academics/…`; screens at `/schools/[code]/academics`.
+Decisions 7–17 are built as designed. Deviations, all deliberate: (a) **composite foreign keys use `ON DELETE NO ACTION`** (a school delete cascades through `tenantId`); (b) **locks are database triggers** (`assessment_scheme_locked`, `assessment_component_locked`, `grade_scale_locked`, `grade_band_locked`) — not only the service — and `pg_trigger_depth() > 1` lets a whole-school cascade through;
+(c) **a new version archives its predecessor in the same transaction** (decision 14 said "until activated"); (d) **decision 18 narrowed:** the page is administrators-only (the staff read API exists and is tested, no staff screen yet), sections are real links (`?section=`) rather than a tab widget, and the nav label is "Academics"; (e) copy-forward needs a typed name when the label is not a year pair;
+(f) **new rule found by the tests: a refusal that can follow a write must roll the transaction back** (`refuseAndRollBack` / `rollingBack`) — a returned refusal commits what came before it; (g) dates are spelled by a table, not `Intl`. **Mutation pass pending — end of Phase 2** (the "1.1" paragraph of the plan's "Mutation plan" below is the work).
 
 ##### 1.1 — Academic structure (migration `…_phase_1_1_academic_structure`)
 All tables below: `tenantId NOT NULL`, `ENABLE`+`FORCE` RLS with `USING` and `WITH CHECK` on `"tenantId" = app_tenant_id()` in the **same migration**, composite FKs (reconciliation 2),

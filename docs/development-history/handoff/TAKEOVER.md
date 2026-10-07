@@ -80,6 +80,7 @@ Do **not** start 1.2 or later.
 live-data-safe additive migrations only (the school's data must survive), its own plan/phase docs, and every divergence logged in **both** plan docs (the "Shared naming conventions" table and §0.5.1.6 there). Its own backlog item "0.5.2 School Settings" still awaits the maintainer's go-ahead — do not start it.
 
 ## 3. Standing rules that are easy to forget
+- Task tracking: check that `/home/rojitech/Desktop/CODEC/out/tasks.md` exists (create it if not: legend, rules in force, one section per repo, filled from the progress trackers), read it at the start of every session and keep it updated as tasks start, finish, block or appear (`[~]` started, `[x]` done and verified, `[!]` needs the maintainer; real test numbers, branches, PR links). It covers both repos.
 - Design before code: a "Build design" section in the plan (numbered decisions, tests paragraph, mutation list), committed alone, before the code it describes.
 - Migrations are additive and immutable; RLS in the same migration as the table; add the table to the catalog guard.
 - The app connects as `app_user`; tests arrange data with the admin `db` helper and read as the runtime role. **Do not create or alter database roles beyond what `docker/postgres/init/01-roles.sql` and `pnpm db:roles` do** — on the reviewer's sandbox such a change was denied and then explicitly approved by the maintainer, once, for that sandbox only.
