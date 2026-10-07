@@ -28,7 +28,8 @@ export type PeopleFailure =
   // --- guardians ---
   | "INVALID_GUARDIAN"
   | "ALREADY_LINKED"
-  | "LAST_LINK"
+  /// A guardian cannot be archived while any student is still linked to them: remove the links first (nothing is archived silently).
+  | "HAS_LIVE_LINKS"
   // --- staff ---
   | "ACCOUNT_TAKEN"
   | "ACCOUNT_MISMATCH"

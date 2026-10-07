@@ -30,6 +30,8 @@ const FIELD_MESSAGES: Record<string, string> = {
   email: "Give a valid email address.",
   relationship: "Choose mother, father, guardian or other.",
   category: "Choose teaching or non-teaching.",
+  guardianId: "Choose an existing guardian, or give the new guardian's name — not both.",
+  isPrimary: "Say true or false.",
 };
 
 export function peopleFailure(reason: PeopleFailure, detail?: Record<string, unknown>, what = "student"): Response {
@@ -83,6 +85,16 @@ export function peopleFailure(reason: PeopleFailure, detail?: Record<string, unk
         "ALREADY_ENROLLED",
         [{ path: "body.sessionId", message: "Already enrolled for this session." }],
       );
+    case "INVALID_GUARDIAN":
+      return fail("Choose a guardian of this school.", 400, "VALIDATION", [
+        { path: "body.guardianId", message: "Choose a guardian of this school." },
+      ]);
+    case "ALREADY_LINKED":
+      return fail("That guardian is already linked to this student.", 409, "ALREADY_LINKED", [
+        { path: "body.guardianId", message: "Already linked to this student." },
+      ]);
+    case "HAS_LIVE_LINKS":
+      return fail("Students are still linked to this guardian. Remove those links first.", 409, "HAS_LIVE_LINKS");
     default:
       return fail("That can't be done.", 409, reason);
   }
