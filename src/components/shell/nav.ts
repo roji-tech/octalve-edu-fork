@@ -1,6 +1,6 @@
 import type { ComponentType, SVGProps } from "react";
 import type { Role } from "@prisma/client";
-import { HomeIcon, SlidersIcon, UsersIcon } from "@/components/ui/icons";
+import { CalendarIcon, HomeIcon, SlidersIcon, UsersIcon } from "@/components/ui/icons";
 import { isValidTenantCode } from "@/lib/tenant/validate-code";
 
 /// A school the signed-in person belongs to, as the shell needs it. Display data only (see lib/auth/page-session.ts).
@@ -25,6 +25,7 @@ export function navFor(school: ShellSchool | null): NavItem[] {
   const items: NavItem[] = [{ label: "Overview", href: `/schools/${school.code}`, icon: HomeIcon, exact: true }];
   if (school.role === "ADMIN") {
     items.push(
+      { label: "Academics", href: `/schools/${school.code}/academics`, icon: CalendarIcon },
       { label: "Users", href: `/schools/${school.code}/users`, icon: UsersIcon },
       { label: "Settings", href: null, icon: SlidersIcon },
     );
@@ -49,7 +50,7 @@ export function schoolFromPath(pathname: string, schools: readonly ShellSchool[]
 }
 
 /// The page's own name for the breadcrumb ("School / Users"), by path.
-const SCHOOL_PAGES: Record<string, string> = { "": "Overview", users: "Users", settings: "Settings" };
+const SCHOOL_PAGES: Record<string, string> = { "": "Overview", users: "Users", academics: "Academics", settings: "Settings" };
 const GLOBAL_PAGES: Record<string, string> = { "/dashboard": "Your schools", "/account": "Account" };
 
 export function pageLabel(pathname: string): string | null {

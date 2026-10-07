@@ -32,7 +32,7 @@ async function request(path: string, init: RequestInit): Promise<Reply> {
   }
 }
 
-export function sendJson(path: string, method: "POST" | "PATCH" | "DELETE", body?: unknown): Promise<Reply> {
+export function sendJson(path: string, method: "POST" | "PUT" | "PATCH" | "DELETE", body?: unknown): Promise<Reply> {
   return request(path, {
     method,
     headers: { "Content-Type": "application/json" },

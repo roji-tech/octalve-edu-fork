@@ -14,11 +14,12 @@ test.describe("navFor", () => {
     expect(navFor(null)).toMatchObject([{ label: "Your schools", href: "/dashboard" }]);
   });
 
-  test("an ADMIN of a school: Overview, Users (a page) and Settings (not built yet → no link)", () => {
+  test("an ADMIN of a school: Overview, Academics and Users (pages) and Settings (not built yet → no link)", () => {
     const items = navFor(admin);
-    expect(items.map((i) => i.label)).toEqual(["Overview", "Users", "Settings"]);
+    expect(items.map((i) => i.label)).toEqual(["Overview", "Academics", "Users", "Settings"]);
     expect(items[0].href).toBe("/schools/riverside");
-    expect(items[1].href).toBe("/schools/riverside/users");
+    expect(items[1].href).toBe("/schools/riverside/academics");
+    expect(items[2].href).toBe("/schools/riverside/users");
     expect(items.filter((i) => i.href === null).map((i) => i.label)).toEqual(["Settings"]); // "Soon", never a dead link
   });
 
@@ -91,6 +92,7 @@ test.describe("pageLabel and isActive", () => {
     expect(pageLabel("/schools/riverside")).toBe("Overview");
     expect(pageLabel("/schools/riverside/users")).toBe("Users");
     expect(pageLabel("/schools/riverside/users/")).toBe("Users");
+    expect(pageLabel("/schools/riverside/academics")).toBe("Academics");
     expect(pageLabel("/schools/riverside/unheard-of")).toBeNull(); // no invented names
     expect(pageLabel("/somewhere-else")).toBeNull();
   });
