@@ -1,6 +1,16 @@
 import { test, expect } from "../support/fixtures";
 import type { Locator, Page } from "@playwright/test";
-import { Role, addMembership, createTenant, createUser, db, removeCreatedTenants, seedInstance, type TestTenant } from "../support/db";
+import {
+  Role,
+  addMembership,
+  createTenant,
+  createUser,
+  db,
+  removeCreatedTenants,
+  seedInstance,
+  uniqueIp,
+  type TestTenant,
+} from "../support/db";
 import { SAAS_URL } from "../support/env";
 import { signInThroughUi } from "./helpers";
 
@@ -56,14 +66,72 @@ test.describe("the page", () => {
     ).toHaveAttribute("aria-current", "page");
   });
 
-  test("anyone who is not an administrator of this school gets the same 403 view as a stranger", async ({ page }) => {
+  test("staff may LOOK: the same four sections with nothing that writes (no New session, New class, Edit, Archive…); students and parents get the same 403 view as a stranger", async ({
+    page,
+    browser,
+  }) => {
     const teacher = await createUser({ name: "Tola Teacher" });
     await addMembership(teacher.id, school.id, Role.TEACHING_STAFF, school.campuses[0].id);
+    await db.academicSession.create({
+      data: {
+        tenantId: school.id,
+        label: "2026/2027",
+        startDate: new Date("2026-09-01"),
+        endDate: new Date("2027-07-31"),
+        status: "ACTIVE",
+      },
+    });
+    const group = await db.classGroup.create({ data: { tenantId: school.id, name: "JSS 1" } });
+    await db.classArm.create({ data: { tenantId: school.id, classGroupId: group.id, name: "A" } });
+    await db.subject.create({ data: { tenantId: school.id, name: "Mathematics" } });
     await signInThroughUi(page, teacher);
+
     const response = await page.goto(`/schools/${school.code}/academics`);
-    expect(response?.status()).toBe(403);
-    await expect(page.getByRole("heading", { level: 1, name: "You don't have access to this school" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Sessions" })).toHaveCount(0);
+    expect(response?.status()).toBe(200);
+    await expect(page.getByRole("heading", { level: 1, name: "Academic setup" })).toBeVisible();
+    await expect(page.getByText("Only an administrator can change this.")).toBeVisible();
+    await expect(page.getByRole("heading", { level: 2, name: "Sessions" })).toBeVisible();
+    await expect(item(page, "2026/2027")).toBeVisible();
+    await expect(page.getByRole("button", { name: "New session" })).toHaveCount(0);
+    for (const verb of ["Edit", "Open", "Close", "Reopen", "Copy", "Archive"]) {
+      await expect(page.getByRole("button", { name: new RegExp(`^${verb}`) }), verb).toHaveCount(0);
+    }
+    await page.getByRole("button", { name: /^Terms of 2026\/2027/ }).click(); // looking at the terms is allowed…
+    await expect(page.getByRole("button", { name: /Add a term/ })).toHaveCount(0); // …changing them is not
+    await page.getByRole("button", { name: "All sessions" }).click();
+
+    for (const [section, heading, buttons] of [
+      [
+        "classes",
+        "Classes and arms",
+        ["New class", "New subject", "Add arm to JSS 1", "Edit JSS 1", "Archive JSS 1", "Edit Mathematics", "Archive Mathematics"],
+      ],
+      ["assessment", "Assessment schemes", ["New scheme"]],
+      ["grading", "Grade scales", ["New scale"]],
+    ] as const) {
+      await page.goto(`/schools/${school.code}/academics?section=${section}`);
+      await expect(page.getByRole("heading", { level: 2, name: heading })).toBeVisible();
+      for (const name of buttons) await expect(page.getByRole("button", { name }), `${section}: ${name}`).toHaveCount(0);
+    }
+    await page.goto(`/schools/${school.code}/academics?section=classes`);
+    await expect(item(page, "JSS 1").first()).toBeVisible();
+    await expect(page.getByText("Mathematics")).toBeVisible();
+
+    for (const [role, name] of [
+      [Role.PARENT, "Pat Parent"],
+      [Role.STUDENT, "Sam Student"],
+    ] as const) {
+      const outsider = await createUser({ name });
+      await addMembership(outsider.id, school.id, role);
+      const fresh = await browser.newContext({ baseURL: SAAS_URL, extraHTTPHeaders: { "x-real-ip": uniqueIp() } });
+      const other = await fresh.newPage();
+      await signInThroughUi(other, outsider);
+      const denied = await other.goto(`/schools/${school.code}/academics`);
+      expect(denied?.status(), name).toBe(403);
+      await expect(other.getByRole("heading", { level: 1, name: "You don't have access to this school" })).toBeVisible();
+      await expect(other.getByRole("heading", { name: "Sessions" })).toHaveCount(0);
+      await fresh.close();
+    }
   });
 });
 

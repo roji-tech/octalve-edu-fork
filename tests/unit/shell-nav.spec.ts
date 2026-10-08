@@ -14,25 +14,38 @@ test.describe("navFor", () => {
     expect(navFor(null)).toMatchObject([{ label: "Your schools", href: "/dashboard" }]);
   });
 
-  test("an ADMIN of a school: Overview, Academics and Users (pages) and Settings (not built yet → no link)", () => {
+  test("an ADMIN of a school: Overview, Academics, People and Users (pages) and Settings (not built yet → no link)", () => {
     const items = navFor(admin);
-    expect(items.map((i) => i.label)).toEqual(["Overview", "Academics", "Users", "Settings"]);
+    expect(items.map((i) => i.label)).toEqual(["Overview", "Academics", "People", "Users", "Settings"]);
     expect(items[0].href).toBe("/schools/riverside");
     expect(items[1].href).toBe("/schools/riverside/academics");
-    expect(items[2].href).toBe("/schools/riverside/users");
+    expect(items[2].href).toBe("/schools/riverside/people");
+    expect(items[3].href).toBe("/schools/riverside/users");
     expect(items.filter((i) => i.href === null).map((i) => i.label)).toEqual(["Settings"]); // "Soon", never a dead link
   });
 
-  test("everyone else sees Overview only — decided by the role IN THAT SCHOOL", () => {
-    for (const role of ["TEACHING_STAFF", "NON_TEACHING_STAFF", "STUDENT", "PARENT"] as const) {
+  test("staff see Overview, Academics and People (to look at, never to change); students and parents see Overview only — decided by the role IN THAT SCHOOL", () => {
+    for (const role of ["TEACHING_STAFF", "NON_TEACHING_STAFF"] as const) {
+      const items = navFor({ ...admin, role });
+      expect(
+        items.map((i) => i.label),
+        role,
+      ).toEqual(["Overview", "Academics", "People"]);
+      expect(
+        items.map((i) => i.href),
+        role,
+      ).toEqual(["/schools/riverside", "/schools/riverside/academics", "/schools/riverside/people"]);
+    }
+    for (const role of ["STUDENT", "PARENT"] as const) {
       expect(
         navFor({ ...admin, role }).map((i) => i.label),
         role,
       ).toEqual(["Overview"]);
     }
     // The same person is an admin in one school and a teacher in another: each school's nav follows its own role.
-    expect(navFor(teacher).map((i) => i.label)).toEqual(["Overview"]);
+    expect(navFor(teacher).map((i) => i.label)).toEqual(["Overview", "Academics", "People"]);
     expect(navFor(admin).map((i) => i.label)).toContain("Users");
+    expect(navFor(teacher).map((i) => i.label)).not.toContain("Users"); // the Users page stays the administrators'
   });
 
   test("the links carry the school's code", () => {
@@ -93,6 +106,11 @@ test.describe("pageLabel and isActive", () => {
     expect(pageLabel("/schools/riverside/users")).toBe("Users");
     expect(pageLabel("/schools/riverside/users/")).toBe("Users");
     expect(pageLabel("/schools/riverside/academics")).toBe("Academics");
+    expect(pageLabel("/schools/riverside/people")).toBe("People");
+    expect(pageLabel("/schools/riverside/people/students/abc123")).toBe("People"); // a person's own page is still People
+    expect(pageLabel("/schools/riverside/people/staff/abc123/")).toBe("People");
+    expect(pageLabel("/schools/riverside/people/students")).toBeNull(); // no such page: no invented names
+    expect(pageLabel("/schools/riverside/people/other/abc123")).toBeNull();
     expect(pageLabel("/schools/riverside/unheard-of")).toBeNull(); // no invented names
     expect(pageLabel("/somewhere-else")).toBeNull();
   });

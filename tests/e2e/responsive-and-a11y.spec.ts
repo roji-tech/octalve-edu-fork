@@ -1013,6 +1013,315 @@ test.describe("academic setup (SaaS-mode server)", () => {
   });
 });
 
+test.describe("people (SaaS-mode server)", () => {
+  test.use({ baseURL: SAAS_URL });
+  test.beforeAll(async () => {
+    await seedInstance();
+  });
+  test.afterAll(async () => {
+    await removeCreatedTenants();
+  });
+
+  const dialog = (page: Page) => page.getByRole("dialog");
+  async function setup(page: Page, role: "ADMIN" | "TEACHING_STAFF" = "ADMIN") {
+    const school = await createTenant({
+      name: "Alpha School with a rather long name to prove it wraps",
+      campuses: ["Alpha North", "Alpha South"],
+    });
+    const me = await createUser({ name: "Amina Yusuf" });
+    await addMembership(
+      me.id,
+      school.id,
+      role === "ADMIN" ? Role.ADMIN : Role.TEACHING_STAFF,
+      role === "ADMIN" ? null : school.campuses[0].id,
+    );
+    await signInThroughUi(page, me);
+    return school;
+  }
+  async function seed(school: { id: string; campuses: { id: string }[] }) {
+    const session = await db.academicSession.create({
+      data: {
+        tenantId: school.id,
+        label: "2026/2027",
+        startDate: new Date("2026-09-01"),
+        endDate: new Date("2027-07-31"),
+        status: "ACTIVE",
+      },
+    });
+    const group = await db.classGroup.create({ data: { tenantId: school.id, name: "JSS 1" } });
+    const arm = await db.classArm.create({ data: { tenantId: school.id, classGroupId: group.id, name: "A", capacity: 30 } });
+    await db.classArm.create({ data: { tenantId: school.id, classGroupId: group.id, name: "B" } });
+    const subject = await db.subject.create({ data: { tenantId: school.id, name: "Mathematics" } });
+    await db.subjectOffering.create({ data: { tenantId: school.id, classGroupId: group.id, subjectId: subject.id } });
+    return { session, group, arm, subject };
+  }
+  const student = (schoolId: string, over: Record<string, unknown> = {}) =>
+    db.studentRecord.create({
+      data: {
+        tenantId: schoolId,
+        firstName: "Sade",
+        lastName: "Okoro",
+        dateOfBirth: new Date("2012-05-01"),
+        admissionNo: `ADM/${Math.random().toString(36).slice(2, 8)}`,
+        ...over,
+      },
+    });
+
+  test("students: empty, a list (long names, an archived one), the add form with errors, the import dialog with a report, and the filters", async ({
+    page,
+    isMobile,
+  }) => {
+    test.setTimeout(300_000);
+    const school = await setup(page);
+    await page.goto(`/schools/${school.code}/people?section=students`);
+    await expect(page.getByText("No students yet. Add the first one, or import a file.")).toBeVisible();
+    await checkScreen(page, "/people students (empty)", isMobile);
+
+    const { session, arm } = await seed(school);
+    const sade = await student(school.id, {
+      firstName: "Oluwaseun-Adebayo-Chukwuemeka",
+      lastName: "Okonkwo-Abdulrahman-Wellington",
+      admissionNo: "ADM/LONG/0001",
+    });
+    await db.studentEnrollment.create({ data: { tenantId: school.id, studentId: sade.id, sessionId: session.id, classArmId: arm.id } });
+    await student(school.id, { firstName: "Tunde", lastName: "Bello", campusId: school.campuses[0].id });
+    await student(school.id, { firstName: "Old", lastName: "Boy", archivedAt: new Date() });
+    await page.goto(`/schools/${school.code}/people?section=students`);
+    await expect(page.getByText("2 students")).toBeVisible();
+    await checkScreen(page, "/people students (list)", isMobile);
+    await page.getByLabel("Show", { exact: true }).selectOption("all");
+    await expect(page.getByText("3 students")).toBeVisible();
+    await checkScreen(page, "/people students (everyone, incl. archived)", isMobile);
+    await page.getByLabel("Show", { exact: true }).selectOption("live");
+    await page.getByLabel("Search", { exact: true }).fill("zzzz");
+    await expect(page.getByText("No student matches these filters.")).toBeVisible();
+    await checkScreen(page, "/people students (nothing matches)", isMobile);
+    await page.getByLabel("Search", { exact: true }).fill("");
+
+    await page.getByRole("button", { name: "Add student" }).click();
+    await dialog(page).getByRole("button", { name: "Add student" }).click();
+    await expect(dialog(page).getByText("Give the student's first name.")).toBeVisible();
+    await checkScreen(page, "/people add student (with errors)", isMobile);
+    await page.keyboard.press("Escape");
+
+    await page.getByRole("button", { name: "Import…" }).click();
+    await checkScreen(page, "/people import (before choosing a file)", isMobile);
+    await dialog(page)
+      .locator("#import-file")
+      .setInputFiles({
+        name: "students.csv",
+        mimeType: "text/csv",
+        buffer: Buffer.from("first_name,last_name,date_of_birth\r\nSade,Okoro,2012-05-01\r\n,NoFirst,2012-02-30\r\n"),
+      });
+    await dialog(page).getByRole("button", { name: "Check the file" }).click();
+    await expect(dialog(page).getByRole("table", { name: "Rows with problems" })).toBeVisible();
+    await checkScreen(page, "/people import (report with problems)", isMobile);
+    await dialog(page)
+      .locator("#import-file")
+      .setInputFiles({
+        name: "students.csv",
+        mimeType: "text/csv",
+        buffer: Buffer.from("first_name,last_name,date_of_birth\r\nNew,Pupil,2012-05-01\r\n"),
+      });
+    await dialog(page).getByRole("button", { name: "Check the file" }).click();
+    await expect(dialog(page).getByText("The file is fine: 1 to add.")).toBeVisible();
+    await checkScreen(page, "/people import (clean report)", isMobile);
+  });
+
+  test("a student's page: details, classes, guardians, and each dialog (enrol, move, withdraw, add and edit a guardian, archive)", async ({
+    page,
+    isMobile,
+  }) => {
+    test.setTimeout(300_000);
+    const school = await setup(page);
+    const { session, arm } = await seed(school);
+    const s = await student(school.id, {
+      firstName: "Oluwaseun-Adebayo",
+      lastName: "Okonkwo-Abdulrahman-Wellington",
+      middleName: "Chukwuemeka",
+    });
+    await page.goto(`/schools/${school.code}/people/students/${s.id}`);
+    await expect(page.getByText("Not in a class yet.")).toBeVisible();
+    await expect(page.getByText("No guardian recorded yet.")).toBeVisible();
+    await checkScreen(page, "/people student (no class, no guardian)", isMobile);
+
+    await page.getByRole("button", { name: "Enrol in a class" }).click();
+    await dialog(page).getByRole("button", { name: "Enrol student" }).click();
+    await expect(dialog(page).getByText("Choose a class.")).toBeVisible();
+    await checkScreen(page, "/people enrol dialog (with an error)", isMobile);
+    await page.keyboard.press("Escape");
+    await db.studentEnrollment.create({ data: { tenantId: school.id, studentId: s.id, sessionId: session.id, classArmId: arm.id } });
+    const mum = await db.guardianRecord.create({
+      data: { tenantId: school.id, firstName: "Mary", lastName: "Okonkwo-Abdulrahman", phone: "08031234567", email: "mary@example.com" },
+    });
+    const dad = await db.guardianRecord.create({ data: { tenantId: school.id, firstName: "Gbenga", lastName: "Okonkwo-Abdulrahman" } });
+    await db.guardianLink.create({
+      data: { tenantId: school.id, studentId: s.id, guardianId: mum.id, relationship: "MOTHER", isPrimary: true },
+    });
+    await db.guardianLink.create({ data: { tenantId: school.id, studentId: s.id, guardianId: dad.id, relationship: "FATHER" } });
+    await page.reload();
+    await expect(page.getByText("Primary contact", { exact: true })).toBeVisible();
+    await checkScreen(page, "/people student (enrolled, two guardians)", isMobile);
+
+    await page.getByRole("button", { name: /^Move / }).click();
+    await checkScreen(page, "/people move dialog", isMobile);
+    await page.keyboard.press("Escape");
+    await page.getByRole("button", { name: /^Withdraw / }).click();
+    await dialog(page).getByRole("button", { name: "Withdraw student" }).click();
+    await expect(dialog(page).getByText("Say why, in at least 5 characters.")).toBeVisible();
+    await checkScreen(page, "/people withdraw dialog (with an error)", isMobile);
+    await page.keyboard.press("Escape");
+
+    await page.getByRole("button", { name: "Add guardian" }).click();
+    await checkScreen(page, "/people add guardian (new person)", isMobile);
+    await dialog(page).getByLabel("Who is it?").selectOption("existing");
+    await dialog(page).getByLabel("Search guardians").fill("mar");
+    await expect(dialog(page).getByLabel("Guardian").locator("option", { hasText: "Mary" })).toHaveCount(1);
+    await checkScreen(page, "/people add guardian (from the register)", isMobile);
+    // Escape inside a search box only clears it (the browser's own behaviour), so close with the button.
+    await dialog(page).getByRole("button", { name: "Close" }).click();
+    await page.getByRole("button", { name: /^Edit Gbenga/ }).click();
+    await checkScreen(page, "/people edit guardian dialog", isMobile);
+    await page.keyboard.press("Escape");
+    await page.getByRole("button", { name: /^Remove Gbenga/ }).click();
+    await checkScreen(page, "/people remove guardian confirmation", isMobile);
+    await page.keyboard.press("Escape");
+    await page.getByRole("button", { name: /^Archive / }).click();
+    await dialog(page).getByRole("button", { name: "Archive student" }).click();
+    await expect(dialog(page).getByText("The student is still enrolled. Withdraw them from the class first.")).toBeVisible();
+    await checkScreen(page, "/people archive confirmation (refused)", isMobile);
+  });
+
+  test("staff: the list, a record with no sign-in / an invitation out / a linked account, and each dialog (add, invite, link, add a subject, archive)", async ({
+    page,
+    isMobile,
+  }) => {
+    test.setTimeout(300_000);
+    const school = await setup(page);
+    await page.goto(`/schools/${school.code}/people?section=staff`);
+    await expect(page.getByText("No staff yet. Add the first member of staff.")).toBeVisible();
+    await checkScreen(page, "/people staff (empty)", isMobile);
+
+    const { group, arm, subject } = await seed(school);
+    const plain = await db.staffRecord.create({
+      data: {
+        tenantId: school.id,
+        category: "TEACHING",
+        firstName: "Oluwaseun-Adebayo",
+        lastName: "Okonkwo-Abdulrahman-Wellington",
+        email: "long.name@example.com",
+      },
+    });
+    const invited = await db.staffRecord.create({
+      data: { tenantId: school.id, category: "NON_TEACHING", firstName: "Ivy", lastName: "Invited", email: "ivy@example.com" },
+    });
+    await db.invitation.create({
+      data: {
+        tenantId: school.id,
+        email: "ivy@example.com",
+        role: Role.NON_TEACHING_STAFF,
+        staffRecordId: invited.id,
+        tokenHash: `a11y-${Math.random().toString(36).slice(2)}`,
+        expiresAt: new Date(Date.now() + 86_400_000),
+      },
+    });
+    const member = await createUser({ name: "Lina Linked" });
+    await addMembership(member.id, school.id, Role.TEACHING_STAFF, school.campuses[0].id);
+    const linked = await db.staffRecord.create({
+      data: {
+        tenantId: school.id,
+        category: "TEACHING",
+        firstName: "Lina",
+        lastName: "Linked",
+        userId: member.id,
+        campusId: school.campuses[0].id,
+      },
+    });
+    await db.staffRecord.create({
+      data: { tenantId: school.id, category: "TEACHING", firstName: "Old", lastName: "Hand", archivedAt: new Date() },
+    });
+    await db.staffSubjectAssignment.create({
+      data: { tenantId: school.id, staffRecordId: linked.id, subjectId: subject.id, classArmId: arm.id },
+    });
+    expect(group.id).toBeTruthy();
+    await page.goto(`/schools/${school.code}/people?section=staff`);
+    await expect(page.getByText("3 people")).toBeVisible();
+    await checkScreen(page, "/people staff (list)", isMobile);
+
+    await page.getByRole("button", { name: "Add staff member" }).click();
+    await dialog(page).getByRole("button", { name: "Add staff member" }).click();
+    await expect(dialog(page).getByText("Give their first name.")).toBeVisible();
+    await checkScreen(page, "/people add staff (with errors)", isMobile);
+    await page.keyboard.press("Escape");
+
+    await page.goto(`/schools/${school.code}/people/staff/${plain.id}`);
+    await expect(page.getByText(/No sign-in yet/)).toBeVisible();
+    await checkScreen(page, "/people staff record (no sign-in)", isMobile);
+    await page.getByRole("button", { name: /^Invite / }).click();
+    await checkScreen(page, "/people invite confirmation", isMobile);
+    await page.keyboard.press("Escape");
+    await page.getByRole("button", { name: /^Link / }).click();
+    await checkScreen(page, "/people link account dialog", isMobile);
+    await page.keyboard.press("Escape");
+    await page.getByRole("button", { name: "Add a subject" }).click();
+    await dialog(page).getByRole("button", { name: "Add", exact: true }).click();
+    await expect(dialog(page).getByText("Choose a subject.")).toBeVisible();
+    await checkScreen(page, "/people add subject dialog (with errors)", isMobile);
+    await page.keyboard.press("Escape");
+
+    await page.goto(`/schools/${school.code}/people/staff/${invited.id}`);
+    await expect(page.getByText(/An invitation has been sent/)).toBeVisible();
+    await checkScreen(page, "/people staff record (invited)", isMobile);
+
+    await page.goto(`/schools/${school.code}/people/staff/${linked.id}`);
+    await expect(page.getByText(/Linked to/)).toBeVisible();
+    await db.tenantMembership.update({
+      where: { userId_tenantId: { userId: member.id, tenantId: school.id } },
+      data: { role: Role.NON_TEACHING_STAFF },
+    });
+    await page.reload();
+    await expect(page.getByText(/no longer matches this record/)).toBeVisible();
+    await checkScreen(page, "/people staff record (linked, with its notes and a subject)", isMobile);
+    await page.getByRole("button", { name: /^Unlink / }).click();
+    await checkScreen(page, "/people unlink confirmation", isMobile);
+    await page.keyboard.press("Escape");
+    await page.getByRole("button", { name: /^Archive / }).click();
+    await dialog(page).getByRole("button", { name: "Archive record" }).click();
+    await expect(dialog(page).getByText("Subjects are still assigned to this person. Remove those first.")).toBeVisible();
+    await checkScreen(page, "/people archive staff (refused)", isMobile);
+  });
+
+  test("a member of staff looking: the same screens with nothing that writes", async ({ page, isMobile }) => {
+    test.setTimeout(300_000);
+    const school = await setup(page, "TEACHING_STAFF");
+    const { session, arm } = await seed(school);
+    const s = await student(school.id);
+    await db.studentEnrollment.create({ data: { tenantId: school.id, studentId: s.id, sessionId: session.id, classArmId: arm.id } });
+    const g = await db.guardianRecord.create({ data: { tenantId: school.id, firstName: "Mary", lastName: "Okoro", phone: "08031234567" } });
+    await db.guardianLink.create({
+      data: { tenantId: school.id, studentId: s.id, guardianId: g.id, relationship: "MOTHER", isPrimary: true },
+    });
+    const staff = await db.staffRecord.create({
+      data: { tenantId: school.id, category: "TEACHING", firstName: "Tola", lastName: "Bello" },
+    });
+    await page.goto(`/schools/${school.code}/people?section=students`);
+    await expect(page.getByText("Only an administrator can change this.")).toBeVisible();
+    await checkScreen(page, "/people students (read-only)", isMobile);
+    await page.goto(`/schools/${school.code}/people/students/${s.id}`);
+    await expect(page.getByText("Primary contact", { exact: true })).toBeVisible();
+    await checkScreen(page, "/people student (read-only)", isMobile);
+    await page.goto(`/schools/${school.code}/people?section=staff`);
+    await checkScreen(page, "/people staff (read-only)", isMobile);
+    await page.goto(`/schools/${school.code}/people/staff/${staff.id}`);
+    await checkScreen(page, "/people staff record (read-only)", isMobile);
+    for (const section of ["sessions", "classes", "assessment", "grading"]) {
+      await page.goto(`/schools/${school.code}/academics?section=${section}`);
+      await expect(page.getByText("Only an administrator can change this.")).toBeVisible();
+      await checkScreen(page, `/academics ${section} (read-only)`, isMobile);
+    }
+  });
+});
+
 test.describe("dev email inbox widget (the staging-mode server)", () => {
   test.use({ baseURL: DEVTOOLS_URL });
   test.beforeEach(async () => {

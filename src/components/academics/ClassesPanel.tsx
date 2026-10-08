@@ -15,7 +15,15 @@ type ArchiveTarget = { kind: "class" | "arm" | "subject"; id: string; name: stri
 
 /// "Classes & subjects": the school's levels with their arms, the subjects it teaches, and which classes study which. Everything goes through the
 /// academics API; nothing here is ever deleted, only archived.
-export function ClassesPanel({ schoolCode, campuses }: { schoolCode: string; campuses: CampusOption[] }) {
+export function ClassesPanel({
+  schoolCode,
+  campuses,
+  readOnly = false,
+}: {
+  schoolCode: string;
+  campuses: CampusOption[];
+  readOnly?: boolean;
+}) {
   const root = `/api/v1/schools/${schoolCode}/academics`;
   const [groupPage, setGroupPage] = useState(1);
   const groups = useApi(`${root}/class-groups?limit=20&page=${groupPage}`);
@@ -65,10 +73,12 @@ export function ClassesPanel({ schoolCode, campuses }: { schoolCode: string; cam
             </h2>
             <p className="mt-1 text-sm text-fg-muted">A class is a level (Year 7); an arm is a section of it (7A, 7B).</p>
           </div>
-          <Button onClick={() => (setNotice(null), groupForm.show({ group: null }))}>
-            <PlusIcon className="h-4 w-4" />
-            New class
-          </Button>
+          {!readOnly && (
+            <Button onClick={() => (setNotice(null), groupForm.show({ group: null }))}>
+              <PlusIcon className="h-4 w-4" />
+              New class
+            </Button>
+          )}
         </div>
         <p ref={summaryRef} tabIndex={-1} className="text-sm text-fg-muted focus:outline-none" aria-live="polite">
           {groupMeta ? `${groupMeta.total} ${groupMeta.total === 1 ? "class" : "classes"}` : " "}
@@ -90,36 +100,38 @@ export function ClassesPanel({ schoolCode, campuses }: { schoolCode: string; cam
                       {group.campusName ?? "Whole school"} · {group.subjectCount} {group.subjectCount === 1 ? "subject" : "subjects"}
                     </p>
                   </div>
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      variant="secondary"
-                      aria-label={`Subjects of ${group.name}`}
-                      onClick={() => (setNotice(null), offerings.show(group))}
-                    >
-                      Subjects
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      aria-label={`Add an arm to ${group.name}`}
-                      onClick={() => (setNotice(null), armForm.show({ group, arm: null }))}
-                    >
-                      Add arm
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      aria-label={`Edit ${group.name}`}
-                      onClick={() => (setNotice(null), groupForm.show({ group }))}
-                    >
-                      Edit
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      aria-label={`Archive ${group.name}`}
-                      onClick={() => (setNotice(null), archiving.show({ kind: "class", id: group.id, name: group.name }))}
-                    >
-                      Archive
-                    </Button>
-                  </div>
+                  {!readOnly && (
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        variant="secondary"
+                        aria-label={`Subjects of ${group.name}`}
+                        onClick={() => (setNotice(null), offerings.show(group))}
+                      >
+                        Subjects
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        aria-label={`Add an arm to ${group.name}`}
+                        onClick={() => (setNotice(null), armForm.show({ group, arm: null }))}
+                      >
+                        Add arm
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        aria-label={`Edit ${group.name}`}
+                        onClick={() => (setNotice(null), groupForm.show({ group }))}
+                      >
+                        Edit
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        aria-label={`Archive ${group.name}`}
+                        onClick={() => (setNotice(null), archiving.show({ kind: "class", id: group.id, name: group.name }))}
+                      >
+                        Archive
+                      </Button>
+                    </div>
+                  )}
                 </div>
                 {group.arms.length > 0 ? (
                   <ul className="mt-3 divide-y divide-line rounded-xl border border-line">
@@ -129,25 +141,27 @@ export function ClassesPanel({ schoolCode, campuses }: { schoolCode: string; cam
                           <span className="font-medium">{arm.name}</span>
                           <span className="ml-2 text-xs text-fg-muted">{arm.capacity ? `Up to ${arm.capacity} pupils` : "No limit"}</span>
                         </p>
-                        <div className="flex gap-2">
-                          <Button
-                            variant="ghost"
-                            aria-label={`Edit arm ${arm.name} of ${group.name}`}
-                            onClick={() => (setNotice(null), armForm.show({ group, arm }))}
-                          >
-                            Edit
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            aria-label={`Archive arm ${arm.name} of ${group.name}`}
-                            onClick={() => (
-                              setNotice(null),
-                              archiving.show({ kind: "arm", id: arm.id, name: `${group.name} ${arm.name}` })
-                            )}
-                          >
-                            Archive
-                          </Button>
-                        </div>
+                        {!readOnly && (
+                          <div className="flex gap-2">
+                            <Button
+                              variant="ghost"
+                              aria-label={`Edit arm ${arm.name} of ${group.name}`}
+                              onClick={() => (setNotice(null), armForm.show({ group, arm }))}
+                            >
+                              Edit
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              aria-label={`Archive arm ${arm.name} of ${group.name}`}
+                              onClick={() => (
+                                setNotice(null),
+                                archiving.show({ kind: "arm", id: arm.id, name: `${group.name} ${arm.name}` })
+                              )}
+                            >
+                              Archive
+                            </Button>
+                          </div>
+                        )}
                       </li>
                     ))}
                   </ul>
@@ -171,10 +185,12 @@ export function ClassesPanel({ schoolCode, campuses }: { schoolCode: string; cam
               The subjects the school teaches. Choose which classes study each one from the class above.
             </p>
           </div>
-          <Button onClick={() => (setNotice(null), subjectForm.show({ subject: null }))}>
-            <PlusIcon className="h-4 w-4" />
-            New subject
-          </Button>
+          {!readOnly && (
+            <Button onClick={() => (setNotice(null), subjectForm.show({ subject: null }))}>
+              <PlusIcon className="h-4 w-4" />
+              New subject
+            </Button>
+          )}
         </div>
         <div className="max-w-sm">
           <TextField
@@ -200,22 +216,24 @@ export function ClassesPanel({ schoolCode, campuses }: { schoolCode: string; cam
                 <p className="text-sm font-semibold break-words text-fg">
                   {subject.name} {subject.code && <StatusPill tone="neutral">{subject.code}</StatusPill>}
                 </p>
-                <div className="flex gap-2">
-                  <Button
-                    variant="secondary"
-                    aria-label={`Edit ${subject.name}`}
-                    onClick={() => (setNotice(null), subjectForm.show({ subject }))}
-                  >
-                    Edit
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    aria-label={`Archive ${subject.name}`}
-                    onClick={() => (setNotice(null), archiving.show({ kind: "subject", id: subject.id, name: subject.name }))}
-                  >
-                    Archive
-                  </Button>
-                </div>
+                {!readOnly && (
+                  <div className="flex gap-2">
+                    <Button
+                      variant="secondary"
+                      aria-label={`Edit ${subject.name}`}
+                      onClick={() => (setNotice(null), subjectForm.show({ subject }))}
+                    >
+                      Edit
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      aria-label={`Archive ${subject.name}`}
+                      onClick={() => (setNotice(null), archiving.show({ kind: "subject", id: subject.id, name: subject.name }))}
+                    >
+                      Archive
+                    </Button>
+                  </div>
+                )}
               </li>
             ))}
           </ul>
@@ -225,7 +243,7 @@ export function ClassesPanel({ schoolCode, campuses }: { schoolCode: string; cam
 
       {groupForm.n > 0 && (
         <ClassGroupDialog
-          key={groupForm.n}
+          key={`groupForm-${groupForm.n}`}
           open={groupForm.open}
           onClose={groupForm.hide}
           schoolCode={schoolCode}
@@ -236,7 +254,7 @@ export function ClassesPanel({ schoolCode, campuses }: { schoolCode: string; cam
       )}
       {armForm.n > 0 && (
         <ArmDialog
-          key={armForm.n}
+          key={`armForm-${armForm.n}`}
           open={armForm.open}
           onClose={armForm.hide}
           schoolCode={schoolCode}
@@ -247,7 +265,7 @@ export function ClassesPanel({ schoolCode, campuses }: { schoolCode: string; cam
       )}
       {subjectForm.n > 0 && (
         <SubjectDialog
-          key={subjectForm.n}
+          key={`subjectForm-${subjectForm.n}`}
           open={subjectForm.open}
           onClose={subjectForm.hide}
           schoolCode={schoolCode}
@@ -257,7 +275,7 @@ export function ClassesPanel({ schoolCode, campuses }: { schoolCode: string; cam
       )}
       {offerings.n > 0 && (
         <OfferingsDialog
-          key={offerings.n}
+          key={`offerings-${offerings.n}`}
           open={offerings.open}
           onClose={offerings.hide}
           schoolCode={schoolCode}
@@ -269,7 +287,7 @@ export function ClassesPanel({ schoolCode, campuses }: { schoolCode: string; cam
       )}
       {archiving.n > 0 && (
         <ArchiveDialog
-          key={archiving.n}
+          key={`archiving-${archiving.n}`}
           open={archiving.open}
           onClose={archiving.hide}
           schoolCode={schoolCode}

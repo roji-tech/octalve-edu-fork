@@ -53,10 +53,13 @@ export function SessionsPanel({
   schoolCode,
   campuses,
   schoolType,
+  readOnly = false,
 }: {
   schoolCode: string;
   campuses: CampusOption[];
   schoolType: SchoolType;
+  /// Staff may look at the calendar but not change it (plan 1.2, decision P9): every control that writes is simply not drawn. The API refuses a write from them anyway.
+  readOnly?: boolean;
 }) {
   const words = periodWords(schoolType);
   const [status, setStatus] = useState("live");
@@ -95,6 +98,7 @@ export function SessionsPanel({
       <TermsView
         schoolCode={schoolCode}
         schoolType={schoolType}
+        viewOnly={readOnly}
         sessionId={detail.id}
         fallback={detail}
         onBack={() => {
@@ -115,15 +119,17 @@ export function SessionsPanel({
           </h2>
           <p className="mt-1 text-sm text-fg-muted">Each session is a school year with its {words.many}. Only one is open at a time.</p>
         </div>
-        <Button
-          onClick={() => {
-            setNotice(null);
-            form.show({ session: null });
-          }}
-        >
-          <PlusIcon className="h-4 w-4" />
-          New session
-        </Button>
+        {!readOnly && (
+          <Button
+            onClick={() => {
+              setNotice(null);
+              form.show({ session: null });
+            }}
+          >
+            <PlusIcon className="h-4 w-4" />
+            New session
+          </Button>
+        )}
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2">
@@ -188,7 +194,7 @@ export function SessionsPanel({
                     <Button variant="secondary" aria-label={`${words.Many} of ${session.label}`} onClick={() => setDetail(session)}>
                       {words.Many}
                     </Button>
-                    {editable && (
+                    {!readOnly && editable && (
                       <Button
                         variant="secondary"
                         aria-label={`Edit ${session.label}`}
@@ -197,12 +203,12 @@ export function SessionsPanel({
                         Edit
                       </Button>
                     )}
-                    {!session.archived && session.status === "PLANNED" && (
+                    {!readOnly && !session.archived && session.status === "PLANNED" && (
                       <Button aria-label={`Open ${session.label}`} onClick={() => (setNotice(null), activating.show(session))}>
                         Open
                       </Button>
                     )}
-                    {!session.archived && session.status === "ACTIVE" && !session.closeAt && (
+                    {!readOnly && !session.archived && session.status === "ACTIVE" && !session.closeAt && (
                       <Button
                         variant="secondary"
                         aria-label={`Close ${session.label}`}
@@ -211,7 +217,7 @@ export function SessionsPanel({
                         Close…
                       </Button>
                     )}
-                    {!session.archived && session.status === "ACTIVE" && session.closeAt && (
+                    {!readOnly && !session.archived && session.status === "ACTIVE" && session.closeAt && (
                       <>
                         <Button
                           variant="secondary"
@@ -231,7 +237,7 @@ export function SessionsPanel({
                         )}
                       </>
                     )}
-                    {!session.archived && session.status === "CLOSED" && (
+                    {!readOnly && !session.archived && session.status === "CLOSED" && (
                       <Button
                         variant="secondary"
                         aria-label={`Reopen ${session.label}`}
@@ -240,7 +246,7 @@ export function SessionsPanel({
                         Reopen…
                       </Button>
                     )}
-                    {!session.archived && (
+                    {!readOnly && !session.archived && (
                       <Button
                         variant="ghost"
                         aria-label={`Copy ${session.label} to next year`}
@@ -249,7 +255,7 @@ export function SessionsPanel({
                         Copy forward
                       </Button>
                     )}
-                    {!session.archived && session.status !== "ACTIVE" && (
+                    {!readOnly && !session.archived && session.status !== "ACTIVE" && (
                       <Button
                         variant="ghost"
                         aria-label={`Archive ${session.label}`}
@@ -269,7 +275,7 @@ export function SessionsPanel({
 
       {form.n > 0 && (
         <SessionFormDialog
-          key={form.n}
+          key={`form-${form.n}`}
           open={form.open}
           onClose={form.hide}
           schoolCode={schoolCode}
@@ -280,7 +286,7 @@ export function SessionsPanel({
       )}
       {activating.n > 0 && (
         <ActivateDialog
-          key={activating.n}
+          key={`activating-${activating.n}`}
           open={activating.open}
           session={activating.value!}
           onClose={activating.hide}
@@ -293,7 +299,7 @@ export function SessionsPanel({
       )}
       {closing.n > 0 && (
         <CloseSessionDialog
-          key={closing.n}
+          key={`closing-${closing.n}`}
           open={closing.open}
           session={closing.value!.session}
           sooner={closing.value!.sooner}
@@ -309,7 +315,7 @@ export function SessionsPanel({
       )}
       {cancelling.n > 0 && (
         <CancelCloseDialog
-          key={cancelling.n}
+          key={`cancelling-${cancelling.n}`}
           open={cancelling.open}
           session={cancelling.value!}
           onClose={cancelling.hide}
@@ -319,7 +325,7 @@ export function SessionsPanel({
       )}
       {reopening.n > 0 && (
         <ReopenSessionDialog
-          key={reopening.n}
+          key={`reopening-${reopening.n}`}
           open={reopening.open}
           session={reopening.value!}
           onClose={reopening.hide}
@@ -329,7 +335,7 @@ export function SessionsPanel({
       )}
       {archiving.n > 0 && (
         <ArchiveSessionDialog
-          key={archiving.n}
+          key={`archiving-${archiving.n}`}
           open={archiving.open}
           session={archiving.value!}
           onClose={archiving.hide}
@@ -339,7 +345,7 @@ export function SessionsPanel({
       )}
       {copying.n > 0 && (
         <CopyForwardDialog
-          key={copying.n}
+          key={`copying-${copying.n}`}
           open={copying.open}
           session={copying.value!}
           onClose={copying.hide}
@@ -359,12 +365,15 @@ function TermsView({
   sessionId,
   fallback,
   onBack,
+  viewOnly = false,
 }: {
   schoolCode: string;
   schoolType: SchoolType;
   sessionId: string;
   fallback: SessionView;
   onBack: () => void;
+  /// A member who may only look: nothing that changes the terms is drawn, and the "closed" explanation (which is about the session, not about them) is left out.
+  viewOnly?: boolean;
 }) {
   const words = periodWords(schoolType);
   const { reply, error, loading, reload } = useApi(`/api/v1/schools/${schoolCode}/academics/sessions/${sessionId}`);
@@ -378,7 +387,7 @@ function TermsView({
   const headingRef = useRef<HTMLHeadingElement>(null);
   useEffect(() => headingRef.current?.focus(), []);
 
-  const readOnly = session.archived || session.status === "CLOSED";
+  const readOnly = viewOnly || session.archived || session.status === "CLOSED";
 
   async function makeCurrent(period: PeriodView) {
     setBusy(period.id);
@@ -421,7 +430,7 @@ function TermsView({
           </Button>
         )}
       </div>
-      {readOnly && (
+      {readOnly && !viewOnly && (
         <Alert variant="info" announce={false}>
           {session.archived ? "This session is archived" : "This session is closed"}, so its {words.many} can&apos;t be changed.
         </Alert>
@@ -471,7 +480,7 @@ function TermsView({
       </ListState>
       {form.n > 0 && (
         <PeriodFormDialog
-          key={form.n}
+          key={`form-${form.n}`}
           open={form.open}
           onClose={form.hide}
           schoolCode={schoolCode}
@@ -484,7 +493,7 @@ function TermsView({
       )}
       {archiving.n > 0 && (
         <ArchivePeriodDialog
-          key={archiving.n}
+          key={`archiving-${archiving.n}`}
           open={archiving.open}
           period={archiving.value!}
           onClose={archiving.hide}
