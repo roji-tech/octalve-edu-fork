@@ -128,7 +128,7 @@ fails otherwise. Routes are `withAuth(…, { tenant: true, roles/permissions })`
 | :-- | :-- | :-- |
 | 1.0 | `SchoolType` on `Tenant`; `SchoolSettings` auto-created with every tenant; permissions enum + `permissions` on membership (§1.7) — **✅ built 2026-10-06** (`phases/phase-1.0-foundations.md`; full gate + mutation pass pending) | 0.5.2-F |
 | 1.1 | Academic structure: `AcademicSession`/`Period`, `ClassGroup`/`Arm`, `Subject`, `AssessmentConfig`, `GradeScale` — **✅ built 2026-10-07** (`phases/phase-1.1-academic-structure.md`; mutation pass pending, end of Phase 2) | 1.0 |
-| 1.2 | People: `StaffRecord`, `StudentRecord`, `GuardianRecord`+`GuardianLink`, `StudentEnrollment` — **designed 2026-10-07** (plan "Build design — Phase 1.2"); not built yet | 1.1 |
+| 1.2 | People: `StaffRecord`, `StudentRecord`, `GuardianRecord`+`GuardianLink`, `StudentEnrollment` — **✅ built 2026-10-08** (`phases/phase-1.2-people.md`; branch `claude/phase-1-2-people`, stacked on 1-0-1-1); mutation pass pending (end of Phase 2) | 1.1 |
 | 1.3 | Attendance | 1.2 |
 | 1.4 | Results + approval workflow + publish + parent view | 1.1, 1.2, §1.7 permissions |
 | 1.5 | Finance: `FeeStructure`, `Invoice`, `Payment`, gateway webhooks (+ mock Paystack engine) | 1.2 |

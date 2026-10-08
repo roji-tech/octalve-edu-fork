@@ -2440,6 +2440,12 @@ accepting a write · `DEFAULT_SCHOOL_TYPE` ignored / invalid value accepted / sc
 4. **No "create anyway"** for a duplicate name+birthday.
 5. **Student sign-in accounts** are not linked in 1.2 (column ready); they arrive with the 1.4 views.
 
+##### As built — Phase 1.2 (2026-10-08)
+
+Record: `phases/phase-1.2-people.md`; hand-off `handoff/phase-1-2-people.md`; branch `claude/phase-1-2-people` (stacked on `claude/phase-1-0-1-1`). Built as designed (P1–P9, reconciliations 1–6), with these differences:
+(a) **Lists use offset pagination** (`page`/`limit` with `meta.total`, like Users and Academics), not the cursor P9 mentioned — the lists are filtered and searched, and the pager needs a total. (b) **Import skips rather than errors** on a row whose admission number exists *and* whose name and birth date match (reported as `skipped`, which is what makes a re-run idempotent); a number that exists for someone else is an error. (c) **Export has exactly the import's columns** (no `status`), so an export file can be imported into another school. (d) **Per-route body cap:** `validate()` takes `maxBodyBytes`; only the import raises it (a 1 MiB CSV is larger as JSON); the global 1 MiB default is unchanged. (e) **Export fetches related rows in 1,000-id chunks** — 10,000 rows in one `IN (…)` list overran Postgres's stack depth (found by the cap test). (f) **Guardian validation precedes the archived-student refusal**, so a form shows what is wrong first. (g) **Dialog keys carry the dialog's name** (`archiving-1`, not `1`): `useDialog` counters all start at 1 and two dialogs as siblings collided (this affected every panel, Slice 1's included). (h) **Custom 404** under `(app)` — Next's default page has an inline `<style>` the CSP refuses. (i) The "Link account" list shows only members of this school whose role fits the category and who are unlinked (`linkable-accounts`). (j) Staff may read the Academic setup screen read-only; "People" is in their nav.
+Mutation pass: **not run — pending, end of Phase 2** (the list above stands).
+
 ## Phase 2 — Communication
 
 Matches PRD §6 Phase 2. New schema file `prisma/schema/comms.prisma`.

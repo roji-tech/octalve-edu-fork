@@ -41,8 +41,8 @@ against the real repo, not what a plan says should exist.
   both depending on §0.5.1 landing first. Nothing in Phase 1 should start before this phase's own
   verification gate (negative-test suite for cross-tenant/IDOR access, run as the `app_user` role)
   passes in CI.
-- **Phase 1 — MVP: Core SIS + Finance**: **IN PROGRESS — Slice 1 built (roadmap 1.0 foundations and 1.1 academic structure, 2026-10-06/07)**; 1.2 onward (people and enrolment, attendance, results, fees, parent/student views, settings) **not started**. Records:
-  `phases/phase-1.0-foundations.md`, `phases/phase-1.1-academic-structure.md`; hand-off `handoff/phase-1-slice-1.md`. The remaining schema is designed
+- **Phase 1 — MVP: Core SIS + Finance**: **IN PROGRESS — Slice 1 built (roadmap 1.0 foundations and 1.1 academic structure, 2026-10-06/07)**; **1.2 people and enrolment built 2026-10-08** (`phases/phase-1.2-people.md`, branch `claude/phase-1-2-people`); 1.3 onward (attendance, results, fees, parent/student views, settings) **not started**. Records:
+  `phases/phase-1.0-foundations.md`, `phases/phase-1.1-academic-structure.md`, `phases/phase-1.2-people.md`; hand-offs `handoff/phase-1-slice-1.md`, `handoff/phase-1-2-people.md`. The remaining schema is designed
   (`sis.prisma`/`finance.prisma` in the plan doc) but not migrated. Mutation passes for Phases 1 and 2 are **pending (end of Phase 2)**.
 - **Phase 2 — Communication**: **0% — not started.** Schema designed (`comms.prisma`).
 - **Phase 3 — LMS**: **0% — not started.** Schema designed (`lms.prisma`).

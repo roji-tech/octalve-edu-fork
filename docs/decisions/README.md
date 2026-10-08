@@ -30,3 +30,5 @@ Plans and phase records link to the ADR instead of re-arguing the reason.
 | [0006](0006-admin-implies-permissions-not-roles.md) | ADMIN implies permissions, not roles; only an ADMIN grants | accepted |
 | [0007](0007-mutation-passes-deferred-to-end-of-phase-2.md) | Mutation passes are deferred to the end of Phase 2 | accepted |
 | [0008](0008-closing-a-session-is-delayed-and-reversible.md) | Closing a session is delayed, can be forced with the password, and can be reopened | accepted |
+| [0009](0009-enrolment-is-per-session.md) | Enrolment is per session, not per term | accepted (default) |
+| [0010](0010-school-type-is-a-server-setting.md) | School type comes from the server, never the browser or a school's administrator | proposed |
