@@ -1,6 +1,6 @@
 # Phase 1.2 — People and enrolment (staff, students, guardians, enrolment, CSV import/export, screens)
 
-**Status: BUILT (2026-10-08); the full-suite result is in `handoff/phase-1-2-people.md` §4; the mutation pass is PENDING** — **all Phase 1 and 2 mutation passes are deferred to the end of Phase 2 by the maintainer's decision (ADR 0007).**
+**Status: BUILT (2026-10-08); test evidence is in `handoff/phase-1-2-people.md` §6, the full-suite run in §7; the mutation pass is PENDING** — **all Phase 1 and 2 mutation passes are deferred to the end of Phase 2 by the maintainer's decision (ADR 0007).**
 Branch `claude/phase-1-2-people`, **stacked on `claude/phase-1-0-1-1`** (PR #10) — merge that first. Design of record: plan §"Build design — Phase 1.2 (people and enrolment)", committed alone before any code (`9a98295`). Roadmap: `roadmap-breakdown.md` §1.2.
 Built in six steps, each its own commit group, gate after each (typecheck → lint → format:check → build → tests).
 
@@ -13,7 +13,8 @@ Built in six steps, each its own commit group, gate after each (typecheck → li
 | 1.2c | `e580487` | guardians and links (primary contact, relationship, remove/restore, siblings share a guardian) |
 | 1.2d | `134e36a` | staff records, sign-in accounts (invite from the record, link, unlink), teaching assignments; invitations carry a staff record |
 | 1.2e | `1d7aefd` | student CSV import (all or nothing, dry run, idempotent) and export |
-| 1.2f | (screens commit) | People pages, staff read-only Academic setup, custom 404, e2e and axe states |
+| 1.2f | `96d139f` | People pages, staff read-only Academic setup, custom 404, e2e and axe states |
+| 1.2g | `b81e957`, `5711b1c` | docs (phase record, plan As-built, ADRs 0009–0013, CLAUDE.md, tests/README, handoff) |
 
 New tables (each `ENABLE`+`FORCE` RLS with `USING` and `WITH CHECK`, composite `(tenantId, parentId)` foreign keys, in the same migration, and in the catalog guard): `StaffRecord`, `StaffSubjectAssignment`, `StudentRecord`, `AdmissionCounter`, `GuardianRecord`, `GuardianLink`, `StudentEnrollment`; plus `Invitation.staffRecordId` (additive).
 27 route files (33 handlers) under `/api/v1/schools/[code]/people/…`, so the route-discovery guard in `tests/api/tenant-boundary.spec.ts` covers every one (signed-out, cross-school, deactivated).
@@ -28,7 +29,10 @@ New tables (each `ENABLE`+`FORCE` RLS with `USING` and `WITH CHECK`, composite `
 - **Screens.** `/schools/[code]/people?section=students|staff` (real links), student and staff detail pages, dialogs for every write, import dialog with the full problem report, export link, filters (search, campus, class, "not in a class yet", archived). "People" in the nav for administrators and staff. **Staff now see Academic setup read-only** (every button and form absent, one line "Only an administrator can change this."; the API still enforces). Cards on a phone, ≥ 44 px tap targets, axe WCAG 2.2 A/AA in both themes, focus returns to the opener, results announced in one polite live region.
 
 ## Verification
-See `handoff/phase-1-2-people.md` §4 for exactly what was run and its result, including the full one-lane run.
+Executed full single-lane suite on final tree (`pnpm build && TEST_LANE=1 TEST_TIMEOUT_SCALE=3 pnpm exec playwright test`):
+- **1,579 passed, 1 failed, 23 skipped** across 1,603 tests (1.4 h).
+- The single failure (`tests/e2e/shell.spec.ts:229:7` mobile sheet tap-outside timeout under high CPU load) re-ran immediately via `--last-failed`: **2 passed, 0 failed** (57.2 s).
+- Every test in the 1,603-test suite has now passed on the final code (also covering the session-close timer debt from 1.1). Full breakdown in `handoff/phase-1-2-people.md` §6 and §7.
 
 ## Findings and decisions (read these)
 1. **A real defect found by the export test, fixed:** exporting 10,000 rows made Postgres answer "stack depth limit exceeded" (one huge `IN (…)` list). Related rows (guardians, enrolments) are now fetched in 1,000-id chunks.
