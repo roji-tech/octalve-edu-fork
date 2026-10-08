@@ -32,3 +32,6 @@ Plans and phase records link to the ADR instead of re-arguing the reason.
 | [0008](0008-closing-a-session-is-delayed-and-reversible.md) | Closing a session is delayed, can be forced with the password, and can be reopened | accepted |
 | [0009](0009-enrolment-is-per-session.md) | Enrolment is per session, not per term | accepted (default) |
 | [0010](0010-school-type-is-a-server-setting.md) | School type comes from the server, never the browser or a school's administrator | proposed |
+| [0011](0011-branching-dev-master-prod-and-merge-approval.md) | Development on `dev`; `master` needs approval; `prod` reserved; octalve-core is writable | accepted |
+| [0012](0012-the-docker-databases-are-local-dev-databases.md) | The docker databases are local dev databases with full access | accepted |
+| [0013](0013-commit-and-pr-messages-are-comprehensive.md) | Commit and PR messages are comprehensive | accepted |
