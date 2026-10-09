@@ -43,6 +43,12 @@ export async function setInvitationContext(tx: Tx, tokenHash: string): Promise<v
   await tx.$queryRaw`SELECT set_config('app.invitation_hash', ${tokenHash}::text, true)`;
 }
 
+/// Sets the *verification* context for public credential/report card queries.
+export async function setVerificationContext(tx: Tx, token: string): Promise<void> {
+  if (!/^[0-9a-f]{32}$/.test(token)) throw new Error("setVerificationContext: not a valid verification token");
+  await tx.$queryRaw`SELECT set_config('app.verification_token', ${token}::text, true)`;
+}
+
 export function forTenant(tenantId: VerifiedTenantId) {
   return {
     /// Runs `fn` in one transaction with the tenant context set. Rolls back if `fn` throws.
@@ -71,6 +77,17 @@ export function forInvitation(tokenHash: string) {
     transaction<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
       return prisma.$transaction(async (tx) => {
         await setInvitationContext(tx, tokenHash);
+        return fn(tx);
+      }, TRANSACTION_OPTIONS);
+    },
+  };
+}
+
+export function forVerification(token: string) {
+  return {
+    transaction<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
+      return prisma.$transaction(async (tx) => {
+        await setVerificationContext(tx, token);
         return fn(tx);
       }, TRANSACTION_OPTIONS);
     },

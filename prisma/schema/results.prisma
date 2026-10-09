@@ -1,0 +1,70 @@
+// --- Results & Grading (Phase 1.4: Results, Approval Workflow, Publishing & Public Verification) ---
+//
+// Every row carries its own tenantId and composite foreign keys to parent models on (tenantId, id).
+// Tenant-level RLS is enforced on all tables.
+// ResultAudit is strictly append-only (REVOKE UPDATE, DELETE, TRUNCATE FROM app_user).
+
+enum ResultStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  PUBLISHED
+  LOCKED
+}
+
+/// A term/period subject result for a student.
+model Result {
+  id                 String       @id @default(cuid())
+  tenantId           String
+  studentId          String
+  subjectId          String
+  periodId           String
+  score              Decimal      @db.Decimal(6, 2)
+  maxScore           Decimal      @default(100) @db.Decimal(6, 2)
+  status             ResultStatus @default(DRAFT)
+  componentScores    Json?
+  gradeLetter        String?
+  gradeRemark        String?
+  enteredByStaffId   String?
+  approvedByStaffId  String?
+  publishedAt        DateTime?
+  lockedAt           DateTime?
+  verificationToken  String?      @unique
+  verificationHash   String?
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @default(now()) @updatedAt
+
+  tenant  Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  student StudentRecord  @relation(fields: [tenantId, studentId], references: [tenantId, id], onDelete: Cascade)
+  subject Subject        @relation(fields: [tenantId, subjectId], references: [tenantId, id], onDelete: Cascade)
+  period  AcademicPeriod @relation(fields: [tenantId, periodId], references: [tenantId, id], onDelete: Cascade)
+  history ResultAudit[]
+
+  @@unique([tenantId, studentId, subjectId, periodId])
+  @@unique([tenantId, id])
+  @@index([tenantId, periodId])
+  @@index([tenantId, studentId, periodId])
+  @@index([tenantId, subjectId, periodId])
+  @@index([verificationToken])
+}
+
+/// Append-only audit record tracking every state transition and post-lock score adjustment.
+model ResultAudit {
+  id          String       @id @default(cuid())
+  tenantId    String
+  resultId    String
+  actorUserId String
+  fromStatus  ResultStatus
+  toStatus    ResultStatus
+  fromScore   Decimal?     @db.Decimal(6, 2)
+  toScore     Decimal?     @db.Decimal(6, 2)
+  reason      String?
+  createdAt   DateTime     @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  result Result @relation(fields: [tenantId, resultId], references: [tenantId, id], onDelete: Cascade)
+
+  @@unique([tenantId, id])
+  @@index([tenantId, resultId])
+  @@index([tenantId, createdAt])
+}

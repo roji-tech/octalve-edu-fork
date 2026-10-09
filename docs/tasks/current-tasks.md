@@ -11,8 +11,8 @@
 | # | Task ID | Milestone Title | Status | Started | Ended | PR / Branch |
 |---|---|---|---|---|---|---|
 | 1 | [TASK-0001](0001-phase-1-2-people-and-enrolment.md) | Phase 1.2: People & Enrolment (Option B duplicate override + ADR 0014) | [x] Completed | 2026-10-07 09:00:00 UTC | 2026-10-09 09:06:17 UTC | [PR #11](https://github.com/roji-tech/octalve-edu-fork/pull/11) (`claude/phase-1-2-people`) |
-| 2 | [TASK-0002](0002-phase-1-3-attendance.md) | Phase 1.3: Attendance & Day-to-Day Operations | [x] Completed | 2026-10-09 15:06:00 UTC | 2026-10-09 21:07:00 UTC | `claude/phase-1-3-attendance` |
-| 3 | [TASK-0003](0003-phase-1-4-results-and-publishing.md) | Phase 1.4: Results, Grading & Publishing Workflow | [ ] Pending | — | — | `claude/phase-1-4-results` |
+| 2 | [TASK-0002](0002-phase-1-3-attendance.md) | Phase 1.3: Attendance & Day-to-Day Operations | [x] Completed | 2026-10-09 15:06:00 UTC | 2026-10-09 21:07:00 UTC | [PR #12](https://github.com/roji-tech/octalve-edu-fork/pull/12) (`claude/phase-1-3-attendance`) |
+| 3 | [TASK-0003](0003-phase-1-4-results-and-publishing.md) | Phase 1.4: Results, Grading & Publishing Workflow | [x] Completed | 2026-10-09 22:36:00 UTC | 2026-10-09 23:08:00 UTC | [PR #13](https://github.com/roji-tech/octalve-edu-fork/pull/13) (`claude/phase-1-4-results`) |
 | 4 | [TASK-0004](0004-phase-1-5-finance-and-billing.md) | Phase 1.5: Finance, Invoicing & Paystack Integration | [ ] Pending | — | — | `claude/phase-1-5-finance` |
 | 5 | [TASK-0005](0005-phase-1-6-announcements-and-timetable.md) | Phase 1.6: Announcements & Timetable Scheduling | [ ] Pending | — | — | `claude/phase-1-6-timetable` |
 | 6 | [TASK-0006](0006-phase-1-7-settings-and-mfa.md) | Phase 1.7: Settings UI, Step-up MFA & Audit Logging | [ ] Pending | — | — | `claude/phase-1-7-settings` |
@@ -51,3 +51,17 @@
 - [x] Sub-phase E: UI components (fast phone grid touch interface, summary cards, absentee list)
 - [x] Sub-phase F: Unit, integration, API, and e2e test suite execution
 - [x] Sub-phase G: Phase documentation & PR creation
+
+---
+
+### TASK-0003: Phase 1.4 — Results, Grading & Publishing Workflow
+- **Started:** `2026-10-09 22:36:00 UTC`
+- **Ended:** `2026-10-09 23:08:00 UTC`
+- **Status:** Completed
+- [x] Sub-phase A: Schema & migration (`prisma/schema/results.prisma`, RLS policies, append-only `ResultAudit`)
+- [x] Sub-phase B: Pure rules & computation (`rules.ts`, `ranking.ts` 1224 ties, tamper-evident SHA-256 hash)
+- [x] Sub-phase C: Domain services & HTTP schemas (`service.ts`, `http.ts`, IDOR protections)
+- [x] Sub-phase D: API endpoints (results query/entry, status transitions, student report card, public token verification)
+- [x] Sub-phase E: UI components (`ResultsEntryGrid`, `ResultsApprovalConsole`, `ReportCardView`, `VerifyCertificateForm`)
+- [x] Sub-phase F: Unit, integration (RLS & append-only grants), and API testing green
+- [x] Sub-phase G: Quality gates (`pnpm typecheck`, `pnpm lint`, `pnpm format:check`) and task synchronization

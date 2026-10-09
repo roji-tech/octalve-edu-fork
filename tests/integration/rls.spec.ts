@@ -151,8 +151,9 @@ test.describe("who is running", () => {
     const byTable = Object.fromEntries(rows.map((r) => [r.table_name, r.verbs]));
     expect(byTable["_prisma_migrations"]).toBeUndefined();
     expect(byTable["AuditLog"]).toEqual(["INSERT", "SELECT"]);
+    expect(byTable["ResultAudit"]).toEqual(["INSERT", "SELECT"]);
     for (const [table, verbs] of Object.entries(byTable)) {
-      if (table === "AuditLog") continue;
+      if (table === "AuditLog" || table === "ResultAudit") continue;
       expect(verbs, table).toEqual(["DELETE", "INSERT", "SELECT", "UPDATE"]);
     }
     expect(Object.keys(byTable).length).toBeGreaterThan(10); // and every table is covered, not an empty list
@@ -1203,6 +1204,8 @@ test.describe("catalog guard", () => {
       "GuardianLink",
       "GuardianRecord",
       "Invitation",
+      "Result",
+      "ResultAudit",
       "SchoolSettings",
       "StaffRecord",
       "StaffSubjectAssignment",
