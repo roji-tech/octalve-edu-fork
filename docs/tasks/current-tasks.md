@@ -11,7 +11,7 @@
 | # | Task ID | Milestone Title | Status | Started | Ended | PR / Branch |
 |---|---|---|---|---|---|---|
 | 1 | [TASK-0001](0001-phase-1-2-people-and-enrolment.md) | Phase 1.2: People & Enrolment (Option B duplicate override + ADR 0014) | [x] Completed | 2026-10-07 09:00:00 UTC | 2026-10-09 09:06:17 UTC | [PR #11](https://github.com/roji-tech/octalve-edu-fork/pull/11) (`claude/phase-1-2-people`) |
-| 2 | [TASK-0002](0002-phase-1-3-attendance.md) | Phase 1.3: Attendance & Day-to-Day Operations | [ ] In Progress | 2026-10-09 15:06:00 UTC | — | `claude/phase-1-3-attendance` |
+| 2 | [TASK-0002](0002-phase-1-3-attendance.md) | Phase 1.3: Attendance & Day-to-Day Operations | [x] Completed | 2026-10-09 15:06:00 UTC | 2026-10-09 21:07:00 UTC | `claude/phase-1-3-attendance` |
 | 3 | [TASK-0003](0003-phase-1-4-results-and-publishing.md) | Phase 1.4: Results, Grading & Publishing Workflow | [ ] Pending | — | — | `claude/phase-1-4-results` |
 | 4 | [TASK-0004](0004-phase-1-5-finance-and-billing.md) | Phase 1.5: Finance, Invoicing & Paystack Integration | [ ] Pending | — | — | `claude/phase-1-5-finance` |
 | 5 | [TASK-0005](0005-phase-1-6-announcements-and-timetable.md) | Phase 1.6: Announcements & Timetable Scheduling | [ ] Pending | — | — | `claude/phase-1-6-timetable` |
@@ -42,12 +42,12 @@
 
 ### TASK-0002: Phase 1.3 — Attendance & Day-to-Day Operations
 - **Started:** `2026-10-09 15:06:00 UTC`
-- **Ended:** —
-- **Status:** In Progress
-- [ ] Sub-phase A: Design committed in plan doc (`domain-implementation-plan.md`)
-- [ ] Sub-phase B: Schema & migration (AttendanceRecord table, unique per student+date+period, RLS policies)
-- [ ] Sub-phase C: Pure rules & bulk idempotent mark service
-- [ ] Sub-phase D: API routes (GET roll-call, POST bulk mark, edit window enforcement)
-- [ ] Sub-phase E: UI components (fast phone grid touch interface, summary cards, absentee list)
-- [ ] Sub-phase F: Unit, integration, API, and e2e test suite execution
-- [ ] Sub-phase G: Phase documentation & PR creation
+- **Ended:** `2026-10-09 21:07:00 UTC`
+- **Status:** Completed
+- [x] Sub-phase A: Design committed in plan doc (`domain-implementation-plan.md`)
+- [x] Sub-phase B: Schema & migration (AttendanceRecord table, unique per student+date, RLS policies)
+- [x] Sub-phase C: Pure rules & bulk idempotent mark service
+- [x] Sub-phase D: API routes (GET roll-call, POST bulk mark, edit window enforcement)
+- [x] Sub-phase E: UI components (fast phone grid touch interface, summary cards, absentee list)
+- [x] Sub-phase F: Unit, integration, API, and e2e test suite execution
+- [x] Sub-phase G: Phase documentation & PR creation

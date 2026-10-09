@@ -111,8 +111,9 @@ model ClassArm {
 
   tenant           Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   classGroup       ClassGroup               @relation(fields: [tenantId, classGroupId], references: [tenantId, id], onDelete: NoAction)
-  enrollments      StudentEnrollment[]
+  enrollments       StudentEnrollment[]
   staffAssignments StaffSubjectAssignment[]
+  attendanceRecords AttendanceRecord[]
 
   @@unique([tenantId, id])
   @@index([tenantId, classGroupId])

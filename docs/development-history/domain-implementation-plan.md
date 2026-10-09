@@ -1825,6 +1825,12 @@ layer for any transition originating from `LOCKED` — the DB column stays nulla
 `DRAFT → SUBMITTED` transition genuinely has no "reason") but the API route for a post-lock
 correction rejects a missing reason before it ever reaches Prisma.
 
+**Public Credential / Report-Card Verification (`out/certificate_or_file_access` & `VerifyCertificateForm`):**
+In addition to internal results viewing, every approved and published term report card and graduation certificate will carry an immutable verification token / hash and QR code. An unauthenticated public verification route (`/schools/[code]/verify` or `/verify/[code]`) adopting the `VerifyCertificateForm` pattern allows external stakeholders (tertiary admissions officers, employers, scholarship committees) to verify credential validity, issue date, student admission number, and honours without exposing internal student records.
+
+**Timetable & Curriculum Visual Canvas (`TwoNode_V2_Design_Canvas.html`):**
+`TimetableSlot` scheduling and subject offering arrangements adopt the interactive visual workflow canvas architecture from `TwoNode_V2_Design_Canvas.html` for real-time drag-and-drop clash resolution (teacher-period-room conflict detection), making schedule composition intuitive on desktop viewports while maintaining compact card views on mobile.
+
 **`TimetableSlot`, `Announcement` — straightforward, no audit-driven decisions.**
 
 ```prisma

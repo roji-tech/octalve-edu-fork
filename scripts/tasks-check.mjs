@@ -19,7 +19,10 @@ function parseTasks(repoPath) {
   for (const line of lines) {
     // Match table rows like: | 0001 | ... | ... | Status | ...
     if (line.trim().startsWith("|") && !line.includes("---") && !line.includes("Task File")) {
-      const parts = line.split("|").map((p) => p.trim()).filter(Boolean);
+      const parts = line
+        .split("|")
+        .map((p) => p.trim())
+        .filter(Boolean);
       if (parts.length >= 4) {
         tasks.push({
           id: parts[0],

@@ -54,7 +54,7 @@ test.describe("the page", () => {
     await signedInAdmin(page, "sessions");
     await expect(page).toHaveTitle(/Academic setup/);
     const sections = page.getByRole("navigation", { name: "Academic setup sections" });
-    await expect(sections.getByRole("link")).toHaveText(["Sessions & terms", "Classes & subjects", "Assessment", "Grading"]);
+    await expect(sections.getByRole("link")).toHaveText(["Attendance", "Sessions & terms", "Classes & subjects", "Assessment", "Grading"]);
     await expect(sections.getByRole("link", { name: "Sessions & terms" })).toHaveAttribute("aria-current", "page");
     await sections.getByRole("link", { name: "Grading" }).click();
     await expect(page).toHaveURL(/section=grading/);

@@ -97,8 +97,9 @@ model StudentRecord {
   tenant      Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   campus      Campus?             @relation(fields: [tenantId, campusId], references: [tenantId, id], onDelete: NoAction)
   membership  TenantMembership?   @relation(fields: [userId, tenantId], references: [userId, tenantId], onDelete: NoAction)
-  enrollments StudentEnrollment[]
-  guardians   GuardianLink[]
+  enrollments       StudentEnrollment[]
+  guardians         GuardianLink[]
+  attendanceRecords AttendanceRecord[]
 
   @@unique([tenantId, id])
   @@index([tenantId])

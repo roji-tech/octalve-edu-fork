@@ -1193,6 +1193,7 @@ test.describe("catalog guard", () => {
       "AdmissionCounter",
       "AssessmentComponent",
       "AssessmentScheme",
+      "AttendanceRecord",
       "AuditLog",
       "Campus",
       "ClassArm",
