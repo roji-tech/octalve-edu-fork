@@ -4,8 +4,12 @@ import {
   addYears,
   checkPeriodDates,
   checkSessionDates,
+  CLOSE_DELAY_MS,
+  FORCE_CLOSE_DELAY_MS,
   cleanName,
+  cleanReason,
   currentSessionFor,
+  effectiveStatus,
   findOverlap,
   findPeriodOverlap,
   fromIsoDate,
@@ -164,6 +168,37 @@ test.describe("the current session (decision 11)", () => {
     expect(currentSessionFor(null, [s("north", "n", "ACTIVE")])).toBeNull(); // no school-wide session, and the school-wide ask ignores campus ones
     expect(currentSessionFor("n", [s("north", "n", "ACTIVE")])?.id).toBe("north");
     expect(currentSessionFor("n", [])).toBeNull();
+  });
+});
+
+test.describe("closing a session takes time (plan, 'Design change')", () => {
+  const NOW = Date.parse("2026-10-07T12:00:00Z");
+  test("the delays are a day and a minute — spelled out here, not read back from the constants under test", () => {
+    expect(CLOSE_DELAY_MS).toBe(24 * 60 * 60 * 1000);
+    expect(FORCE_CLOSE_DELAY_MS).toBe(60 * 1000);
+  });
+  test("effectiveStatus: an ACTIVE session is CLOSED exactly when its scheduled close has come (inclusive), and nothing else changes", () => {
+    const at = (ms: number) => new Date(NOW + ms).toISOString();
+    expect(effectiveStatus({ status: "ACTIVE", closeAt: null }, NOW)).toBe("ACTIVE");
+    expect(effectiveStatus({ status: "ACTIVE" }, NOW)).toBe("ACTIVE");
+    expect(effectiveStatus({ status: "ACTIVE", closeAt: at(1) }, NOW)).toBe("ACTIVE"); // a millisecond to go
+    expect(effectiveStatus({ status: "ACTIVE", closeAt: at(0) }, NOW)).toBe("CLOSED"); // the moment itself
+    expect(effectiveStatus({ status: "ACTIVE", closeAt: at(-1) }, NOW)).toBe("CLOSED");
+    expect(effectiveStatus({ status: "ACTIVE", closeAt: new Date(NOW - 5000) }, new Date(NOW))).toBe("CLOSED"); // Dates work as well as strings
+    for (const status of ["PLANNED", "CLOSED"] as const) expect(effectiveStatus({ status, closeAt: at(-1000) }, NOW)).toBe(status);
+  });
+  test("a session whose close has come is not the current one", () => {
+    const due = { id: "a", campusId: null, status: "ACTIVE" as const, archived: false, closeAt: new Date(NOW - 1).toISOString() };
+    const later = { ...due, id: "b", closeAt: new Date(NOW + 60_000).toISOString() };
+    expect(currentSessionFor(null, [due], NOW)).toBeNull();
+    expect(currentSessionFor(null, [due, later], NOW)?.id).toBe("b");
+  });
+  test("cleanReason: 5 to 300 characters once trimmed and single-spaced, no control characters, a string only", () => {
+    expect(cleanReason("  Closed   too early ")).toBe("Closed too early");
+    expect(cleanReason("12345")).toBe("12345");
+    expect(cleanReason("x".repeat(300))).toBe("x".repeat(300));
+    for (const bad of ["", "   ", "1234", "x".repeat(301), "bell\u0007 here", "tab\u0000nul", 5, null, undefined, {}])
+      expect(cleanReason(bad), String(bad)).toBeNull();
   });
 });
 

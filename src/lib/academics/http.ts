@@ -87,6 +87,10 @@ export function academicFailure(reason: AcademicFailure, detail?: Record<string,
         409,
         "SESSION_ALREADY_ACTIVE",
       );
+    case "INVALID_REASON":
+      return fail("Give a reason of 5 to 300 characters.", 400, "VALIDATION", [
+        { path: "body.reason", message: "Give a reason of 5 to 300 characters." },
+      ]);
     case "WRONG_STATE":
       return fail("That can't be done to it in its current state.", 409, "WRONG_STATE");
     case "ARCHIVED":

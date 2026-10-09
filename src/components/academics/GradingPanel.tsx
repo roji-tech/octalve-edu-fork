@@ -15,7 +15,7 @@ const range = (band: BandView) => (band.max === 100 ? `${band.min} to 100` : `${
 
 /// "Grading": the scale that turns a score into a letter and a remark. Exactly one is the school's default. Once results use a scale it is locked:
 /// changing it makes a new version, and results already graded do not change.
-export function GradingPanel({ schoolCode }: { schoolCode: string }) {
+export function GradingPanel({ schoolCode, readOnly = false }: { schoolCode: string; readOnly?: boolean }) {
   const [status, setStatus] = useState("live");
   const [page, setPage] = useState(1);
   const { reply, error, loading, reload } = useApi(
@@ -48,10 +48,12 @@ export function GradingPanel({ schoolCode }: { schoolCode: string }) {
             default.
           </p>
         </div>
-        <Button onClick={() => (setNotice(null), form.show({ mode: "create", scale: null }))}>
-          <PlusIcon className="h-4 w-4" />
-          New scale
-        </Button>
+        {!readOnly && (
+          <Button onClick={() => (setNotice(null), form.show({ mode: "create", scale: null }))}>
+            <PlusIcon className="h-4 w-4" />
+            New scale
+          </Button>
+        )}
       </div>
       <div className="max-w-xs">
         <SelectField
@@ -93,7 +95,7 @@ export function GradingPanel({ schoolCode }: { schoolCode: string }) {
                     )}
                   </p>
                 </div>
-                {!scale.archived && (
+                {!readOnly && !scale.archived && (
                   <div className="flex flex-wrap gap-2">
                     {scale.locked ? (
                       <Button
@@ -168,7 +170,7 @@ export function GradingPanel({ schoolCode }: { schoolCode: string }) {
 
       {form.n > 0 && (
         <ScaleFormDialog
-          key={form.n}
+          key={`form-${form.n}`}
           open={form.open}
           onClose={form.hide}
           schoolCode={schoolCode}
@@ -181,7 +183,7 @@ export function GradingPanel({ schoolCode }: { schoolCode: string }) {
       )}
       {action.n > 0 && (
         <ScaleActionDialog
-          key={action.n}
+          key={`action-${action.n}`}
           open={action.open}
           onClose={action.hide}
           schoolCode={schoolCode}

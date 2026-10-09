@@ -55,6 +55,9 @@ New this slice (counts are `test(` blocks): unit `academic-rules`, `scoring-rule
 6. Should staff get a read-only Academic setup screen now, or with the Phase 1.2 people pages?
 7. AlEemaan: where does the Arabic branch's data come from, and what seeds its School Settings (the setup wizard stores no school name)?
 
+## 7a. Answers received from the maintainer (2026-10-07)
+1. **Campus session shadows school-wide: keep as built.**  3. **Closed sessions:** not final any more — closing is a 24-hour countdown (1 minute with the password) and a closed session can be reopened with a reason (ADR 0008; built on this branch after the first push, see the PR).  4. **Half-open bands: keep**; whole-number rounding before grading stays an option for 1.4.  5. **One default scale per school: yes**, per-class scales later.  6. **Staff read-only screen: with Phase 1.2.**  2. **School type is not asked in the wizard**: it comes from the superadmin's settings or an environment setting at creation (proposal: `DEFAULT_SCHOOL_TYPE` for self-hosted + set when a school is created; a school's own administrator cannot change it) — to be confirmed and built with 1.2.
+
 ## 8. Five-minute verification
 ```bash
 git fetch fork && git checkout claude/phase-1-0-1-1
@@ -72,3 +75,11 @@ Gate order: `pnpm typecheck` → `pnpm lint` → `pnpm format:check` → `pnpm b
 3. **The 18 "did not run"** were the nine serial tests of `setup-handoff.spec.ts` on each browser project (a serial group stops after its first failure), and `--last-failed` re-ran only the first test of each. **Run whole afterwards, both projects: 20 passed, 0 failed.**
 4. The 23 skipped are the viewport-specific tests that skip themselves on the other project.
 So every test in the suite has passed at least once on the final code, but **not in a single uninterrupted run**; a fresh one-lane run on a machine that keeps its servers alive is still the reviewer's confirmation to make. Mutation testing: **NOT RUN** (deferred to the end of Phase 2).
+
+## 9a. After the first push: the session-close timer (ADR 0008) — what was run on the changed tree
+The close timer (migration `20261014090000_session_close_timer`, `closeSession`/`cancelClose`/`reopenSession`, the password proof, the Sessions panel) was added **after** the full-suite run above, so §9's "every test has passed on the final code" now covers the tree **before** that change only. What was run on the tree with the timer (`pnpm typecheck`, `pnpm lint`, `pnpm format:check`, `pnpm build` clean first; one lane, `TEST_LANE=1 TEST_TIMEOUT_SCALE=3`):
+- unit `academic-rules` + integration `academic-session-closing`, `academic-sessions`, `rls`, `tenant-boundary` + api `academic-sessions`, `tenant-boundary` (route discovery sees the new close/cancel/reopen routes): **190 passed, 3 failed** the first time. The three were mine, none was an application defect: two new tests opened a second ACTIVE session in the scope of one whose one-minute countdown had not ended (fixed: another scope / archived first), and the RLS catalog guard saw the seven Phase 1.2 tables because the lane's test database had been migrated from my other branch (fixed by dropping that scratch database so the setup step rebuilt it from this branch's migrations). Re-run whole: **193 passed, 0 failed**.
+- e2e `academics` (desktop + phone): 19 passed, 2 failed — an ambiguous locator in my new test (`Cancel` also matches `Cancel the close`; made exact); those two re-run: **passed**.
+- e2e axe/layout block "academic setup" (both themes, desktop + phone, includes the close/cancel/reopen states): **9 passed, 0 failed**.
+**Not re-run on the timer tree:** the rest of the suite (members, invitations, auth, setup, the other e2e and a11y blocks, https). The timer touches only the academics code, the activate route and `lib/auth/reauth.ts`, but a full one-lane run is still owed; it will be done once, at the end of Phase 1.2, on the branch that contains both.
+

@@ -128,6 +128,17 @@ test.describe("POST /api/v1/setup — guards", () => {
     });
   }
 
+  test("a body that names a school type is refused, whatever the value, and nothing is created (the type is the server's decision)", async () => {
+    for (const schoolType of ["HIGHER_ED", "VOCATIONAL", "K12", "nonsense", null]) {
+      const res = await post({ ...valid(), schoolType });
+      expect(res.status, String(schoolType)).toBe(400);
+      expect(res.json.error.code).toBe("VALIDATION");
+      expect(res.json.error.message).toMatch(/set by the server/i);
+    }
+    expect(await db.user.count()).toBe(0);
+    expect(await db.tenant.count()).toBe(0);
+  });
+
   test("a password of exactly 72 bytes is accepted and works at sign-in (no truncation surprises)", async () => {
     const password = `a1${"b".repeat(70)}`;
     expect(Buffer.byteLength(password)).toBe(72);

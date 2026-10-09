@@ -5,12 +5,9 @@ import { offsetMeta, parseOffsetPagination } from "@/lib/api/pagination";
 import { validate } from "@/lib/api/validate";
 import { withAuth, type TenantAuthContext } from "@/lib/auth/with-auth";
 import { reserveAttempt } from "@/lib/auth/rate-limit";
-import { invitationEmail } from "@/lib/email/messages";
-import { sendEmailQuietly } from "@/lib/email/transport";
+import { mailInvitation } from "@/lib/invitations/deliver";
 import { createInvitation, listOpenInvitations } from "@/lib/invitations/service";
-import { INVITATION_TTL_DAYS } from "@/lib/invitations/token";
 import { campusIdField, emailField, roleField } from "@/lib/members/http";
-import { ROLE_LABELS } from "@/lib/roles";
 
 // /api/v1/schools/[code]/invitations                                                       (plan §0.5.4)
 //   GET   the school's open invitations (pending, and expired ones that can be resent) — never a token or its hash
@@ -19,7 +16,6 @@ import { ROLE_LABELS } from "@/lib/roles";
 // about THIS school (already a member / deactivated here), never who is registered elsewhere.
 const CREATES_PER_WINDOW = 30; // per administrator per school per 5 minutes
 const PER_ADDRESS = 3; // per school per address per 5 minutes: you can resend, not hammer
-const MAIL_PER_ADDRESS = 5; // across ALL schools: nobody's inbox is a target (beyond it the invitation exists, the mail is withheld — Resend later)
 
 const body = z.strictObject({ email: emailField, role: roleField, campusId: campusIdField.nullable().optional() });
 
@@ -63,26 +59,21 @@ export const POST = withAuth(
           return fail("Choose one of this school's campuses.", 400, "VALIDATION", [
             { path: "body.campusId", message: "Choose one of this school's campuses." },
           ]);
+        case "INVALID_STAFF_RECORD":
+          // This route never names a staff record (the body is strict); the staff page has its own route for that.
+          return fail("That can't be done.", 400, "VALIDATION");
       }
     }
 
-    after(async () => {
-      try {
-        if (!(await reserveAttempt(`invite:mail:${input.email}`, MAIL_PER_ADDRESS))) return;
-        await sendEmailQuietly(
-          invitationEmail({
-            to: input.email,
-            token: result.token,
-            schoolName: tenant.tenantName,
-            roleLabel: ROLE_LABELS[input.role],
-            inviterName: auth.user.name,
-            days: INVITATION_TTL_DAYS,
-          }),
-        );
-      } catch (error) {
-        console.error("[invitations] mail failed:", error instanceof Error ? error.message : error);
-      }
-    });
+    after(() =>
+      mailInvitation({
+        to: input.email,
+        token: result.token,
+        schoolName: tenant.tenantName,
+        role: input.role,
+        inviterName: auth.user.name,
+      }),
+    );
     return ok({ invitation: result.invitation }, {}, 201);
   }),
   { tenant: true, roles: ["ADMIN"] },

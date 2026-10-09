@@ -12,6 +12,7 @@ import { isBreachedPassword, BREACHED_MESSAGE } from "@/lib/auth/pwned-password"
 import { slugifyTenantCode, isValidTenantCode } from "@/lib/tenant/validate-code";
 import { setTenantContext } from "@/lib/tenant/for-tenant";
 import { trustedTenantId } from "@/lib/tenant/verified-tenant";
+import { defaultSchoolType } from "@/lib/setup/school-type";
 
 // Solo-only (PRD §4's "one-time setup wizard" onboarding row). SaaS tenants
 // are created by the future self-serve signup flow, not this — so the whole
@@ -92,6 +93,11 @@ export async function POST(req: NextRequest) {
     return fail("Invalid JSON body", 400, "INVALID_BODY");
   }
 
+  // The kind of school is the server's decision (DEFAULT_SCHOOL_TYPE), never the browser's — a body that tries to say is refused, not ignored.
+  if (typeof body === "object" && body !== null && "schoolType" in body) {
+    return fail("The type of school is set by the server, not by this form.", 400, "VALIDATION");
+  }
+
   const parsed = setupSchema.safeParse(body);
   if (!parsed.success) {
     return fail(parsed.error.issues[0]?.message ?? "Invalid payload", 400, "VALIDATION");
@@ -115,6 +121,15 @@ export async function POST(req: NextRequest) {
     if (!isValidToken) {
       return fail("Invalid or missing setup token. Check your server environment settings.", 401, "BAD_SETUP_TOKEN");
     }
+  }
+
+  // Read (and validated) before anything is written: a mistyped DEFAULT_SCHOOL_TYPE stops setup with a clear message instead of making the wrong kind of school.
+  let schoolType: ReturnType<typeof defaultSchoolType>;
+  try {
+    schoolType = defaultSchoolType();
+  } catch (err) {
+    console.error("[SETUP_CONFIG_ERROR]", err);
+    return fail("The server's DEFAULT_SCHOOL_TYPE setting is not valid. Fix it and restart.", 500, "SERVER_CONFIG");
   }
 
   try {
@@ -155,7 +170,7 @@ export async function POST(req: NextRequest) {
       }
 
       const tenant = await tx.tenant.create({
-        data: { code: tenantCode, name: schoolName },
+        data: { code: tenantCode, name: schoolName, schoolType },
       });
 
       const admin = await tx.user.create({

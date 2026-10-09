@@ -9,7 +9,9 @@ import { failureText } from "./useApi";
 import type { PageMeta } from "./model";
 
 /// One dialog's open state. The dialog component stays MOUNTED after it closes (so the platform hands focus back to the control that opened it) and
-/// is remounted — fresh form, no old error — by the next `show` (its `n` is the component's key). Render it as `{d.n > 0 && <X key={d.n} open={d.open} … />}`.
+/// is remounted — fresh form, no old error — by the next `show` (its `n` is part of the component's key). Render it as
+/// `{d.n > 0 && <X key={`d-${d.n}`} open={d.open} … />}`. The key needs a NAME as well as `n`: every dialog's `n` starts at 1, so two dialogs
+/// keyed by `n` alone collide as siblings, and React then mounts a second copy while leaving the first (open) one in the page.
 export function useDialog<T = true>() {
   const [state, setState] = useState<{ value: T | null; open: boolean; n: number }>({ value: null, open: false, n: 0 });
   return {

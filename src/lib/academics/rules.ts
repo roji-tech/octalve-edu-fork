@@ -86,12 +86,46 @@ export function findPeriodOverlap<T extends { kind: PeriodKind; start: string; e
   return others.find((other) => other.kind !== "COHORT" && rangesOverlap(candidate, other)) ?? null;
 }
 
-export type SessionLike = { id: string; campusId: string | null; status: "PLANNED" | "ACTIVE" | "CLOSED"; archived: boolean };
+export type SessionStatusName = "PLANNED" | "ACTIVE" | "CLOSED";
+export type SessionLike = {
+  id: string;
+  campusId: string | null;
+  status: SessionStatusName;
+  archived: boolean;
+  /// A scheduled close (ISO string or Date), if any. Optional so callers that never schedule one need not carry it.
+  closeAt?: string | Date | null;
+};
+
+/// Closing is scheduled (plan, "closing a session takes time"): a day ahead, or a minute ahead when the administrator proves who they are.
+export const CLOSE_DELAY_MS = 24 * 60 * 60 * 1000;
+export const FORCE_CLOSE_DELAY_MS = 60 * 1000;
+
+/// The status a session really has at `now`: an ACTIVE session whose scheduled close has passed is CLOSED — whether or not anything has written
+/// that down yet. Every view and every guard uses this, so a due session is read-only the instant it is due.
+export function effectiveStatus(
+  session: { status: SessionStatusName; closeAt?: string | Date | null },
+  now: Date | number = Date.now(),
+): SessionStatusName {
+  if (session.status !== "ACTIVE" || !session.closeAt) return session.status;
+  return new Date(session.closeAt).getTime() <= new Date(now).getTime() ? "CLOSED" : "ACTIVE";
+}
+
+/// A reason typed for a reopening: 5–300 characters once trimmed, no control characters.
+export function cleanReason(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const text = value.replace(/\s+/g, " ").trim();
+  if (text.length < 5 || text.length > 300 || /[\u0000-\u001f\u007f]/.test(text)) return null;
+  return text;
+}
 
 /// A campus's current session (decision 11): its own ACTIVE session if it has one, else the school-wide ACTIVE one, else none. The ONLY definition
-/// any later phase may use. `campusId` null asks for the school-wide one.
-export function currentSessionFor<T extends SessionLike>(campusId: string | null, sessions: readonly T[]): T | null {
-  const live = sessions.filter((session) => session.status === "ACTIVE" && !session.archived);
+/// any later phase may use. `campusId` null asks for the school-wide one. A session whose scheduled close has passed is not active.
+export function currentSessionFor<T extends SessionLike>(
+  campusId: string | null,
+  sessions: readonly T[],
+  now: Date | number = Date.now(),
+): T | null {
+  const live = sessions.filter((session) => effectiveStatus(session, now) === "ACTIVE" && !session.archived);
   const own = campusId === null ? undefined : live.find((session) => session.campusId === campusId);
   return own ?? live.find((session) => session.campusId === null) ?? null;
 }

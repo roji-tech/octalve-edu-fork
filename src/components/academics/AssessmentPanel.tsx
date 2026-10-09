@@ -13,7 +13,7 @@ import { useAfterChange, useApi } from "./useApi";
 
 /// "Assessment": how a mark is built — continuous-assessment components plus the exam make up the total. A school has a default scheme and may give a class
 /// its own. Once results use a scheme it is locked: it can't be edited, only replaced by a new version.
-export function AssessmentPanel({ schoolCode }: { schoolCode: string }) {
+export function AssessmentPanel({ schoolCode, readOnly = false }: { schoolCode: string; readOnly?: boolean }) {
   const [status, setStatus] = useState("live");
   const [page, setPage] = useState(1);
   const { reply, error, loading, reload } = useApi(
@@ -45,10 +45,12 @@ export function AssessmentPanel({ schoolCode }: { schoolCode: string }) {
             How a mark is built. One scheme can be the school&apos;s default; a class may have its own.
           </p>
         </div>
-        <Button onClick={() => (setNotice(null), form.show({ mode: "create", scheme: null }))}>
-          <PlusIcon className="h-4 w-4" />
-          New scheme
-        </Button>
+        {!readOnly && (
+          <Button onClick={() => (setNotice(null), form.show({ mode: "create", scheme: null }))}>
+            <PlusIcon className="h-4 w-4" />
+            New scheme
+          </Button>
+        )}
       </div>
       <div className="max-w-xs">
         <SelectField
@@ -90,7 +92,7 @@ export function AssessmentPanel({ schoolCode }: { schoolCode: string }) {
                     )}
                   </p>
                 </div>
-                {!scheme.archived && (
+                {!readOnly && !scheme.archived && (
                   <div className="flex flex-wrap gap-2">
                     {scheme.locked ? (
                       <Button
@@ -139,7 +141,7 @@ export function AssessmentPanel({ schoolCode }: { schoolCode: string }) {
 
       {form.n > 0 && (
         <SchemeFormDialog
-          key={form.n}
+          key={`form-${form.n}`}
           open={form.open}
           onClose={form.hide}
           schoolCode={schoolCode}
@@ -154,7 +156,7 @@ export function AssessmentPanel({ schoolCode }: { schoolCode: string }) {
       )}
       {archiving.n > 0 && (
         <SchemeArchiveDialog
-          key={archiving.n}
+          key={`archiving-${archiving.n}`}
           open={archiving.open}
           onClose={archiving.hide}
           schoolCode={schoolCode}

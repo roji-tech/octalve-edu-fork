@@ -906,6 +906,263 @@ test.describe("AssessmentScheme, AssessmentComponent, GradeScale, GradeBand: ten
   });
 });
 
+test.describe("people and enrolment: tenant-scoped, archived never deleted, kept inside their own school (Phase 1.2a)", () => {
+  type Ids = {
+    group: string;
+    arm: string;
+    subject: string;
+    session: string;
+    staff: string;
+    student: string;
+    guardian: string;
+    link: string;
+    enrolment: string;
+    assignment: string;
+  };
+  const ids = {} as { a: Ids; b: Ids };
+  const PEOPLE_TABLES = ["StaffRecord", "StudentRecord", "GuardianRecord", "GuardianLink", "StudentEnrollment", "AdmissionCounter"];
+
+  async function arrange(t: TestTenant, tag: string): Promise<Ids> {
+    const group = await db.classGroup.create({ data: { tenantId: t.id, name: `People ${tag}` } });
+    const arm = await db.classArm.create({ data: { tenantId: t.id, classGroupId: group.id, name: "A" } });
+    const subject = await db.subject.create({ data: { tenantId: t.id, name: `People subject ${tag}` } });
+    const session = await db.academicSession.create({
+      data: { tenantId: t.id, label: `People ${tag}`, startDate: new Date("2026-09-01"), endDate: new Date("2027-07-31") },
+    });
+    const staff = await db.staffRecord.create({ data: { tenantId: t.id, category: "TEACHING", firstName: "Tola", lastName: tag } });
+    const student = await db.studentRecord.create({
+      data: { tenantId: t.id, firstName: "Sade", lastName: tag, dateOfBirth: new Date("2012-05-01"), admissionNo: `RLS/${tag}` },
+    });
+    const guardian = await db.guardianRecord.create({ data: { tenantId: t.id, firstName: "Gbenga", lastName: tag } });
+    const link = await db.guardianLink.create({
+      data: { tenantId: t.id, studentId: student.id, guardianId: guardian.id, relationship: "FATHER", isPrimary: true },
+    });
+    const enrolment = await db.studentEnrollment.create({
+      data: { tenantId: t.id, studentId: student.id, sessionId: session.id, classArmId: arm.id },
+    });
+    const assignment = await db.staffSubjectAssignment.create({
+      data: { tenantId: t.id, staffRecordId: staff.id, subjectId: subject.id, classArmId: arm.id },
+    });
+    await db.admissionCounter.create({ data: { tenantId: t.id, year: 2026, next: 2 } });
+    return {
+      group: group.id,
+      arm: arm.id,
+      subject: subject.id,
+      session: session.id,
+      staff: staff.id,
+      student: student.id,
+      guardian: guardian.id,
+      link: link.id,
+      enrolment: enrolment.id,
+      assignment: assignment.id,
+    };
+  }
+
+  test.beforeAll(async () => {
+    ids.a = await arrange(a, "A");
+    ids.b = await arrange(b, "B");
+  });
+
+  test("no context = no rows; a tenant reads ITS rows in every people table and never another's", async () => {
+    for (const table of [...PEOPLE_TABLES, "StaffSubjectAssignment"]) {
+      expect(await prisma.$queryRawUnsafe(`SELECT 1 FROM "${table}"`), table).toEqual([]);
+      const rows = await asTenant<{ tenantId: string }[]>(a, (tx) => tx.$queryRawUnsafe(`SELECT "tenantId" FROM "${table}"`));
+      expect(rows.length, table).toBeGreaterThan(0);
+      expect(
+        rows.every((r) => r.tenantId === a.id),
+        table,
+      ).toBe(true);
+    }
+    expect(await asTenant(a, (tx) => tx.studentRecord.findUnique({ where: { id: ids.b.student } }))).toBeNull();
+    expect(await asTenant(a, (tx) => tx.guardianLink.findUnique({ where: { id: ids.b.link } }))).toBeNull();
+    expect(await asTenant(a, (tx) => tx.studentEnrollment.findUnique({ where: { id: ids.b.enrolment } }))).toBeNull();
+  });
+
+  test("WITH CHECK: A's context cannot create rows for B in any people table, nor MOVE its own to B", async () => {
+    await expect(
+      asTenant(a, (tx) => tx.staffRecord.createMany({ data: [{ tenantId: b.id, category: "TEACHING", firstName: "x", lastName: "y" }] })),
+    ).rejects.toThrow(violation);
+    await expect(
+      asTenant(a, (tx) =>
+        tx.studentRecord.createMany({
+          data: [{ tenantId: b.id, firstName: "x", lastName: "y", dateOfBirth: new Date("2012-01-01"), admissionNo: "SMUGGLED/1" }],
+        }),
+      ),
+    ).rejects.toThrow(violation);
+    await expect(
+      asTenant(a, (tx) => tx.guardianRecord.createMany({ data: [{ tenantId: b.id, firstName: "x", lastName: "y" }] })),
+    ).rejects.toThrow(violation);
+    await expect(
+      asTenant(a, (tx) =>
+        tx.guardianLink.createMany({
+          data: [{ tenantId: b.id, studentId: ids.b.student, guardianId: ids.b.guardian, relationship: "OTHER" }],
+        }),
+      ),
+    ).rejects.toThrow(violation);
+    await expect(
+      asTenant(a, (tx) =>
+        tx.studentEnrollment.createMany({
+          data: [{ tenantId: b.id, studentId: ids.b.student, sessionId: ids.b.session, classArmId: ids.b.arm }],
+        }),
+      ),
+    ).rejects.toThrow(violation);
+    await expect(
+      asTenant(a, (tx) =>
+        tx.staffSubjectAssignment.createMany({
+          data: [{ tenantId: b.id, staffRecordId: ids.b.staff, subjectId: ids.b.subject, classArmId: ids.b.arm }],
+        }),
+      ),
+    ).rejects.toThrow(violation);
+    await expect(asTenant(a, (tx) => tx.admissionCounter.createMany({ data: [{ tenantId: b.id, year: 2030 }] }))).rejects.toThrow(
+      violation,
+    );
+    for (const table of PEOPLE_TABLES) {
+      await expect(
+        asTenant(a, (tx) => tx.$executeRawUnsafe(`UPDATE "${table}" SET "tenantId" = $1`, b.id)),
+        table,
+      ).rejects.toThrow(violation);
+    }
+    expect(await db.studentRecord.count({ where: { tenantId: b.id } })).toBe(1);
+    expect(await db.studentEnrollment.count({ where: { tenantId: b.id } })).toBe(1);
+  });
+
+  test("A cannot UPDATE or DELETE B's rows; it cannot DELETE its own records (no DELETE policy) — archiving is the only way out — but it CAN remove its own assignment", async () => {
+    expect(
+      (
+        await asTenant<{ count: number }>(a, (tx) =>
+          tx.studentRecord.updateMany({ where: { tenantId: b.id }, data: { firstName: "hijacked" } }),
+        )
+      ).count,
+    ).toBe(0);
+    expect((await asTenant<{ count: number }>(a, (tx) => tx.staffSubjectAssignment.deleteMany({ where: { tenantId: b.id } }))).count).toBe(
+      0,
+    );
+    for (const model of [
+      "staffRecord",
+      "studentRecord",
+      "guardianRecord",
+      "guardianLink",
+      "studentEnrollment",
+      "admissionCounter",
+    ] as const) {
+      const deleted = await asTenant<{ count: number }>(a, (tx) =>
+        (tx[model] as unknown as { deleteMany: () => Promise<{ count: number }> }).deleteMany(),
+      );
+      expect(deleted.count, model).toBe(0);
+    }
+    expect((await db.studentRecord.findUniqueOrThrow({ where: { id: ids.b.student } })).firstName).toBe("Sade");
+    const own = await asTenant<{ count: number }>(a, (tx) =>
+      tx.studentRecord.updateMany({ where: { id: ids.a.student }, data: { archivedAt: new Date() } }),
+    );
+    expect(own.count).toBe(1); // archiving its own is allowed
+    await db.studentRecord.update({ where: { id: ids.a.student }, data: { archivedAt: null } });
+    expect((await asTenant<{ count: number }>(a, (tx) => tx.staffSubjectAssignment.deleteMany())).count).toBe(1); // its own assignment
+    expect(await db.staffSubjectAssignment.count({ where: { tenantId: b.id } })).toBe(1);
+    await db.staffSubjectAssignment.create({
+      data: { tenantId: a.id, staffRecordId: ids.a.staff, subjectId: ids.a.subject, classArmId: ids.a.arm },
+    }); // restore
+  });
+
+  test("the user and invitation contexts read none of it", async () => {
+    expect(await forUser(userBoth.id).transaction((tx) => tx.studentRecord.findMany())).toEqual([]);
+    expect(await forUser(userBoth.id).transaction((tx) => tx.studentEnrollment.findMany())).toEqual([]);
+    expect(await forInvitation(hashOf(a.code)).transaction((tx) => tx.guardianRecord.findMany())).toEqual([]);
+    expect(await forInvitation(hashOf(a.code)).transaction((tx) => tx.staffRecord.findMany())).toEqual([]);
+  });
+
+  test("composite foreign keys: even the owner role cannot point a school's row at another school's parent", async () => {
+    const foreign = /foreign key|violates/i;
+    // enrolment: A's student into B's arm and B's session, and B's student into A's arm (the enrolment arranged above is removed first, then put back)
+    await db.studentEnrollment.delete({ where: { id: ids.a.enrolment } });
+    await expect(
+      db.studentEnrollment.create({ data: { tenantId: a.id, studentId: ids.a.student, sessionId: ids.a.session, classArmId: ids.b.arm } }),
+    ).rejects.toThrow(foreign);
+    await expect(
+      db.studentEnrollment.create({ data: { tenantId: a.id, studentId: ids.a.student, sessionId: ids.b.session, classArmId: ids.a.arm } }),
+    ).rejects.toThrow(foreign);
+    await expect(
+      db.studentEnrollment.create({ data: { tenantId: a.id, studentId: ids.b.student, sessionId: ids.a.session, classArmId: ids.a.arm } }),
+    ).rejects.toThrow(foreign);
+    ids.a.enrolment = (
+      await db.studentEnrollment.create({
+        data: { tenantId: a.id, studentId: ids.a.student, sessionId: ids.a.session, classArmId: ids.a.arm },
+      })
+    ).id; // restore
+    // a guardian link between A's student and B's guardian, and the reverse
+    await db.guardianLink.deleteMany({ where: { tenantId: a.id } });
+    await expect(
+      db.guardianLink.create({ data: { tenantId: a.id, studentId: ids.a.student, guardianId: ids.b.guardian, relationship: "MOTHER" } }),
+    ).rejects.toThrow(foreign);
+    await expect(
+      db.guardianLink.create({ data: { tenantId: a.id, studentId: ids.b.student, guardianId: ids.a.guardian, relationship: "MOTHER" } }),
+    ).rejects.toThrow(foreign);
+    ids.a.link = (
+      await db.guardianLink.create({
+        data: { tenantId: a.id, studentId: ids.a.student, guardianId: ids.a.guardian, relationship: "FATHER", isPrimary: true },
+      })
+    ).id; // restore
+    // a teacher assigned to another school's subject or arm
+    await expect(
+      db.staffSubjectAssignment.create({
+        data: { tenantId: a.id, staffRecordId: ids.a.staff, subjectId: ids.b.subject, classArmId: ids.a.arm },
+      }),
+    ).rejects.toThrow(foreign);
+    await expect(
+      db.staffSubjectAssignment.create({
+        data: { tenantId: a.id, staffRecordId: ids.a.staff, subjectId: ids.a.subject, classArmId: ids.b.arm },
+      }),
+    ).rejects.toThrow(foreign);
+    // a record whose campus is another school's
+    const campusB = b.campuses[0];
+    await expect(
+      db.studentRecord.create({
+        data: {
+          tenantId: a.id,
+          campusId: campusB.id,
+          firstName: "x",
+          lastName: "y",
+          dateOfBirth: new Date("2012-01-01"),
+          admissionNo: "CAMPUS/1",
+        },
+      }),
+    ).rejects.toThrow(foreign);
+    // an invitation that names another school's staff record
+    await expect(
+      db.invitation.create({
+        data: {
+          tenantId: a.id,
+          email: "carries@foreign.test",
+          role: Role.TEACHING_STAFF,
+          tokenHash: hashOf("foreign-staff"),
+          expiresAt: new Date(Date.now() + 3_600_000),
+          staffRecordId: ids.b.staff,
+        },
+      }),
+    ).rejects.toThrow(foreign);
+  });
+
+  test("a sign-in account on a record must be a member of THAT school, and only one record per school may name it", async () => {
+    const foreign = /foreign key|violates/i;
+    const onlyInB = await createUser();
+    await addMembership(onlyInB.id, b.id, Role.TEACHING_STAFF);
+    // A's record naming someone who is not a member of A
+    await expect(db.staffRecord.update({ where: { id: ids.a.staff }, data: { userId: onlyInB.id } })).rejects.toThrow(foreign);
+    // a member of A is accepted — once
+    const member = await createUser();
+    await addMembership(member.id, a.id, Role.TEACHING_STAFF);
+    await db.staffRecord.update({ where: { id: ids.a.staff }, data: { userId: member.id } });
+    const second = await db.staffRecord.create({ data: { tenantId: a.id, category: "TEACHING", firstName: "Second", lastName: "Record" } });
+    await expect(db.staffRecord.update({ where: { id: second.id }, data: { userId: member.id } })).rejects.toThrow(/unique|duplicate/i);
+    // the same person can be linked in another school too (the old global @unique would have forbidden it)
+    await addMembership(member.id, b.id, Role.TEACHING_STAFF);
+    await db.staffRecord.update({ where: { id: ids.b.staff }, data: { userId: member.id } });
+    // clean up what this test linked
+    await db.staffRecord.update({ where: { id: ids.a.staff }, data: { userId: null } });
+    await db.staffRecord.update({ where: { id: ids.b.staff }, data: { userId: null } });
+    await db.staffRecord.delete({ where: { id: second.id } });
+  });
+});
+
 test.describe("catalog guard", () => {
   // Tables with NO tenantId column — by design, and each for a stated reason. A NEW table must either carry a tenantId
   // (and then the test below demands forced RLS and a policy) or be added here on purpose, in review.
@@ -933,6 +1190,7 @@ test.describe("catalog guard", () => {
     expect(rows.map((r) => r.relname).sort()).toEqual([
       "AcademicPeriod",
       "AcademicSession",
+      "AdmissionCounter",
       "AssessmentComponent",
       "AssessmentScheme",
       "AuditLog",
@@ -941,8 +1199,14 @@ test.describe("catalog guard", () => {
       "ClassGroup",
       "GradeBand",
       "GradeScale",
+      "GuardianLink",
+      "GuardianRecord",
       "Invitation",
       "SchoolSettings",
+      "StaffRecord",
+      "StaffSubjectAssignment",
+      "StudentEnrollment",
+      "StudentRecord",
       "Subject",
       "SubjectOffering",
       "TenantMembership",

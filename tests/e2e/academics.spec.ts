@@ -1,6 +1,16 @@
 import { test, expect } from "../support/fixtures";
 import type { Locator, Page } from "@playwright/test";
-import { Role, addMembership, createTenant, createUser, db, removeCreatedTenants, seedInstance, type TestTenant } from "../support/db";
+import {
+  Role,
+  addMembership,
+  createTenant,
+  createUser,
+  db,
+  removeCreatedTenants,
+  seedInstance,
+  uniqueIp,
+  type TestTenant,
+} from "../support/db";
 import { SAAS_URL } from "../support/env";
 import { signInThroughUi } from "./helpers";
 
@@ -56,14 +66,72 @@ test.describe("the page", () => {
     ).toHaveAttribute("aria-current", "page");
   });
 
-  test("anyone who is not an administrator of this school gets the same 403 view as a stranger", async ({ page }) => {
+  test("staff may LOOK: the same four sections with nothing that writes (no New session, New class, Edit, Archive…); students and parents get the same 403 view as a stranger", async ({
+    page,
+    browser,
+  }) => {
     const teacher = await createUser({ name: "Tola Teacher" });
     await addMembership(teacher.id, school.id, Role.TEACHING_STAFF, school.campuses[0].id);
+    await db.academicSession.create({
+      data: {
+        tenantId: school.id,
+        label: "2026/2027",
+        startDate: new Date("2026-09-01"),
+        endDate: new Date("2027-07-31"),
+        status: "ACTIVE",
+      },
+    });
+    const group = await db.classGroup.create({ data: { tenantId: school.id, name: "JSS 1" } });
+    await db.classArm.create({ data: { tenantId: school.id, classGroupId: group.id, name: "A" } });
+    await db.subject.create({ data: { tenantId: school.id, name: "Mathematics" } });
     await signInThroughUi(page, teacher);
+
     const response = await page.goto(`/schools/${school.code}/academics`);
-    expect(response?.status()).toBe(403);
-    await expect(page.getByRole("heading", { level: 1, name: "You don't have access to this school" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Sessions" })).toHaveCount(0);
+    expect(response?.status()).toBe(200);
+    await expect(page.getByRole("heading", { level: 1, name: "Academic setup" })).toBeVisible();
+    await expect(page.getByText("Only an administrator can change this.")).toBeVisible();
+    await expect(page.getByRole("heading", { level: 2, name: "Sessions" })).toBeVisible();
+    await expect(item(page, "2026/2027")).toBeVisible();
+    await expect(page.getByRole("button", { name: "New session" })).toHaveCount(0);
+    for (const verb of ["Edit", "Open", "Close", "Reopen", "Copy", "Archive"]) {
+      await expect(page.getByRole("button", { name: new RegExp(`^${verb}`) }), verb).toHaveCount(0);
+    }
+    await page.getByRole("button", { name: /^Terms of 2026\/2027/ }).click(); // looking at the terms is allowed…
+    await expect(page.getByRole("button", { name: /Add a term/ })).toHaveCount(0); // …changing them is not
+    await page.getByRole("button", { name: "All sessions" }).click();
+
+    for (const [section, heading, buttons] of [
+      [
+        "classes",
+        "Classes and arms",
+        ["New class", "New subject", "Add arm to JSS 1", "Edit JSS 1", "Archive JSS 1", "Edit Mathematics", "Archive Mathematics"],
+      ],
+      ["assessment", "Assessment schemes", ["New scheme"]],
+      ["grading", "Grade scales", ["New scale"]],
+    ] as const) {
+      await page.goto(`/schools/${school.code}/academics?section=${section}`);
+      await expect(page.getByRole("heading", { level: 2, name: heading })).toBeVisible();
+      for (const name of buttons) await expect(page.getByRole("button", { name }), `${section}: ${name}`).toHaveCount(0);
+    }
+    await page.goto(`/schools/${school.code}/academics?section=classes`);
+    await expect(item(page, "JSS 1").first()).toBeVisible();
+    await expect(page.getByText("Mathematics")).toBeVisible();
+
+    for (const [role, name] of [
+      [Role.PARENT, "Pat Parent"],
+      [Role.STUDENT, "Sam Student"],
+    ] as const) {
+      const outsider = await createUser({ name });
+      await addMembership(outsider.id, school.id, role);
+      const fresh = await browser.newContext({ baseURL: SAAS_URL, extraHTTPHeaders: { "x-real-ip": uniqueIp() } });
+      const other = await fresh.newPage();
+      await signInThroughUi(other, outsider);
+      const denied = await other.goto(`/schools/${school.code}/academics`);
+      expect(denied?.status(), name).toBe(403);
+      await expect(other.getByRole("heading", { level: 1, name: "You don't have access to this school" })).toBeVisible();
+      await expect(other.getByRole("heading", { name: "Sessions" })).toHaveCount(0);
+      await fresh.close();
+    }
   });
 });
 
@@ -155,7 +223,6 @@ test.describe("sessions and terms", () => {
     page,
   }) => {
     const admin = await signedInAdmin(page, "sessions");
-    void admin;
     await db.academicSession.create({
       data: {
         tenantId: school.id,
@@ -174,9 +241,95 @@ test.describe("sessions and terms", () => {
     await expect(dialog(page).getByText(/"2025\/2026" is already the active session/)).toBeVisible();
     await dialog(page).getByLabel("If another session is already open, close it first").check();
     await dialog(page).getByRole("button", { name: "Open session" }).click();
+    await expect(dialog(page).getByText("Enter your password to confirm.")).toBeVisible(); // ending a year on the spot asks who you are
+    await field(dialog(page), "Your password").fill("not-my-password-1");
+    await dialog(page).getByRole("button", { name: "Open session" }).click();
+    await expect(dialog(page).getByText("That password isn't right.")).toBeVisible();
+    expect((await db.academicSession.findFirstOrThrow({ where: { tenantId: school.id, label: "2025/2026" } })).status).toBe("ACTIVE");
+    await field(dialog(page), "Your password").fill(admin.password);
+    await dialog(page).getByRole("button", { name: "Open session" }).click();
     await expect(notice(page)).toContainText("2026/2027 is now open, and 2025/2026 was closed.");
     await expect(item(page, "2025/2026")).toContainText("Closed");
     await expect(item(page, "2026/2027")).toContainText("Active");
+  });
+});
+
+test.describe("closing a session", () => {
+  async function activeYear() {
+    return db.academicSession.create({
+      data: {
+        tenantId: school.id,
+        label: "2026/2027",
+        startDate: new Date("2026-09-01"),
+        endDate: new Date("2027-07-31"),
+        status: "ACTIVE",
+      },
+    });
+  }
+
+  test("Close… starts a 24-hour countdown that says what it does; the row shows when it closes; Cancel closing takes it back", async ({
+    page,
+  }) => {
+    await signedInAdmin(page, "sessions");
+    const year = await activeYear();
+    await page.reload();
+    await page.getByRole("button", { name: "Close 2026/2027" }).click();
+    const d = dialog(page);
+    await expect(d.getByRole("heading", { name: "Close 2026/2027?" })).toBeVisible();
+    await expect(d).toContainText("Closing starts a 24-hour countdown. Until it ends nothing changes, and you can cancel.");
+    await expect(d.getByLabel("Your password")).toHaveCount(0); // the slow way needs no password
+    await d.getByRole("button", { name: "Start 24-hour countdown" }).click();
+    await expect(dialog(page)).toBeHidden();
+    await expect(notice(page)).toContainText("2026/2027 will close on");
+    await expect(item(page, "2026/2027")).toContainText("Active");
+    await expect(item(page, "2026/2027")).toContainText("Closes ");
+    expect(
+      Math.abs((await db.academicSession.findUniqueOrThrow({ where: { id: year.id } })).closeAt!.getTime() - (Date.now() + 86_400_000)),
+    ).toBeLessThan(60_000);
+
+    await page.getByRole("button", { name: "Cancel the planned close of 2026/2027" }).click();
+    await expect(dialog(page).getByRole("button", { name: "Cancel", exact: true })).toBeFocused(); // the safe choice has focus
+    await dialog(page).getByRole("button", { name: "Cancel the close" }).click();
+    await expect(notice(page)).toContainText("The planned close of 2026/2027 was cancelled.");
+    await expect(item(page, "2026/2027")).not.toContainText("Closes ");
+    expect((await db.academicSession.findUniqueOrThrow({ where: { id: year.id } })).closeAt).toBeNull();
+  });
+
+  test("Close sooner asks for the password, says so in the field when it is wrong, and then closes in a minute; once due the session is Closed and can be reopened with a reason", async ({
+    page,
+  }) => {
+    const admin = await signedInAdmin(page, "sessions");
+    const year = await activeYear();
+    await page.reload();
+    await page.getByRole("button", { name: "Close 2026/2027" }).click();
+    await dialog(page).getByLabel("Close sooner — in 1 minute instead of 24 hours").check();
+    await expect(dialog(page).getByRole("button", { name: "Close in 1 minute" })).toBeVisible();
+    await dialog(page).getByRole("button", { name: "Close in 1 minute" }).click();
+    await expect(dialog(page).getByText("Enter your password to confirm.")).toBeVisible();
+    await field(dialog(page), "Your password").fill("not-my-password-1");
+    await dialog(page).getByRole("button", { name: "Close in 1 minute" }).click();
+    await expect(dialog(page).getByText("That password isn't right.")).toBeVisible();
+    expect((await db.academicSession.findUniqueOrThrow({ where: { id: year.id } })).closeAt).toBeNull();
+    await field(dialog(page), "Your password").fill(admin.password);
+    await dialog(page).getByRole("button", { name: "Close in 1 minute" }).click();
+    await expect(dialog(page)).toBeHidden();
+    await expect(notice(page)).toContainText("2026/2027 will close on");
+    const stored = await db.academicSession.findUniqueOrThrow({ where: { id: year.id } });
+    expect(stored.closeForced).toBe(true);
+    expect(Math.abs(stored.closeAt!.getTime() - (Date.now() + 60_000))).toBeLessThan(30_000);
+    await expect(page.getByRole("button", { name: "Close 2026/2027 sooner" })).toHaveCount(0); // already as soon as it gets
+
+    await db.academicSession.update({ where: { id: year.id }, data: { closeAt: new Date(Date.now() - 1000) } }); // the minute has passed
+    await page.reload();
+    await expect(item(page, "2026/2027")).toContainText("Closed");
+    await page.getByRole("button", { name: "Reopen 2026/2027" }).click();
+    await dialog(page).getByRole("button", { name: "Reopen session" }).click();
+    await expect(dialog(page).getByText("Give a reason of at least 5 characters.")).toBeVisible();
+    await field(dialog(page), "Why is it being reopened?").fill("Closed too early");
+    await dialog(page).getByRole("button", { name: "Reopen session" }).click();
+    await expect(notice(page)).toContainText("2026/2027 is open again.");
+    await expect(item(page, "2026/2027")).toContainText("Active");
+    expect(await db.auditLog.count({ where: { tenantId: school.id, targetId: year.id, action: "SESSION_REOPENED" } })).toBe(1);
   });
 });
 

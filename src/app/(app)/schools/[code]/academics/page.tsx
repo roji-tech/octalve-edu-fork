@@ -12,9 +12,10 @@ import { requireTenantPage } from "@/lib/tenant/page-tenant";
 export const metadata: Metadata = { title: "Academic setup" };
 export const dynamic = "force-dynamic";
 
-// Academic setup (plan "Build design — Phase 1.0 and 1.1"): the school year and its terms, the classes and subjects, how marks are built and how
-// scores become grades — administrators only. Like the Users page it resolves the school from the person's OWN membership (403 otherwise), then
-// requires ADMIN in that school; the lists and every change go through the academics API, which enforces the same rule again.
+// Academic setup (plan "Build design — Phase 1.0 and 1.1", and 1.2 decision P9): the school year and its terms, the classes and subjects, how marks are built
+// and how scores become grades. Administrators change it; staff may LOOK (the same four sections with every control that writes left out); students and
+// parents get the one access-denied view. Like the Users page it resolves the school from the person's OWN membership (403 otherwise); the lists and every
+// change go through the academics API, which enforces the same rules again — hiding a button is a courtesy, not the guard.
 export default async function AcademicsPage({
   params,
   searchParams,
@@ -25,7 +26,8 @@ export default async function AcademicsPage({
   const { code } = await params;
   const { section: asked } = await searchParams;
   const { tenant } = await requireTenantPage(code);
-  if (tenant.role !== "ADMIN") forbidden();
+  if (tenant.role !== "ADMIN" && tenant.role !== "TEACHING_STAFF" && tenant.role !== "NON_TEACHING_STAFF") forbidden();
+  const readOnly = tenant.role !== "ADMIN";
 
   const section = isSection(asked) ? asked : "sessions";
   const campuses = await tenant.run((tx) =>
@@ -36,14 +38,20 @@ export default async function AcademicsPage({
     <div>
       <PageHeader
         title="Academic setup"
-        description={`The school year, classes, subjects and grading for ${tenant.tenantName}. Nothing here is ever deleted — old items are archived.`}
+        description={
+          readOnly
+            ? `The school year, classes, subjects and grading for ${tenant.tenantName}. Only an administrator can change this.`
+            : `The school year, classes, subjects and grading for ${tenant.tenantName}. Nothing here is ever deleted — old items are archived.`
+        }
       />
       <SectionNav schoolCode={tenant.tenantCode} current={section} />
       <div className="mt-8">
-        {section === "sessions" && <SessionsPanel schoolCode={tenant.tenantCode} campuses={campuses} schoolType={tenant.schoolType} />}
-        {section === "classes" && <ClassesPanel schoolCode={tenant.tenantCode} campuses={campuses} />}
-        {section === "assessment" && <AssessmentPanel schoolCode={tenant.tenantCode} />}
-        {section === "grading" && <GradingPanel schoolCode={tenant.tenantCode} />}
+        {section === "sessions" && (
+          <SessionsPanel schoolCode={tenant.tenantCode} campuses={campuses} schoolType={tenant.schoolType} readOnly={readOnly} />
+        )}
+        {section === "classes" && <ClassesPanel schoolCode={tenant.tenantCode} campuses={campuses} readOnly={readOnly} />}
+        {section === "assessment" && <AssessmentPanel schoolCode={tenant.tenantCode} readOnly={readOnly} />}
+        {section === "grading" && <GradingPanel schoolCode={tenant.tenantCode} readOnly={readOnly} />}
       </div>
     </div>
   );

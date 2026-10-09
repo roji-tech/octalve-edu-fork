@@ -1,6 +1,6 @@
 import type { ComponentType, SVGProps } from "react";
 import type { Role } from "@prisma/client";
-import { CalendarIcon, HomeIcon, SlidersIcon, UsersIcon } from "@/components/ui/icons";
+import { CalendarIcon, GraduationCapIcon, HomeIcon, SlidersIcon, UsersIcon } from "@/components/ui/icons";
 import { isValidTenantCode } from "@/lib/tenant/validate-code";
 
 /// A school the signed-in person belongs to, as the shell needs it. Display data only (see lib/auth/page-session.ts).
@@ -26,8 +26,15 @@ export function navFor(school: ShellSchool | null): NavItem[] {
   if (school.role === "ADMIN") {
     items.push(
       { label: "Academics", href: `/schools/${school.code}/academics`, icon: CalendarIcon },
+      { label: "People", href: `/schools/${school.code}/people`, icon: GraduationCapIcon },
       { label: "Users", href: `/schools/${school.code}/users`, icon: UsersIcon },
       { label: "Settings", href: null, icon: SlidersIcon },
+    );
+  } else if (school.role === "TEACHING_STAFF" || school.role === "NON_TEACHING_STAFF") {
+    // Staff may look at the school year and at the school's people (read-only; plan 1.2, decisions P2 and P9) — they change none of it.
+    items.push(
+      { label: "Academics", href: `/schools/${school.code}/academics`, icon: CalendarIcon },
+      { label: "People", href: `/schools/${school.code}/people`, icon: GraduationCapIcon },
     );
   }
   return items;
@@ -50,14 +57,22 @@ export function schoolFromPath(pathname: string, schools: readonly ShellSchool[]
 }
 
 /// The page's own name for the breadcrumb ("School / Users"), by path.
-const SCHOOL_PAGES: Record<string, string> = { "": "Overview", users: "Users", academics: "Academics", settings: "Settings" };
+const SCHOOL_PAGES: Record<string, string> = {
+  "": "Overview",
+  users: "Users",
+  academics: "Academics",
+  people: "People",
+  settings: "Settings",
+};
 const GLOBAL_PAGES: Record<string, string> = { "/dashboard": "Your schools", "/account": "Account" };
 
 export function pageLabel(pathname: string): string | null {
   const own = GLOBAL_PAGES[pathname.replace(/\/+$/, "") || "/"];
   if (own) return own;
   const match = /^\/schools\/[^/]+(?:\/([^/]+))?\/?$/.exec(pathname);
-  return match ? (SCHOOL_PAGES[match[1] ?? ""] ?? null) : null;
+  if (match) return SCHOOL_PAGES[match[1] ?? ""] ?? null;
+  // A person's own page under People (a student or a member of staff) is still "People" in the breadcrumb.
+  return /^\/schools\/[^/]+\/people\/(?:students|staff)\/[^/]+\/?$/.test(pathname) ? "People" : null;
 }
 
 export const isActive = (pathname: string, item: Pick<NavItem, "href" | "exact">): boolean => {
