@@ -116,7 +116,12 @@ one-off pattern sources, referenced once for a specific technique and then done:
 
 ## Working rules in this repo (follow these without being asked)
 
-**Task tracking (applies to every session, in both repos).** Check that `/home/rojitech/Desktop/CODEC/out/tasks.md` exists before starting work (create it if it does not — see the read-order step) and update it as tasks start, finish, block or appear — it is the maintainer's view of progress, separate from the in-repo progress tracker (which records what is *built*). Note: this is the *workspace* `CODEC/out/`, not the repo's own gitignored `out/` folder.
+**Task tracking (applies to every session, in both repos).** All tasks are organized inside `/home/rojitech/Desktop/CODEC/out/tasks/` (and mirrored in repo `out/tasks/`):
+- `current-tasks.md` contains the active sequential register and execution queue.
+- Every individual task file is named with a 4-digit sequential prefix: `NNNN-<kebab-name>.md` (e.g. `0001-phase-1-2-people-and-enrolment.md`), based on `template.md`.
+- How to tick: change `[ ]` to `[x]`. The table shows the characters, not a clickable box.
+- Always record start and end date and time in UTC (`YYYY-MM-DD HH:MM:SS UTC`).
+- Update tasks as work starts, finishes, blocks or appears — it is the maintainer's view of progress, separate from in-repo progress trackers.
 
 1. **Design before code.** Extend the relevant phase section in `domain-implementation-plan.md`
    first. This phase (0.5) exists specifically because the security audit found two *architectural*

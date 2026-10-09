@@ -170,7 +170,9 @@ T3 cursor pagination (high churn) · T4 edit window and who may edit · T5 summa
 T1 score entry per component with max-score validation against the snapshot · T2 status machine DRAFT → SUBMITTED → APPROVED →
 PUBLISHED (conditional updates; `CAN_APPROVE_RESULTS`) · T3 position/ranking computed server-side with correct ties ·
 T4 server-rendered report-card PDF · T5 parent/student view only of PUBLISHED, only own children (IDOR tests) · T6 promotion
-(closes enrollment, opens next) · T7 screens.
+(closes enrollment, opens next) · T7 screens · **T8 public certificate / report-card verification & file access pattern**:
+each generated credential/report card carries a cryptographic hash and QR code linking to a public verification endpoint (referencing
+the `VerifyCertificateForm` pattern and `out/certificate_or_file_access` architecture for tamper-evident credentials).
 
 ### 1.5 detail (finance)
 T1 fee structures per period/class · T2 invoice generation (idempotent per student+period) · T3 payment records, `Decimal`
@@ -181,7 +183,9 @@ amount re-checked) · T7 status polling endpoint rate-limited per IP and referen
 body refused, 20 simultaneous fulfilments → one, amount mismatch throws.
 
 ### 1.6 detail
-Announcements (audience targeting by role/campus, publish window) · timetable slots (clash detection per teacher/room/class).
+Announcements (audience targeting by role/campus, publish window) · timetable slots (clash detection per teacher/room/class;
+**interactive timetable & curriculum scheduling canvas**: adopting the visual workflow node/grid design architecture from
+`TwoNode_V2_Design_Canvas.html` for real-time drag-and-drop clash resolution).
 
 ### 1.7 detail (settings + step-up)
 All toggles from plan §1.3 table; each change requires a fresh second factor (reuse 0.5.D) and is audited before/after

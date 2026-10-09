@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { forbidden } from "next/navigation";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { AssessmentPanel } from "@/components/academics/AssessmentPanel";
+import { AttendancePanel } from "@/components/academics/AttendancePanel";
 import { ClassesPanel } from "@/components/academics/ClassesPanel";
 import { GradingPanel } from "@/components/academics/GradingPanel";
 import { SectionNav } from "@/components/academics/SectionNav";
@@ -46,6 +47,7 @@ export default async function AcademicsPage({
       />
       <SectionNav schoolCode={tenant.tenantCode} current={section} />
       <div className="mt-8">
+        {section === "attendance" && <AttendancePanel schoolCode={tenant.tenantCode} readOnly={readOnly} />}
         {section === "sessions" && (
           <SessionsPanel schoolCode={tenant.tenantCode} campuses={campuses} schoolType={tenant.schoolType} readOnly={readOnly} />
         )}

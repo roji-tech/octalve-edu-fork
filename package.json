@@ -25,7 +25,8 @@
     "lanes:sync": "node scripts/lanes.mjs sync",
     "test:lanes": "node scripts/lanes.mjs test",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "tasks:check": "node scripts/tasks-check.mjs"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

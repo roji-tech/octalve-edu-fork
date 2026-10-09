@@ -41,6 +41,7 @@ model Tenant {
   guardianRecords   GuardianRecord[]
   guardianLinks     GuardianLink[]
   enrollments       StudentEnrollment[]
+  attendanceRecords AttendanceRecord[]
 }
 
 /// A branch/campus under one tenant (PRD §7) — distinct from multi-tenancy:

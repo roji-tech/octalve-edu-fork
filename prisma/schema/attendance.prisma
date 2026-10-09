@@ -1,0 +1,38 @@
+// --- Phase 1.3: Attendance & Day-to-Day Operations ---
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  EXCUSED
+}
+
+enum AttendanceSource {
+  ONLINE
+  OFFLINE_SYNC
+}
+
+/// Daily roll-call attendance record for a student in a class arm.
+model AttendanceRecord {
+  id             String           @id @default(cuid())
+  tenantId       String
+  studentId      String
+  classArmId     String
+  date           DateTime         @db.Date
+  status         AttendanceStatus
+  remarks        String?
+  markedByUserId String?
+  markedAt       DateTime         @default(now())
+  source         AttendanceSource @default(ONLINE)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @default(now()) @updatedAt
+
+  tenant   Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  student  StudentRecord @relation(fields: [tenantId, studentId], references: [tenantId, id], onDelete: Cascade)
+  classArm ClassArm      @relation(fields: [tenantId, classArmId], references: [tenantId, id], onDelete: NoAction)
+
+  @@unique([tenantId, studentId, date])
+  @@index([tenantId, classArmId, date])
+  @@index([tenantId, studentId, date])
+  @@index([tenantId, date])
+}
