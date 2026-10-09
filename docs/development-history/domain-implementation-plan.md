@@ -2686,3 +2686,27 @@ segment gains traction first") — matching that uncertainty here rather than ov
 No schema for any of these should be finalized before a real signal (a paying customer, a specific
 request) exists — inventing it now risks the exact "a field or enum value that sounds right but was
 never actually decided" trap `TheNiche`'s own plan names as the thing to guard against.
+
+---
+
+#### Build design — Phase 1.3 (attendance and day-to-day operations) (2026-10-09, written before any code)
+
+**Scope.** Roadmap sub-phase 1.3: daily roll-call attendance tracking for class arms and students, idempotent bulk-mark endpoint, absence reason classification, phone-optimized touch grid UI, and audit logging. Builds on Phase 1.2 (people and enrolment) and 1.1 (academic sessions and class arms).
+
+##### Reconciliations with the §1.3 sketches
+1. **Row-level security and composite tenant keys:** As in 1.1 and 1.2, every table carries `tenantId` and composite foreign keys `(tenantId, studentId)` → `StudentRecord`, `(tenantId, classArmId)` → `ClassArm`. RLS is enabled and forced in Postgres.
+2. **Idempotent daily uniqueness:** Keyed on `UNIQUE (tenantId, studentId, date)`. Marking attendance for a class arm upserts the record for each enrolled student on that date; re-submitting the same roll call updates existing records cleanly without producing duplicate entries or stranded rows.
+3. **Provenance flag (`source`):** `ONLINE` vs `OFFLINE_SYNC` (closes Audit #8) so background or synced submissions are auditable without an auxiliary table.
+4. **Who may do what:**
+   - Reads: `ADMIN`, `TEACHING_STAFF`, `NON_TEACHING_STAFF`.
+   - Writes: `ADMIN` and `TEACHING_STAFF`. Teachers mark roll calls for classes; administrators can mark or correct any attendance record.
+5. **Edit window boundaries:**
+   - Future dates are rejected (`FUTURE_DATE_NOT_ALLOWED`).
+   - Historical window: `TEACHING_STAFF` may edit attendance within a 7-day window; older edits require `ADMIN`.
+   - Attendance dates must fall within an active or unarchived academic session.
+6. **Mobile touch grid:**
+   - One-tap "Mark All Present" default.
+   - Tap-to-cycle or fast toggle between `PRESENT`, `LATE`, `ABSENT`, `EXCUSED`.
+   - Full roll call for a class of 30+ students completable in under 30 seconds on a mobile viewport.
+   - Live summary stats (percentage, count of present/absent/late).
+
