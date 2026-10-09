@@ -68,6 +68,7 @@ model AcademicPeriod {
 
   tenant  Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   session AcademicSession @relation(fields: [tenantId, sessionId], references: [tenantId, id], onDelete: NoAction)
+  results Result[]
 
   @@unique([tenantId, id])
   @@index([tenantId, sessionId])
@@ -132,6 +133,7 @@ model Subject {
   tenant           Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   offerings        SubjectOffering[]
   staffAssignments StaffSubjectAssignment[]
+  results          Result[]
 
   @@unique([tenantId, id])
   @@index([tenantId])
