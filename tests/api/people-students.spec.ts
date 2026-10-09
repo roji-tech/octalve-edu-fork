@@ -186,6 +186,14 @@ test.describe("creating and changing a student", () => {
     expect(taken.status).toBe(409);
     expect(taken.json.error).toMatchObject({ code: "ADMISSION_NUMBER_TAKEN", details: [{ path: "body.admissionNo" }] });
     expect(await db.studentRecord.count({ where: { tenantId: a.id, firstName: { equals: body.firstName, mode: "insensitive" } } })).toBe(1);
+
+    const overridden = await api(
+      students(),
+      as("admin", { method: "POST", body: { ...body, firstName: body.firstName.toUpperCase(), allowDuplicate: true } }),
+    );
+    expect(overridden.status).toBe(201);
+    expect(overridden.json.data.student.admissionNo).not.toBe(first.json.data.student.admissionNo);
+    expect(await db.studentRecord.count({ where: { tenantId: a.id, firstName: { equals: body.firstName, mode: "insensitive" } } })).toBe(2);
   });
 
   test("bad bodies are 400 VALIDATION naming the field; unknown keys (tenantId, userId, archivedAt, id) are refused, not ignored", async () => {
@@ -269,6 +277,34 @@ test.describe("creating and changing a student", () => {
       changed: true,
       student: { archived: false },
     });
+  });
+
+  test("duplicate override with allowDuplicate: true works on PATCH and restore", async () => {
+    await seedStudent({ firstName: "Alhaji" });
+    const s2 = await seedStudent({ firstName: "Other" });
+
+    // PATCH to duplicate name
+    const blockedPatch = await api(`${students()}/${s2.id}`, as("admin", { method: "PATCH", body: { firstName: "Alhaji" } }));
+    expect(blockedPatch.status).toBe(409);
+    expect(blockedPatch.json.error.code).toBe("POSSIBLE_DUPLICATE");
+
+    const allowedPatch = await api(
+      `${students()}/${s2.id}`,
+      as("admin", { method: "PATCH", body: { firstName: "Alhaji", allowDuplicate: true } }),
+    );
+    expect(allowedPatch.status).toBe(200);
+    expect(allowedPatch.json.data.changed).toBe(true);
+
+    // Archive and restore
+    expect((await api(`${students()}/${s2.id}/archive`, as("admin", { method: "POST" }))).status).toBe(200);
+    const blockedRestore = await api(`${students()}/${s2.id}/restore`, as("admin", { method: "POST" }));
+    expect(blockedRestore.status).toBe(409);
+    expect(blockedRestore.json.error.code).toBe("POSSIBLE_DUPLICATE");
+
+    const allowedRestore = await api(`${students()}/${s2.id}/restore`, as("admin", { method: "POST", body: { allowDuplicate: true } }));
+    expect(allowedRestore.status).toBe(200);
+    expect(allowedRestore.json.data.changed).toBe(true);
+    expect(allowedRestore.json.data.student.archived).toBe(false);
   });
 });
 

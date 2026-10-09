@@ -15,6 +15,7 @@ const patchBody = z
     lastName: textField.optional(),
     dateOfBirth: z.string().max(20).optional(),
     admissionNo: z.string().max(100).optional(),
+    allowDuplicate: z.boolean().optional(),
   })
   .refine((value) => Object.values(value).some((v) => v !== undefined), "Give at least one thing to change.");
 

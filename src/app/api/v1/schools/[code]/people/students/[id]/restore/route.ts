@@ -12,7 +12,17 @@ export const POST = withAuth(
     if (!isPlausibleId(id)) return notFound("student");
     const limited = await peopleWriteLimited(auth);
     if (limited) return limited;
-    const result = await restoreStudent(auth.tenant, auth.userId, id);
+    let allowDuplicate = false;
+    const text = await _req.text().catch(() => "");
+    if (text.trim()) {
+      try {
+        const json = JSON.parse(text);
+        allowDuplicate = Boolean(json?.allowDuplicate);
+      } catch {
+        // empty or non-JSON body keeps default false
+      }
+    }
+    const result = await restoreStudent(auth.tenant, auth.userId, id, allowDuplicate);
     return result.ok ? ok({ student: result.student, changed: result.changed }) : peopleFailure(result.reason, result.detail);
   },
   { tenant: true, roles: WRITE_ROLES },

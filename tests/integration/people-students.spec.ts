@@ -171,6 +171,46 @@ test.describe("creating a student", () => {
     expect(await restoreStudent(admin(), boss.id, original.id)).toMatchObject({ ok: false, reason: "POSSIBLE_DUPLICATE" });
   });
 
+  test("a duplicate can be overridden with allowDuplicate: true on create, update and restore, auditing the override without PII", async () => {
+    const original = await student();
+    const twin = await createStudent(admin(), boss.id, { ...PUPIL, firstName: " sade ", lastName: "OKORO", allowDuplicate: true }, NOW);
+    expect(twin).toMatchObject({ ok: true });
+    if (!twin.ok) throw new Error("twin create failed");
+    expect(twin.student.admissionNo).not.toBe(original.admissionNo);
+
+    // Verify audit log has duplicateOverridden: true and existingAdmissionNo, with zero PII
+    const createLog = await db.auditLog.findFirstOrThrow({
+      where: { targetId: twin.student.id, action: "STUDENT_CREATED" },
+    });
+    expect(createLog.afterValue).toMatchObject({
+      duplicateOverridden: true,
+      existingAdmissionNo: original.admissionNo,
+    });
+    expect(JSON.stringify(createLog)).not.toContain("Sade");
+    expect(JSON.stringify(createLog)).not.toContain("2012-05-01");
+
+    // Update with allowDuplicate: true
+    const third = await student({ firstName: "Third" });
+    const blockedUpdate = await updateStudent(admin(), boss.id, third.id, { firstName: "Sade" }, NOW);
+    expect(blockedUpdate).toMatchObject({ ok: false, reason: "POSSIBLE_DUPLICATE" });
+    const allowedUpdate = await updateStudent(admin(), boss.id, third.id, { firstName: "Sade", allowDuplicate: true }, NOW);
+    expect(allowedUpdate).toMatchObject({ ok: true, changed: true });
+    const updateLog = await db.auditLog.findFirstOrThrow({
+      where: { targetId: third.id, action: "STUDENT_UPDATED" },
+    });
+    expect(updateLog.afterValue).toMatchObject({ duplicateOverridden: true });
+
+    // Restore with allowDuplicate: true
+    expect(await archiveStudent(admin(), boss.id, twin.student.id)).toMatchObject({ ok: true });
+    expect(await restoreStudent(admin(), boss.id, twin.student.id)).toMatchObject({ ok: false, reason: "POSSIBLE_DUPLICATE" });
+    const restored = await restoreStudent(admin(), boss.id, twin.student.id, true);
+    expect(restored).toMatchObject({ ok: true, changed: true });
+    const restoreLog = await db.auditLog.findFirstOrThrow({
+      where: { targetId: twin.student.id, action: "STUDENT_RESTORED" },
+    });
+    expect(restoreLog.afterValue).toMatchObject({ duplicateOverridden: true, existingAdmissionNo: original.admissionNo });
+  });
+
   test("running out of numbers (50 taken in a row) is refused AND rolls the counter back — the refusal came after a write", async () => {
     await db.studentRecord.createMany({
       data: Array.from({ length: 50 }, (_, i) => ({

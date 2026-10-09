@@ -218,6 +218,7 @@ export type StudentInput = {
   lastName: unknown;
   dateOfBirth: unknown;
   admissionNo?: unknown;
+  allowDuplicate?: boolean;
 };
 
 type CleanFields = { firstName: string; middleName: string | null; lastName: string; dateOfBirth: string };
@@ -294,9 +295,10 @@ export async function insertStudent(
   fields: CleanFields,
   typedAdmissionNo: string | null,
   now: Date,
+  allowDuplicate = false,
 ): Promise<PeopleResult<{ row: StudentRow }>> {
   const duplicate = await findDuplicate(tx, tenantId, fields);
-  if (duplicate) return refuse("POSSIBLE_DUPLICATE", { admissionNo: duplicate.admissionNo });
+  if (duplicate && !allowDuplicate) return refuse("POSSIBLE_DUPLICATE", { admissionNo: duplicate.admissionNo });
   let admissionNo = typedAdmissionNo;
   if (admissionNo) {
     if (await admissionTaken(tx, tenantId, admissionNo)) return refuse("ADMISSION_NUMBER_TAKEN");
@@ -321,6 +323,7 @@ export async function insertStudent(
     admissionNo,
     campusId,
     generated: typedAdmissionNo === null,
+    ...(duplicate && allowDuplicate ? { duplicateOverridden: true, existingAdmissionNo: duplicate.admissionNo } : {}),
   });
   return { ok: true, row };
 }
@@ -351,7 +354,7 @@ export async function createStudent(
         if (!campus) return refuse("INVALID_CAMPUS");
       }
       await lockStudents(tx, tenantId);
-      const created = await insertStudent(tx, tenantId, actorUserId, campusId, fields.value, typed, now);
+      const created = await insertStudent(tx, tenantId, actorUserId, campusId, fields.value, typed, now, Boolean(input.allowDuplicate));
       if (!created.ok) return created;
       return { ok: true as const, student: toStudent(created.row) };
     }),
@@ -400,9 +403,13 @@ export async function updateStudent(
       if (changedFields.length === 0) return { ok: true as const, student: toStudent(current), changed: false };
 
       await lockStudents(tx, tenantId);
+      let duplicateOverridden = false;
       if (changedFields.some((name) => name !== "admissionNo" && name !== "middleName")) {
         const duplicate = await findDuplicate(tx, tenantId, fields, id);
-        if (duplicate) return refuse("POSSIBLE_DUPLICATE", { admissionNo: duplicate.admissionNo });
+        if (duplicate) {
+          if (!input.allowDuplicate) return refuse("POSSIBLE_DUPLICATE", { admissionNo: duplicate.admissionNo });
+          duplicateOverridden = true;
+        }
       }
       if (admissionNo !== current.admissionNo && (await admissionTaken(tx, tenantId, admissionNo, id)))
         return refuse("ADMISSION_NUMBER_TAKEN");
@@ -425,7 +432,11 @@ export async function updateStudent(
         "STUDENT_UPDATED",
         id,
         { admissionNo: current.admissionNo },
-        { admissionNo, changed: changedFields },
+        {
+          admissionNo,
+          changed: changedFields,
+          ...(duplicateOverridden ? { duplicateOverridden: true } : {}),
+        },
       );
       return { ok: true as const, student: toStudent(row), changed: true };
     }),
@@ -467,6 +478,7 @@ export async function restoreStudent(
   tenant: TenantCtx,
   actorUserId: string,
   id: string,
+  allowDuplicate = false,
 ): Promise<PeopleResult<{ student: StudentView; changed: boolean }>> {
   const { tenantId } = tenant;
   return rollingBack(() =>
@@ -486,11 +498,12 @@ export async function restoreStudent(
         },
         id,
       );
-      if (duplicate) return refuse("POSSIBLE_DUPLICATE", { admissionNo: duplicate.admissionNo });
+      if (duplicate && !allowDuplicate) return refuse("POSSIBLE_DUPLICATE", { admissionNo: duplicate.admissionNo });
       const done = await tx.studentRecord.updateMany({ where: { id, tenantId, archivedAt: { not: null } }, data: { archivedAt: null } });
       if (done.count !== 1) return refuseAndRollBack("WRONG_STATE");
       await auditPeople(tx, tenantId, actorUserId, "StudentRecord", "STUDENT_RESTORED", id, undefined, {
         admissionNo: current.admissionNo,
+        ...(duplicate && allowDuplicate ? { duplicateOverridden: true, existingAdmissionNo: duplicate.admissionNo } : {}),
       });
       return {
         ok: true as const,

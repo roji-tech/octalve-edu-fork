@@ -17,6 +17,7 @@ const IMPORTS_PER_WINDOW = 12; // per administrator per school per 5 minutes: a 
 const body = z.strictObject({
   csv: z.string({ error: "Send the file's text." }).max(IMPORT_MAX_BYTES * 2),
   dryRun: z.boolean({ error: "Say whether this is a dry run (true) or the real import (false)." }),
+  allowDuplicate: z.boolean().optional(),
 });
 
 export const POST = withAuth(

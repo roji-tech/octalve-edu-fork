@@ -103,7 +103,7 @@ one-off pattern sources, referenced once for a specific technique and then done:
 
 ## Files that are stable reference — read once, trust, don't expect them to move
 
-- `docs/decisions/` — short ADRs (one per decision someone might reverse by mistake); read the index before changing RLS, locks, permissions, deactivation or migrations. Rules are in its README: never edit an accepted decision, supersede it.
+- `docs/adr/` — short ADRs (one per decision someone might reverse by mistake); read the index before changing RLS, locks, permissions, deactivation or migrations. Rules are in its README: never edit an accepted decision, supersede it.
 - `docs/PRD.md` — changes only when the canonical Claude Doc is re-synced; treat as authoritative
   between syncs.
 - `docs/branches-and-environments.md` — the `dev`/`main`/`prod` git convention. Note it documents the

@@ -211,7 +211,7 @@ const REFUSAL_TEXT: Record<string, ImportProblem> = {
   ALREADY_ENROLLED: { column: "class", message: "Already enrolled in a class for that session." },
 };
 
-export type ImportInput = { csv: string; dryRun: boolean };
+export type ImportInput = { csv: string; dryRun: boolean; allowDuplicate?: boolean };
 
 export async function importStudents(
   tenant: TenantCtx,
@@ -340,7 +340,16 @@ export async function importStudents(
             }
           }
 
-          const created = await insertStudent(tx, tenantId, actorUserId, row.campusId, fields, row.admissionNo, now);
+          const created = await insertStudent(
+            tx,
+            tenantId,
+            actorUserId,
+            row.campusId,
+            fields,
+            row.admissionNo,
+            now,
+            Boolean(input.allowDuplicate),
+          );
           if (!created.ok) {
             fail([REFUSAL_TEXT[created.reason] ?? { column: null, message: "This row could not be imported." }]);
             continue;

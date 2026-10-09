@@ -7,7 +7,7 @@
 - `phases/phase-1.2-people.md` — Phase completion record & findings
 - `handoff/phase-1-slice-1.md` — Preceding hand-off record (Foundations 1.0 + Academic Structure 1.1)
 - `docs/development-history/domain-implementation-plan.md` §"Build design — Phase 1.2 (people and enrolment)" (decisions P1–P9)
-- `docs/decisions/` — ADRs 0009 (per-session enrolment), 0010 (school type from env), 0011 (branching rules), 0012 (docker dev DBs), 0013 (comprehensive commit/PR messages)
+- `docs/adr/` — ADRs 0009 (per-session enrolment), 0010 (school type from env), 0011 (branching rules), 0012 (docker dev DBs), 0013 (comprehensive commit/PR messages), 0014 (namesake duplicate override)
 - `CLAUDE.md` — Project orientation and operational rules
 
 ---
@@ -317,7 +317,6 @@ When faster execution is required during active iterations or regression sweeps:
 1. **Phase 1.2 Scope Exclusions (Deliberate Design Decisions)**:
    - Student sign-in accounts (students cannot log in; accounts begin with staff/parents).
    - Student gender tracking (excluded from initial model).
-   - "Create Anyway" override for duplicate students (hard refusal enforced).
    - Per-term enrolment history (enrolment is strictly scoped per session).
 2. **Future Phases**:
    - Phase 1.3 Attendance (daily/period tracking, phone grid).
@@ -332,19 +331,17 @@ When faster execution is required during active iterations or regression sweeps:
 
 ---
 
-## 9. Open Questions for Maintainer
+## 9. Maintainer Decisions and Confirmations
 
-1. **School Type Server Environment Configuration (`bba8985`)**:
+1. **School Type Server Environment Configuration (`bba8985`, ADR 0010)**:
    - `DEFAULT_SCHOOL_TYPE` server environment variable controls school type at creation; setup wizard strictly rejects client-supplied types.
-   - Implemented as separate commit `bba8985` (ADR 0010 status: Proposed).
-   - *Question:* Does the maintainer formally approve ADR 0010, or should commit `bba8985` be dropped before merging into `dev`?
-2. **Five Default Assumptions for Phase 1.2**:
-   - Per-session enrolment as single active row per session (ADR 0009).
-   - Absence of gender field on Student record.
-   - Admission number format defaulting to `YYYY/NNNN`.
-   - Strict rejection without override on duplicate student detection.
-   - Omission of student account authentication in Phase 1.2.
-   - *Question:* Are these five defaults accepted as built?
+   - *Status:* Accepted by maintainer.
+2. **Default Assumptions for Phase 1.2**:
+   - Per-session enrolment as single active row per session (ADR 0009). Accepted.
+   - Absence of gender field on Student record. Accepted.
+   - Admission number format defaulting to `YYYY/NNNN`. Accepted.
+   - Omission of student account authentication in Phase 1.2. Accepted.
+   - **Duplicate student detection**: Maintainer selected **Option B (in-place override)**. Rather than permanently refusing duplicate namesakes, the system warns administrators with `POSSIBLE_DUPLICATE` and provides an explicit `allowDuplicate: true` override in the UI and API. Overrides are recorded in the audit trail (`duplicateOverridden: true`, `existingAdmissionNo`) without leaking PII. Fully implemented and tested across create, update, restore, and CSV import.
 
 ---
 

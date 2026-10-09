@@ -25,6 +25,7 @@ const createBody = z.strictObject({
   lastName: textField,
   dateOfBirth: z.string({ error: "Give a date of birth." }).max(20),
   admissionNo: z.string().max(100).nullable().optional(),
+  allowDuplicate: z.boolean().optional(),
 });
 
 export const GET = withAuth(

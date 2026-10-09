@@ -1,5 +1,5 @@
 # 0010 — School type comes from the server, never from the browser or a school's administrator
-Status: proposed (built as a separate commit `bba8985`; awaiting the maintainer's confirmation) · Recorded: 2026-10-08
+Status: Accepted · Decided: by the maintainer · Recorded: 2026-10-08
 
 ## Context
 `Tenant.schoolType` decides whether a school's periods are terms, semesters or cohorts. Changing it later would rename every period and can strand existing ones. There is no platform-level superadmin yet.

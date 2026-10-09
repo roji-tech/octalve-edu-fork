@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
+import { CheckboxField } from "@/components/ui/CheckboxField";
 import { Dialog } from "@/components/ui/Dialog";
 import { SelectField } from "@/components/ui/SelectField";
 import { TextField } from "@/components/ui/TextField";
@@ -52,6 +53,13 @@ export function StudentFormDialog({
   const [dateOfBirth, setDateOfBirth] = useState(student?.dateOfBirth ?? "");
   const [admissionNo, setAdmissionNo] = useState(student?.admissionNo ?? "");
   const [campusId, setCampusId] = useState("");
+  const [allowDuplicate, setAllowDuplicate] = useState(false);
+  const [duplicateNotice, setDuplicateNotice] = useState<string | null>(null);
+
+  function resetDuplicate() {
+    if (duplicateNotice) setDuplicateNotice(null);
+    if (allowDuplicate) setAllowDuplicate(false);
+  }
 
   async function submit(): Promise<Outcome> {
     const errors: Record<string, string> = {};
@@ -59,23 +67,34 @@ export function StudentFormDialog({
     if (!lastName.trim()) errors.lastName = "Give the student's last name.";
     if (!dateOfBirth) errors.dateOfBirth = "Give the date of birth.";
     if (Object.keys(errors).length > 0) return { errors };
-    if (student) {
-      return sendJson(`${base(schoolCode)}/people/students/${student.id}`, "PATCH", {
-        firstName: firstName.trim(),
-        middleName: blankToNull(middleName),
-        lastName: lastName.trim(),
-        dateOfBirth,
-        ...(admissionNo.trim() && admissionNo.trim() !== student.admissionNo ? { admissionNo: admissionNo.trim() } : {}),
-      });
+
+    const url = student ? `${base(schoolCode)}/people/students/${student.id}` : `${base(schoolCode)}/people/students`;
+    const method = student ? "PATCH" : "POST";
+    const payload = student
+      ? {
+          firstName: firstName.trim(),
+          middleName: blankToNull(middleName),
+          lastName: lastName.trim(),
+          dateOfBirth,
+          ...(admissionNo.trim() && admissionNo.trim() !== student.admissionNo ? { admissionNo: admissionNo.trim() } : {}),
+          ...(allowDuplicate ? { allowDuplicate: true } : {}),
+        }
+      : {
+          campusId: campusId || null,
+          firstName: firstName.trim(),
+          middleName: blankToNull(middleName),
+          lastName: lastName.trim(),
+          dateOfBirth,
+          ...(admissionNo.trim() ? { admissionNo: admissionNo.trim() } : {}),
+          ...(allowDuplicate ? { allowDuplicate: true } : {}),
+        };
+
+    const reply = await sendJson(url, method, payload);
+    if (!reply.ok && reply.code === "POSSIBLE_DUPLICATE") {
+      setDuplicateNotice(reply.message ?? "A student with the same name and date of birth already exists.");
+      return { errors: {} };
     }
-    return sendJson(`${base(schoolCode)}/people/students`, "POST", {
-      campusId: campusId || null,
-      firstName: firstName.trim(),
-      middleName: blankToNull(middleName),
-      lastName: lastName.trim(),
-      dateOfBirth,
-      ...(admissionNo.trim() ? { admissionNo: admissionNo.trim() } : {}),
-    });
+    return reply;
   }
 
   return (
@@ -89,6 +108,7 @@ export function StudentFormDialog({
       fields={["firstName", "middleName", "lastName", "dateOfBirth", "admissionNo", "campusId"]}
       onSubmit={submit}
       onDone={onDone}
+      submitDisabled={Boolean(duplicateNotice && !allowDuplicate)}
     >
       {(errors, pending) => (
         <>
@@ -96,7 +116,10 @@ export function StudentFormDialog({
             <TextField
               label="First name"
               value={firstName}
-              onChange={(e) => setFirstName(e.target.value)}
+              onChange={(e) => {
+                setFirstName(e.target.value);
+                resetDuplicate();
+              }}
               error={errors.firstName}
               maxLength={80}
               autoComplete="off"
@@ -105,7 +128,10 @@ export function StudentFormDialog({
             <TextField
               label="Last name"
               value={lastName}
-              onChange={(e) => setLastName(e.target.value)}
+              onChange={(e) => {
+                setLastName(e.target.value);
+                resetDuplicate();
+              }}
               error={errors.lastName}
               maxLength={80}
               autoComplete="off"
@@ -125,7 +151,10 @@ export function StudentFormDialog({
             label="Date of birth"
             type="date"
             value={dateOfBirth}
-            onChange={(e) => setDateOfBirth(e.target.value)}
+            onChange={(e) => {
+              setDateOfBirth(e.target.value);
+              resetDuplicate();
+            }}
             error={errors.dateOfBirth}
             disabled={pending}
             min="1900-01-01"
@@ -150,6 +179,26 @@ export function StudentFormDialog({
               disabled={pending}
               options={[{ value: "", label: "Whole school" }, ...campuses.map((campus) => ({ value: campus.id, label: campus.name }))]}
             />
+          )}
+          {duplicateNotice && (
+            <div className="space-y-3 rounded-xl border border-warn-line bg-warn-bg/20 p-4">
+              <Alert variant="warning">{duplicateNotice}</Alert>
+              <CheckboxField
+                label={
+                  <span>
+                    <span className="font-semibold text-fg">
+                      {student ? "Update anyway as a distinct student" : "Register anyway as a distinct student"}
+                    </span>
+                    <span className="block text-xs text-fg-muted">
+                      Confirm this is a distinct student who genuinely shares the same name and date of birth (e.g. a namesake cousin).
+                    </span>
+                  </span>
+                }
+                checked={allowDuplicate}
+                onChange={(e) => setAllowDuplicate(e.target.checked)}
+                disabled={pending}
+              />
+            </div>
           )}
         </>
       )}

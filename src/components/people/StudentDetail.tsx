@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { ArrowLeftIcon, PlusIcon } from "@/components/ui/icons";
 import { sendJson, type Reply } from "@/components/auth/postJson";
 import { FOCUS_RING } from "@/components/shell/nav";
-import { ListState, LiveNotice, StatusPill, useDialog, type Notice } from "@/components/academics/parts";
+import { ConfirmDialog, ListState, LiveNotice, StatusPill, useDialog, type Notice } from "@/components/academics/parts";
 import { failureText, useApi } from "@/components/academics/useApi";
 import { AddGuardianDialog, EditLinkDialog, RemoveGuardianDialog } from "./GuardianDialogs";
 import { ArchiveStudentDialog, EnrolDialog, StudentFormDialog, WithdrawDialog, enrolmentTone } from "./StudentDialogs";
@@ -57,21 +57,26 @@ export function StudentDetail({
   const editingLink = useDialog<GuardianLinkView>();
   const removing = useDialog<GuardianLinkView>();
 
+  const [duplicateToRestore, setDuplicateToRestore] = useState<string | null>(null);
+
   const done = (close: () => void, text: string) => () => {
     flushSync(close);
     setNotice({ variant: "success", text });
     void reloadAll();
   };
 
-  async function restore() {
+  async function restore(allowDuplicate = false) {
     if (busy) return;
     setBusy(true);
     setNotice(null);
-    const reply = await sendJson(`${root}/restore`, "POST");
+    const reply = await sendJson(`${root}/restore`, "POST", allowDuplicate ? { allowDuplicate: true } : undefined);
     setBusy(false);
     if (reply.ok) {
+      setDuplicateToRestore(null);
       setNotice({ variant: "success", text: "Restored." });
       void reloadAll();
+    } else if (reply.code === "POSSIBLE_DUPLICATE") {
+      setDuplicateToRestore(reply.message ?? "A student with the same name and date of birth already exists.");
     } else {
       setNotice({ variant: "error", text: failureText(reply.status, reply.message) });
     }
@@ -336,6 +341,22 @@ export function StudentDetail({
                 link={removing.value}
                 onDone={done(removing.hide, "Guardian removed.")}
               />
+            )}
+            {duplicateToRestore && (
+              <ConfirmDialog
+                open={true}
+                onClose={() => setDuplicateToRestore(null)}
+                title={`Restore ${name}?`}
+                confirmLabel="Restore anyway"
+                pendingLabel="Restoring…"
+                onConfirm={() => sendJson(`${root}/restore`, "POST", { allowDuplicate: true })}
+                onDone={done(() => setDuplicateToRestore(null), "Restored.")}
+              >
+                <p>{duplicateToRestore}</p>
+                <p className="mt-2 text-sm text-fg-muted">
+                  Confirm that this is a distinct student who genuinely shares the same name and date of birth.
+                </p>
+              </ConfirmDialog>
             )}
           </>
         )}
