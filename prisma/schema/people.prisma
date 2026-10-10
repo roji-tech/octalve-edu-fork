@@ -101,6 +101,7 @@ model StudentRecord {
   guardians         GuardianLink[]
   attendanceRecords AttendanceRecord[]
   results           Result[]
+  invoices          Invoice[]
 
   @@unique([tenantId, id])
   @@index([tenantId])

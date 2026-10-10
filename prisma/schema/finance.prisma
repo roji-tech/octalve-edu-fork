@@ -1,0 +1,136 @@
+// --- Finance & Billing (Phase 1.5: Fee Structures, Invoices, Payments, Paystack Gateway & Webhooks) ---
+//
+// Tenant-level RLS is enforced on all tenant-scoped tables.
+// Amounts are Decimal in Naira (db.Decimal(12, 2)), kobo is used only inside the gateway client.
+// Idempotent invoice generation per (tenantId, studentId, periodId).
+// Atomic payment fulfillment uses updateMany on status = PENDING.
+// Server-side verification (verifiedServerSide = true) is required before invoice status flips to PAID.
+
+enum InvoiceStatus {
+  UNPAID
+  PARTIALLY_PAID
+  PAID
+  WAIVED
+}
+
+enum PaymentProvider {
+  PAYSTACK
+  FLUTTERWAVE
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+}
+
+/// Fee structure item per academic period, optionally scoped to a class group (null = applies to all classes).
+model FeeStructure {
+  id           String   @id @default(cuid())
+  tenantId     String
+  periodId     String
+  classGroupId String?
+  name         String   // "Tuition", "Sports Levy", "PTA", etc.
+  amount       Decimal  @db.Decimal(12, 2)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @default(now()) @updatedAt
+
+  tenant     Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  period     AcademicPeriod @relation(fields: [tenantId, periodId], references: [tenantId, id], onDelete: Cascade)
+  classGroup ClassGroup?    @relation(fields: [tenantId, classGroupId], references: [tenantId, id], onDelete: NoAction)
+
+  @@unique([tenantId, id])
+  @@index([tenantId, periodId])
+  @@index([tenantId, classGroupId])
+}
+
+/// Student term invoice with line-items snapshot and live payment state.
+model Invoice {
+  id          String        @id @default(cuid())
+  tenantId    String
+  studentId   String
+  periodId    String
+  invoiceNo   String        // e.g. INV-2026-0001
+  totalAmount Decimal       @db.Decimal(12, 2)
+  amountPaid  Decimal       @default(0) @db.Decimal(12, 2)
+  status      InvoiceStatus @default(UNPAID)
+  dueDate     DateTime?     @db.Date
+  lineItems   Json?         // Snapshot of fee structures [{ name, amount, feeStructureId }]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @default(now()) @updatedAt
+
+  tenant    Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  student   StudentRecord     @relation(fields: [tenantId, studentId], references: [tenantId, id], onDelete: Cascade)
+  period    AcademicPeriod    @relation(fields: [tenantId, periodId], references: [tenantId, id], onDelete: Cascade)
+  payments  Payment[]
+  discounts InvoiceDiscount[]
+
+  @@unique([tenantId, studentId, periodId])
+  @@unique([tenantId, invoiceNo])
+  @@unique([tenantId, id])
+  @@index([tenantId, status])
+  @@index([tenantId, periodId])
+  @@index([tenantId, studentId])
+}
+
+/// Payment transaction record (online gateway or recorded manual payment).
+model Payment {
+  id                 String          @id @default(cuid())
+  tenantId           String
+  invoiceId          String
+  amount             Decimal         @db.Decimal(12, 2)
+  provider           PaymentProvider @default(PAYSTACK)
+  providerRef        String          // Idempotency key / transaction reference
+  status             PaymentStatus   @default(PENDING)
+  verifiedServerSide Boolean         @default(false)
+  channel            String?         // "card", "bank_transfer", "cash", "pos", "mock"
+  paidAt             DateTime?
+  receiptNo          String?         // RCP-2026-0001
+  metadata           Json?
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @default(now()) @updatedAt
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  invoice Invoice @relation(fields: [tenantId, invoiceId], references: [tenantId, id], onDelete: Cascade)
+
+  @@unique([provider, providerRef])
+  @@unique([tenantId, id])
+  @@index([tenantId, invoiceId])
+  @@index([tenantId, status])
+  @@index([tenantId, providerRef])
+}
+
+/// Audited fee discounts, waivers or scholarships applied to an invoice.
+model InvoiceDiscount {
+  id               String               @id @default(cuid())
+  tenantId         String
+  invoiceId        String
+  amount           Decimal              @db.Decimal(12, 2)
+  reason           String
+  mode             DiscountWorkflowMode @default(MANUAL_OVERRIDE)
+  appliedByUserId  String
+  approvedByUserId String?
+  createdAt        DateTime             @default(now())
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  invoice Invoice @relation(fields: [tenantId, invoiceId], references: [tenantId, id], onDelete: Cascade)
+
+  @@unique([tenantId, id])
+  @@index([tenantId, invoiceId])
+}
+
+/// Webhook audit ledger recording incoming gateway deliveries and signature verifications.
+model PaymentWebhookEvent {
+  id             String          @id @default(cuid())
+  provider       PaymentProvider @default(PAYSTACK)
+  eventId        String          // Provider event/delivery ID
+  eventType      String?         // e.g. "charge.success"
+  signatureValid Boolean
+  processedAt    DateTime?
+  rawPayloadHash String          // SHA-256 hash of exact raw body, NEVER raw payload
+  error          String?
+  receivedAt     DateTime        @default(now())
+
+  @@unique([provider, eventId])
+  @@index([provider, receivedAt])
+}

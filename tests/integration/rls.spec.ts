@@ -1178,6 +1178,7 @@ test.describe("catalog guard", () => {
     "Tenant", // resolved by code before any tenant is known
     "SystemSettings", // the one global singleton row
     "_prisma_migrations", // Prisma's own ledger (the runtime role has no access)
+    "PaymentWebhookEvent", // webhook deliveries logged before tenant lookup
   ];
 
   test("every table with a tenantId column has RLS ENABLED and FORCED and at least one policy", async () => {
@@ -1199,11 +1200,15 @@ test.describe("catalog guard", () => {
       "Campus",
       "ClassArm",
       "ClassGroup",
+      "FeeStructure",
       "GradeBand",
       "GradeScale",
       "GuardianLink",
       "GuardianRecord",
       "Invitation",
+      "Invoice",
+      "InvoiceDiscount",
+      "Payment",
       "Result",
       "ResultAudit",
       "SchoolSettings",

@@ -44,6 +44,10 @@ model Tenant {
   attendanceRecords AttendanceRecord[]
   results           Result[]
   resultAudits      ResultAudit[]
+  feeStructures     FeeStructure[]
+  invoices          Invoice[]
+  payments          Payment[]
+  invoiceDiscounts  InvoiceDiscount[]
 }
 
 /// A branch/campus under one tenant (PRD §7) — distinct from multi-tenancy:
