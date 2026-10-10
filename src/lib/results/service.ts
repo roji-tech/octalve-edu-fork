@@ -308,8 +308,8 @@ export async function getStudentReportCard(
 
   const isPublicViewer = viewerRole === "STUDENT" || viewerRole === "PARENT";
 
-  const [student, period, results] = await Promise.all([
-    tx.studentRecord.findFirstOrThrow({
+  const [student, period] = await Promise.all([
+    tx.studentRecord.findFirst({
       where: { tenantId, id: studentId },
       include: {
         campus: true,
@@ -319,20 +319,25 @@ export async function getStudentReportCard(
         },
       },
     }),
-    tx.academicPeriod.findFirstOrThrow({
+    tx.academicPeriod.findFirst({
       where: { tenantId, id: periodId },
       include: { session: true },
     }),
-    tx.result.findMany({
-      where: {
-        tenantId,
-        studentId,
-        periodId,
-        status: isPublicViewer ? ResultStatus.PUBLISHED : undefined,
-      },
-      include: { subject: true },
-    }),
   ]);
+
+  if (!student || !period) {
+    return { ok: false, failure: "NOT_FOUND" as const };
+  }
+
+  const results = await tx.result.findMany({
+    where: {
+      tenantId,
+      studentId,
+      periodId,
+      status: isPublicViewer ? ResultStatus.PUBLISHED : undefined,
+    },
+    include: { subject: true },
+  });
 
   const activeEnrollment = student.enrollments[0];
   const classArmId = activeEnrollment?.classArmId;

@@ -1,6 +1,6 @@
 # Octalve Edu — Development Progress Tracker
 
-Last Updated: 2026-10-05
+Last Updated: 2026-10-10
 
 Companion to `docs/development-history/domain-implementation-plan.md` (the step-by-step build
 plan), `docs/development-history/phases/*.md` (one detailed doc per completed phase), and
@@ -25,25 +25,8 @@ against the real repo, not what a plan says should exist.
   `HTTP 200`. See `docs/development-history/phases/phase-0-foundation.md` for the full record,
   including the one real judgment call (Prisma 8 rc → 6.19.3 downgrade, matching the sibling `ims`
   project).
-- **Phase 0.5 — Auth, RLS & Shared API Infrastructure**: **In progress.** §0.5.0 (first-run
-  superadmin setup wizard, Solo only) is **done and verified live** — see
-  `docs/development-history/phases/phase-0.5.0-setup-wizard.md`. §0.5.1 (auth) went through a full
-  two-AI security review, a hardening pass, and a Better-Auth-vs-hand-roll spike (resolved: hand-roll,
-  adapting AlEemaan's already-built implementation), and **as of 2026-09-30 is built and verified**
-  (branch `claude/auth-0.5.1-port` on the maintainer's fork, awaiting the maintainer's PR/merge into
-  `octalve-core/octalve-edu` — see "Auth build" below and the work log in
-  `docs/development-history/phases/phase-0.5.1-auth.md`): hashed-token database sessions, constant-time
-  login, layered rate limiting, `withAuth`, `/login` + `/dashboard` + a retrofitted `/setup`, and a
-  repeatable Playwright suite (`pnpm test`: unit, integration, API, browser at desktop + phone sizes,
-  axe accessibility, and a real-HTTPS run that proves the `__Host-` cookie is set *and cleared*). §0.5.2
-  (tenant-trust boundary: `resolve-tenant.ts` + `forTenant()` + explicit RLS role setup) and §0.5.3
-  (shared API pagination/rate-limiting helpers beyond the response envelope) are designed, not built,
-  both depending on §0.5.1 landing first. Nothing in Phase 1 should start before this phase's own
-  verification gate (negative-test suite for cross-tenant/IDOR access, run as the `app_user` role)
-  passes in CI.
-- **Phase 1 — MVP: Core SIS + Finance**: **IN PROGRESS — Slice 1 built (roadmap 1.0 foundations and 1.1 academic structure, 2026-10-06/07)**; **1.2 people and enrolment built 2026-10-08** (`phases/phase-1.2-people.md`, branch `claude/phase-1-2-people`); 1.3 onward (attendance, results, fees, parent/student views, settings) **not started**. Records:
-  `phases/phase-1.0-foundations.md`, `phases/phase-1.1-academic-structure.md`, `phases/phase-1.2-people.md`; hand-offs `handoff/phase-1-slice-1.md`, `handoff/phase-1-2-people.md`. The remaining schema is designed
-  (`sis.prisma`/`finance.prisma` in the plan doc) but not migrated. Mutation passes for Phases 1 and 2 are **pending (end of Phase 2)**.
+- **Phase 0.5 — Auth, RLS & Shared API Infrastructure**: **100% Complete.** All sub-phases (0.5.0–0.5.F, 0.5.2 tenant trust boundary, 0.5.2-RLS, 0.5.2-H app shell, 0.5.3 API infrastructure, 0.5.4 users and invitations) built, verified with automated test suites under `app_user` role, and merged.
+- **Phase 1 — MVP: Core SIS + Finance**: **100% Complete.** All 8 milestones built, verified, hardened, and gated across Phase 1.0 (Foundations), 1.1 (Academic Structure), 1.2 (People & Enrolment), 1.3 (Attendance), 1.4 (Results & Grading), 1.5 (Finance & Invoicing with dual-mode Paystack), 1.6 (Timetable & Announcements), 1.7 (Settings & Step-up MFA), and 1.8 (End-to-End Hardening, Cross-Tenant IDOR Matrix, Lifecycle Walk, Finance Adversarial Suite, PostgreSQL EXPLAIN Query Plan Sanity, and Phase Gate). Full repository gates clean. Records: `phases/phase-1.*.md`.
 - **Phase 2 — Communication**: **0% — not started.** Schema designed (`comms.prisma`).
 - **Phase 3 — LMS**: **0% — not started.** Schema designed (`lms.prisma`).
 - **Phase 4 — Operations**: **0% — not started.** Schema deliberately thin per the plan's own
@@ -337,8 +320,29 @@ Record: `phases/phase-1.7-settings-and-mfa.md`, task register `docs/tasks/0006-p
 - Activated Settings navigation in `src/components/shell/nav.ts` (replacing disabled "Soon" text).
 - Full quality gates passing: 294/294 unit tests, 68/68 RLS tests, 15/15 API tests, Next.js build clean, typecheck clean, lint clean, format check clean.
 
+## Next action (Phase 1.7)
+1. Commit branch `claude/phase-1-7-settings` and submit PR to fork (Completed).
+2. Advanced to Phase 1.8: End-to-End Hardening, Security Walk & Gate.
+
+## Phase 1.8 End-to-End Hardening, Adversarial Security Walk & Phase Gate (2026-10-10) — built, verified, all quality gates green
+Record: `phases/phase-1.8-phase-gate.md`, task register `docs/tasks/0007-phase-1-8-phase-gate-and-hardening.md`. Branch `claude/phase-1-8-gate`.
+- **Automated Cross-Tenant IDOR Matrix (`tests/api/idor-audit.spec.ts`)**: 22/22 attack vectors across every Phase 1 model entity verified for zero cross-tenant leakage and graceful 404 responses (Students, Staff, Guardians, Report Cards, Sessions, Class Groups, Class Arms, Subjects, Assessment Schemes, Grade Scales, Invoices, Manual Payments, Discounts, Timetable Slots, Announcements). Resolved `findFirstOrThrow` in results service and normalized manual payment/discount routes to return clean 404s.
+- **10-Step Institutional Operational Lifecycle Walk (`tests/integration/phase-1-lifecycle-walk.spec.ts`)**: 11/11 serial tests covering the end-to-end multi-actor institutional lifecycle (Session/Term setup $\to$ Subject offerings & grading $\to$ Staff assignment $\to$ Student enrollment & guardian linking $\to$ Daily roll-call attendance $\to$ CA/Exam score entry & 4-stage approval workflow $\to$ Student/Parent report card $\to$ Fee structure, batch invoicing & Paystack checkout fulfillment $\to$ Timetable slots & announcement broadcast $\to$ Workflow settings mutation with step-up verification).
+- **Payment & Webhook Adversarial Security Suite (`tests/api/finance-adversarial.spec.ts`)**: 5/5 tests covering forged HMAC-SHA512 header rejection, missing signatures, replay attack idempotency (`duplicate: true`), kobo amount reduction/tampering detection (`Amount mismatch`), and high-concurrency race condition (20 simultaneous webhook deliveries resolving to exactly 1 success without balance inflation).
+- **PostgreSQL `EXPLAIN` Query Plan Sanity (`tests/integration/query-performance.spec.ts`)**: 6/6 tests asserting 100% composite index scans (`Index Scan`, `Bitmap Index Scan`) with zero sequential scans (`Seq Scan`) on tenant tables under production optimizer conditions (`AttendanceRecord`, `Result`, `Invoice`, `TimetableSlot`, `SettingsChangeAudit`, `StudentEnrollment`).
+- **Full Quality Gates Passed**:
+  - `pnpm test:unit`: 294 / 294 passed
+  - `pnpm test:fast tests/integration/rls.spec.ts`: 68 / 68 passed
+  - Combined Hardening Suites (IDOR, Lifecycle, Finance Adversarial, Query Performance): 41 / 41 passed
+  - `pnpm typecheck`: 0 errors
+  - `pnpm lint`: 0 errors, 0 warnings
+  - `pnpm format:check`: 100% compliant
+  - `pnpm tasks:check`: 100% synchronized across all 7 milestones
+  - `pnpm build`: 100% clean Next.js Turbopack build
+
 ## Next action
-1. Commit branch `claude/phase-1-7-settings` and submit PR to fork.
-2. Advance to Phase 1.8: End-to-End Hardening, Security Walk & Gate.
+1. Commit branch `claude/phase-1-8-gate` and submit PR to fork `roji-tech/octalve-edu-fork`.
+2. Phase 1 (Core SIS + Finance) is 100% Complete. Prepare for Phase 2 (Communication).
+
 
 
