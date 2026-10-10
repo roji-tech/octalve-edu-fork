@@ -28,7 +28,7 @@ export function navFor(school: ShellSchool | null): NavItem[] {
       { label: "Academics", href: `/schools/${school.code}/academics`, icon: CalendarIcon },
       { label: "People", href: `/schools/${school.code}/people`, icon: GraduationCapIcon },
       { label: "Users", href: `/schools/${school.code}/users`, icon: UsersIcon },
-      { label: "Settings", href: null, icon: SlidersIcon },
+      { label: "Settings", href: `/schools/${school.code}/settings`, icon: SlidersIcon },
     );
   } else if (school.role === "TEACHING_STAFF" || school.role === "NON_TEACHING_STAFF") {
     // Staff may look at the school year and at the school's people (read-only; plan 1.2, decisions P2 and P9) — they change none of it.

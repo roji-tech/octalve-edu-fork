@@ -50,6 +50,7 @@ model Tenant {
   invoiceDiscounts  InvoiceDiscount[]
   announcements     Announcement[]
   timetableSlots    TimetableSlot[]
+  settingsChangeAudits SettingsChangeAudit[]
 }
 
 /// A branch/campus under one tenant (PRD §7) — distinct from multi-tenancy:

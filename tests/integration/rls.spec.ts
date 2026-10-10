@@ -152,8 +152,9 @@ test.describe("who is running", () => {
     expect(byTable["_prisma_migrations"]).toBeUndefined();
     expect(byTable["AuditLog"]).toEqual(["INSERT", "SELECT"]);
     expect(byTable["ResultAudit"]).toEqual(["INSERT", "SELECT"]);
+    expect(byTable["SettingsChangeAudit"]).toEqual(["INSERT", "SELECT"]);
     for (const [table, verbs] of Object.entries(byTable)) {
-      if (table === "AuditLog" || table === "ResultAudit") continue;
+      if (table === "AuditLog" || table === "ResultAudit" || table === "SettingsChangeAudit") continue;
       expect(verbs, table).toEqual(["DELETE", "INSERT", "SELECT", "UPDATE"]);
     }
     expect(Object.keys(byTable).length).toBeGreaterThan(10); // and every table is covered, not an empty list
@@ -646,6 +647,36 @@ test.describe("SchoolSettings: one row per school, tenant-scoped (Phase 1.0)", (
   test("the user and invitation contexts read NO settings (a person with no school in view sees nothing of any school's)", async () => {
     expect(await forUser(userBoth.id).transaction((tx) => tx.schoolSettings.findMany())).toEqual([]);
     expect(await forInvitation(hashOf(a.code)).transaction((tx) => tx.schoolSettings.findMany())).toEqual([]);
+  });
+});
+
+test.describe("SettingsChangeAudit: tenant-scoped, append-only (Phase 1.7)", () => {
+  let auditA: { id: string };
+  test.beforeAll(async () => {
+    auditA = await db.settingsChangeAudit.create({
+      data: {
+        tenantId: a.id,
+        actorUserId: userA.id,
+        field: "resultApprovalRequired",
+        fromValue: "true",
+        toValue: "false",
+        stepUpVerifiedAt: new Date(),
+      },
+    });
+  });
+
+  test("reads ONLY the active tenant's settings audits; cross-tenant reads return nothing", async () => {
+    expect(await prisma.settingsChangeAudit.findMany()).toEqual([]); // runtime role with no context
+    const mine = await asTenant<{ id: string }[]>(a, (tx) => tx.settingsChangeAudit.findMany());
+    expect(mine.map((r) => r.id)).toContain(auditA.id);
+    expect(await asTenant(b, (tx) => tx.settingsChangeAudit.findMany({ where: { id: auditA.id } }))).toEqual([]);
+  });
+
+  test("cannot UPDATE or DELETE an audit record through the runtime role (append-only)", async () => {
+    await expect(
+      asTenant(a, (tx) => tx.settingsChangeAudit.updateMany({ where: { id: auditA.id }, data: { toValue: "true" } })),
+    ).rejects.toThrow(violation);
+    await expect(asTenant(a, (tx) => tx.settingsChangeAudit.deleteMany({ where: { id: auditA.id } }))).rejects.toThrow(violation);
   });
 });
 
@@ -1213,6 +1244,7 @@ test.describe("catalog guard", () => {
       "Result",
       "ResultAudit",
       "SchoolSettings",
+      "SettingsChangeAudit",
       "StaffRecord",
       "StaffSubjectAssignment",
       "StudentEnrollment",

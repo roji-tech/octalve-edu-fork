@@ -14,14 +14,15 @@ test.describe("navFor", () => {
     expect(navFor(null)).toMatchObject([{ label: "Your schools", href: "/dashboard" }]);
   });
 
-  test("an ADMIN of a school: Overview, Academics, People and Users (pages) and Settings (not built yet → no link)", () => {
+  test("an ADMIN of a school: Overview, Academics, People, Users, and Settings (now active)", () => {
     const items = navFor(admin);
     expect(items.map((i) => i.label)).toEqual(["Overview", "Academics", "People", "Users", "Settings"]);
     expect(items[0].href).toBe("/schools/riverside");
     expect(items[1].href).toBe("/schools/riverside/academics");
     expect(items[2].href).toBe("/schools/riverside/people");
     expect(items[3].href).toBe("/schools/riverside/users");
-    expect(items.filter((i) => i.href === null).map((i) => i.label)).toEqual(["Settings"]); // "Soon", never a dead link
+    expect(items[4].href).toBe("/schools/riverside/settings");
+    expect(items.filter((i) => i.href === null)).toEqual([]);
   });
 
   test("staff see Overview, Academics and People (to look at, never to change); students and parents see Overview only — decided by the role IN THAT SCHOOL", () => {
