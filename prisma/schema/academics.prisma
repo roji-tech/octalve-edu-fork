@@ -113,11 +113,13 @@ model ClassArm {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @default(now()) @updatedAt
 
-  tenant           Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  classGroup       ClassGroup               @relation(fields: [tenantId, classGroupId], references: [tenantId, id], onDelete: NoAction)
+  tenant            Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  classGroup        ClassGroup               @relation(fields: [tenantId, classGroupId], references: [tenantId, id], onDelete: NoAction)
   enrollments       StudentEnrollment[]
-  staffAssignments StaffSubjectAssignment[]
+  staffAssignments  StaffSubjectAssignment[]
   attendanceRecords AttendanceRecord[]
+  announcements     Announcement[]
+  timetableSlots    TimetableSlot[]
 
   @@unique([tenantId, id])
   @@index([tenantId, classGroupId])
@@ -137,6 +139,7 @@ model Subject {
   offerings        SubjectOffering[]
   staffAssignments StaffSubjectAssignment[]
   results          Result[]
+  timetableSlots   TimetableSlot[]
 
   @@unique([tenantId, id])
   @@index([tenantId])

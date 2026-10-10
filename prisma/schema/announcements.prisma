@@ -1,0 +1,40 @@
+// --- Announcements & Broadcasts (Phase 1.6) ---
+//
+// Tenant-level RLS is enforced on Announcement.
+// Multi-audience targeting by Role[] (empty = everyone), campusId (null = all campuses),
+// and classArmId (null = all classes).
+// Publication windows with publishedAt and optional expiresAt.
+
+enum AnnouncementStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+/// Broadcast announcement targeted to specific roles, campuses, or class arms.
+model Announcement {
+  id           String             @id @default(cuid())
+  tenantId     String
+  campusId     String? // null = all campuses
+  classArmId   String? // null = all classes
+  title        String
+  body         String             @db.Text
+  targetRoles  Role[]             @default([]) // empty = all roles (everyone)
+  status       AnnouncementStatus @default(PUBLISHED)
+  isPinned     Boolean            @default(false)
+  authorUserId String // author's User.id
+  publishedAt  DateTime           @default(now())
+  expiresAt    DateTime?
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @default(now()) @updatedAt
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  campus   Campus?   @relation(fields: [tenantId, campusId], references: [tenantId, id], onDelete: NoAction)
+  classArm ClassArm? @relation(fields: [tenantId, classArmId], references: [tenantId, id], onDelete: NoAction)
+
+  @@unique([tenantId, id])
+  @@index([tenantId, status])
+  @@index([tenantId, campusId])
+  @@index([tenantId, classArmId])
+  @@index([tenantId, publishedAt])
+}

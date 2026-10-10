@@ -306,7 +306,30 @@ plan docs (§0.5.1.6 there, the shared-names table here).
 
 Then, in order: ~~the Phase 0.5 addenda~~ (0.5.B–0.5.F, all built), ~~the tenant-trust-boundary resolver and `forTenant()`~~ and ~~its explicit RLS role setup~~ (§0.5.2 — built, verified as `app_user`),
 ~~the shared API helpers and the Redis-backed rate limiter~~ (§0.5.3 — built), ~~this repo's app shell (§0.5.2-H)~~ (built, verified), ~~the Users pages with invitations (§0.5.4)~~ (built, verified, documented — `phases/phase-0.5.4-users-invitations.md`; the survivors' mutation re-check is deferred to the end of Phase 2);
-**now: Phase 1 slice 1 — 1.0 foundations (✅ built 2026-10-06: `phases/phase-1.0-foundations.md`) and 1.1 academic structure (✅ built 2026-10-07: `phases/phase-1.1-academic-structure.md`; slice hand-off `handoff/phase-1-slice-1.md`)** (design committed on `claude/phase-1-0-1-1`: plan "Build design — Phase 1.0 and 1.1"; every new table with its RLS policy in the same migration). **Maintainer's decision (2026-10-06): mutation
-passes for Phases 1 and 2 run together at the end of Phase 2, not per sub-phase.** Then the AlEemaan port of the Users pages and invitations.
+**now: Phase 1 — Core Academics, People, Attendance, Results, Finance & Timetable**
 
-**Hand-over (this session):** development was handed to a **local Claude Code session** (see [`handoff/TAKEOVER.md`](handoff/TAKEOVER.md)); its status and evidence are in `handoff/takeover-report.md`. The 0.5.4 mutation set (122 mutations) and the serial and parallel runners are in `handoff/tools/`.
+## Phase 1.2 People & Enrollment (2026-10-08) — built, verified and merged
+Record: `phases/phase-1.2-people.md`, task register `docs/tasks/0001-phase-1-2-people-and-enrolment.md`. Staff records, student records, guardian links, academic session enrollment, CSV bulk student import with preview/commit transaction. Full RLS policies and catalog tests green.
+
+## Phase 1.3 Attendance & Daily Operations (2026-10-09) — built, verified and merged
+Record: `phases/phase-1.3-attendance.md`, task register `docs/tasks/0002-phase-1-3-attendance.md`. Branch `claude/phase-1-3-attendance`. Daily class arm roll-call roster, idempotent attendance marking, 7-day edit grace period for teachers, future-date prevention, attendance percentage computation, mobile-optimized 44px tap targets. Full unit, API, integration and E2E tests green.
+
+## Phase 1.4 Results, Assessment & Report Cards (2026-10-09) — built, verified and merged
+Record: `phases/phase-1.4-results-and-grading.md`, task register `docs/tasks/0003-phase-1-4-results-and-publishing.md`. Append-only score audit logs (`ResultAudit`), continuous grade band computation (0-100 scales), GPA calculation, assessment scheme component entry, locked-term publication workflows, student report card generator. Full quality gates green.
+
+## Phase 1.5 Finance, Invoicing & Dual-Mode Paystack Integration (2026-10-10) — built, verified and merged (PR #14)
+Record: `phases/phase-1.5-finance-and-billing.md`, task register `docs/tasks/0004-phase-1-5-finance-and-billing.md`. Term fee structures by class group, automated batch invoice generation, partial payments, manual receipt recording, waiver support, dual-mode Paystack checkout (`PAYSTACK_MOCK_MODE=true` for instant interactive simulation / live HMAC-verified webhooks with replay protection via `PaymentWebhookEvent`), and parent/admin invoices dashboard. PR #14 merged into `fork/claude/phase-1-3-attendance`.
+
+## Phase 1.6 Announcements & Timetable Scheduling (2026-10-10) — built, verified, all quality gates green
+Record: `phases/phase-1.6-announcements-and-timetable.md`, task register `docs/tasks/0005-phase-1-6-announcements-and-timetable.md`. Branch `claude/phase-1-6-timetable`.
+- Multi-audience broadcasts (`Announcement`) targeting `Role[]`, `campusId`, `classArmId` with active publish/expiry windows.
+- Recurring weekly `TimetableSlot` scheduling per `classArmId`, `subjectId`, `staffRecordId`, `dayOfWeek` (1–7), `startTime`, `endTime`, `room`.
+- Pure clash detection engine (`rules.ts`) preventing teacher double-booking, class arm schedule overlap, and room conflicts.
+- Interactive TwoNode visual canvas architecture with week grid, real-time conflict badges, and mobile-responsive cards.
+- Multi-tenant PostgreSQL RLS (`app_user`, `forTenant()`, `app_tenant_id()`) verified across all tables.
+- Full quality gates passing: 287/287 unit tests, 66/66 RLS tests, 20/20 API tests, clean build/typecheck/lint/format.
+
+## Next action
+1. Commit branch `claude/phase-1-6-timetable` and submit PR to fork.
+2. Advance to Phase 1.7: Settings UI, Step-up MFA & Audit Logging.
+

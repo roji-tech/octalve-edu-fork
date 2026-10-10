@@ -2716,3 +2716,52 @@ never actually decided" trap `TheNiche`'s own plan names as the thing to guard a
    - Full roll call for a class of 30+ students completable in under 30 seconds on a mobile viewport.
    - Live summary stats (percentage, count of present/absent/late).
 
+---
+
+#### Build design — Phase 1.4 (Results, Grading & Publishing Workflow) (2026-10-09)
+
+**Scope.** Record assessments by component, dynamic grade band resolution, GPA calculation, locked-term publication workflows, append-only score audit logs (`ResultAudit`), and student report card generator.
+
+##### Reconciliations & Invariants
+1. **Append-Only Score Ledger:** Every grade modification writes to `ResultAudit` with previous score, new score, and author ID. `app_user` has `REVOKE UPDATE, DELETE, TRUNCATE` on `ResultAudit`.
+2. **Lock-on-Publish:** Once an academic period's results are marked published by an `ADMIN`, scores cannot be edited by teachers without an administrative unlock.
+3. **Continuous Band Math:** Grade letters and remarks resolve from contiguous, non-overlapping `GradeBand` rows (0.00 to 100.00).
+4. **Tenant Isolation:** Enforced with `app_user` Row-Level Security in PostgreSQL.
+
+---
+
+#### Build design — Phase 1.5 (Finance, Invoicing & Dual-Mode Paystack Integration) (2026-10-10)
+
+**Scope.** Term fee structures per class group, automated batch invoice generation, partial payments, manual receipt recording, waiver support, dual-mode Paystack checkout (`PAYSTACK_MOCK_MODE=true` for instant interactive testing, live HMAC-verified webhooks with replay protection via `PaymentWebhookEvent`), and parent/admin invoices dashboard.
+
+##### Reconciliations & Invariants
+1. **Dual-Mode Paystack Gateway:** Safe local / test development using zero-credential interactive mock dialogs, alongside hardened production HMAC SHA-512 webhook signature verification.
+2. **Decimal Precision:** All fee structures, item amounts, discounts, and payments use `Decimal(12, 2)` to eliminate floating-point drift.
+3. **Automated Status Reconciliation:** Invoice status dynamically calculates (`UNPAID` → `PARTIALLY_PAID` → `PAID` / `WAIVED`) based on sum of verified payments.
+4. **Row-Level Security:** `Invoice`, `FeeStructure`, `Payment`, and `InvoiceDiscount` are tenant-isolated with forced PostgreSQL RLS policies.
+
+---
+
+#### Build design — Phase 1.6 (Announcements & Timetable Scheduling) (2026-10-10)
+
+**Scope.** Multi-audience broadcast notices (`Announcement`) targeted by `Role[]`, `campusId`, `classArmId` with active publish/expiry windows; recurring weekly timetable slot scheduling (`TimetableSlot`) per class arm, subject, teacher, day of week (1–7), and room; 3D pure conflict detection engine (teacher double-booking, class arm schedule overlap, room clash); interactive TwoNode visual canvas with week grid, conflict badges, and mobile-responsive cards.
+
+##### Reconciliations & Invariants
+1. **Multi-Audience Broadcast Model:**
+   - `targetRoles = []` signifies a school-wide broadcast visible to all roles (`ADMIN`, `TEACHING_STAFF`, `NON_TEACHING_STAFF`, `STUDENT`, `PARENT`).
+   - `campusId = null` applies to all campuses; specific `campusId` restricts visibility.
+   - `classArmId = null` applies to all classes; specific `classArmId` restricts visibility.
+   - Publication windows respect `publishedAt <= now` and `expiresAt > now`.
+2. **Pure Clash Detection Engine:**
+   - Teacher double-booking: matching `staffRecordId` during overlapping interval on same day of week.
+   - Class arm overlap: matching `classArmId` during overlapping interval on same day of week.
+   - Room clash: matching room (case-insensitive) during overlapping interval on same day of week.
+   - Atomic batch saves reject internal collisions and external database clashes with HTTP 409 `TIMETABLE_CLASH`.
+3. **Interactive TwoNode Canvas Architecture:**
+   - Desktop/tablet week grid (Mon–Fri/Sat) with subject cards, teacher/arm badges, and live clash warning banners.
+   - Mobile card view grouping lessons by weekday with responsive tap targets.
+   - Interactive creation/edit modal with client-side live clash detection preview.
+4. **Row-Level Security:**
+   - `Announcement` and `TimetableSlot` enforce `ENABLE` and `FORCE` RLS with `app_tenant_id()` policies for runtime role `app_user`.
+
+

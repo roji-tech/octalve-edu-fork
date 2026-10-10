@@ -1193,6 +1193,7 @@ test.describe("catalog guard", () => {
       "AcademicPeriod",
       "AcademicSession",
       "AdmissionCounter",
+      "Announcement",
       "AssessmentComponent",
       "AssessmentScheme",
       "AttendanceRecord",
@@ -1219,6 +1220,7 @@ test.describe("catalog guard", () => {
       "Subject",
       "SubjectOffering",
       "TenantMembership",
+      "TimetableSlot",
     ]); // update this list WITH the migration
     for (const row of rows) {
       expect(row, row.relname).toMatchObject({ enabled: true, forced: true });

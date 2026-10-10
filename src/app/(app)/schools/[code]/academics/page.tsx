@@ -7,6 +7,7 @@ import { ClassesPanel } from "@/components/academics/ClassesPanel";
 import { GradingPanel } from "@/components/academics/GradingPanel";
 import { SectionNav } from "@/components/academics/SectionNav";
 import { SessionsPanel } from "@/components/academics/SessionsPanel";
+import { TimetablePanel } from "@/components/academics/TimetablePanel";
 import { isSection } from "@/components/academics/model";
 import { requireTenantPage } from "@/lib/tenant/page-tenant";
 
@@ -30,7 +31,7 @@ export default async function AcademicsPage({
   if (tenant.role !== "ADMIN" && tenant.role !== "TEACHING_STAFF" && tenant.role !== "NON_TEACHING_STAFF") forbidden();
   const readOnly = tenant.role !== "ADMIN";
 
-  const section = isSection(asked) ? asked : "sessions";
+  const section = isSection(asked) ? asked : "timetable";
   const campuses = await tenant.run((tx) =>
     tx.campus.findMany({ where: { tenantId: tenant.tenantId }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
   );
@@ -41,12 +42,13 @@ export default async function AcademicsPage({
         title="Academic setup"
         description={
           readOnly
-            ? `The school year, classes, subjects and grading for ${tenant.tenantName}. Only an administrator can change this.`
-            : `The school year, classes, subjects and grading for ${tenant.tenantName}. Nothing here is ever deleted — old items are archived.`
+            ? `The school year, classes, subjects, timetable and grading for ${tenant.tenantName}. Only an administrator can change this.`
+            : `The school year, classes, subjects, timetable and grading for ${tenant.tenantName}. Nothing here is ever deleted — old items are archived.`
         }
       />
       <SectionNav schoolCode={tenant.tenantCode} current={section} />
       <div className="mt-8">
+        {section === "timetable" && <TimetablePanel schoolCode={tenant.tenantCode} readOnly={readOnly} />}
         {section === "attendance" && <AttendancePanel schoolCode={tenant.tenantCode} readOnly={readOnly} />}
         {section === "sessions" && (
           <SessionsPanel schoolCode={tenant.tenantCode} campuses={campuses} schoolType={tenant.schoolType} readOnly={readOnly} />

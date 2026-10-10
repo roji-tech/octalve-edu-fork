@@ -48,6 +48,8 @@ model Tenant {
   invoices          Invoice[]
   payments          Payment[]
   invoiceDiscounts  InvoiceDiscount[]
+  announcements     Announcement[]
+  timetableSlots    TimetableSlot[]
 }
 
 /// A branch/campus under one tenant (PRD §7) — distinct from multi-tenancy:
@@ -65,6 +67,7 @@ model Campus {
   classGroups    ClassGroup[]
   staffRecords   StaffRecord[]
   studentRecords StudentRecord[]
+  announcements  Announcement[]
 
   /// A school cannot have two campuses of the same name (compared exactly, after the API trims it).
   @@unique([tenantId, name])

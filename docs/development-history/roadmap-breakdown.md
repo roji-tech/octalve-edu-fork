@@ -30,11 +30,18 @@ replace a design pass — every phase still gets its design written into the pla
 | **0.5.2 Tenant trust boundary** | ✅ application layer (`claude/tenant-trust-boundary`) **and row-level security** (`claude/tenant-rls`) built and verified | `phases/phase-0.5.2…` |
 | 0.5.3 Shared API infrastructure | ✅ built and verified (`claude/tenant-trust-boundary`) | `phases/phase-0.5.3…` |
 | **0.5.2-H App shell** | ✅ built and verified (`claude/app-shell-users`) | `phases/phase-0.5.2H-app-shell.md` |
-| **0.5.4 Users pages & invitations** | ✅ built, verified, documented (`claude/app-shell-users`); 122-mutation first pass done (102 caught, survivors turned into tests, 5 justified-equivalent) — **the survivors' re-check is deferred to the end of Phase 2** by the maintainer; admin-initiated email change (0.5.4-F) still open | `phases/phase-0.5.4-users-invitations.md` |
-| Phase 1 … 5 | ⬜ | plan |
+| **0.5.4 Users pages & invitations** | ✅ built, verified, documented (`claude/app-shell-users`) | `phases/phase-0.5.4-users-invitations.md` |
+| **1.0 Foundations & Sessions** | ✅ built and verified (`claude/phase-1-0-1-1`) | `phases/phase-1.0-foundations.md` |
+| **1.1 Academic Structure** | ✅ built and verified (`claude/phase-1-0-1-1`) | `phases/phase-1.1-academic-structure.md` |
+| **1.2 People & Enrollment** | ✅ built and verified (`claude/phase-1-2-people`) | `phases/phase-1.2-people.md` |
+| **1.3 Attendance & Operations** | ✅ built and verified (`fork/claude/phase-1-3-attendance`) | `phases/phase-1.3-attendance.md` |
+| **1.4 Results & Grading** | ✅ built and verified (`claude/phase-1-4-results`) | `phases/phase-1.4-results-and-grading.md` |
+| **1.5 Finance & Billing** | ✅ built and verified (`claude/phase-1-5-finance`, PR #14 merged) | `phases/phase-1.5-finance-and-billing.md` |
+| **1.6 Announcements & Timetable** | 🟡 in progress (`claude/phase-1-6-timetable`) | `phases/phase-1.6-announcements-and-timetable.md` |
+| Phase 1.7 … 5 | ⬜ | plan |
 
-**No open blocker.** The RLS role was created with the maintainer's approval ("do both and run") and the whole suite now runs as `app_user`. Phase 1 may start once the shell and
-the Users pages exist; **every Phase 1 table ships RLS in its own migration** (the catalog guard enforces it).
+**Phase 1.6 is active on branch `claude/phase-1-6-timetable`.** Every new table ships RLS and runtime privileges in its own migration.
+
 
 ---
 
