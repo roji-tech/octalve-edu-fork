@@ -27,7 +27,8 @@ export const POST = withAuth(
         return ok(res, {}, 201);
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : "Failed to record manual payment";
-        return fail(message, 400);
+        const isNotFound = message.includes("not found") || (err as { name?: string })?.name === "NotFoundError";
+        return fail(message, isNotFound ? 404 : 400);
       }
     },
   ),

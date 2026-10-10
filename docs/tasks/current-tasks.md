@@ -16,7 +16,7 @@
 | 4 | [TASK-0004](0004-phase-1-5-finance-and-billing.md) | Phase 1.5: Finance, Invoicing & Paystack Integration | [x] Completed | 2026-10-10 00:07:00 UTC | 2026-10-10 08:45:00 UTC | [PR #14](https://github.com/roji-tech/octalve-edu-fork/pull/14) (`claude/phase-1-5-finance`) |
 | 5 | [TASK-0005](0005-phase-1-6-announcements-and-timetable.md) | Phase 1.6: Announcements & Timetable Scheduling | [x] Completed | 2026-10-10 11:15:00 UTC | 2026-10-10 15:30:00 UTC | [PR #15](https://github.com/roji-tech/octalve-edu-fork/pull/15) (`claude/phase-1-6-timetable`) |
 | 6 | [TASK-0006](0006-phase-1-7-settings-and-mfa.md) | Phase 1.7: Settings UI, Step-up MFA & Audit Logging | [x] Completed | 2026-10-10 16:00:00 UTC | 2026-10-10 17:10:00 UTC | `claude/phase-1-7-settings` |
-| 7 | [TASK-0007](0007-phase-1-8-phase-gate-and-hardening.md) | Phase 1.8: End-to-End Hardening, Security Walk & Gate | [ ] Pending | — | — | `claude/phase-1-8-gate` |
+| 7 | [TASK-0007](0007-phase-1-8-phase-gate-and-hardening.md) | Phase 1.8: End-to-End Hardening, Security Walk & Gate | [x] Completed | 2026-10-10 17:35:00 UTC | 2026-10-10 19:25:00 UTC | `claude/phase-1-8-gate` |
 
 ---
 
@@ -107,4 +107,17 @@
 - [x] Sub-phase E: UI components (`SchoolSettingsPanel`, `StepUpModal`, `SettingsAuditLog`, `/schools/[code]/settings` page, active shell nav)
 - [x] Sub-phase F: Testing & quality gates (294 unit tests, 68 RLS tests, 15 API tests, clean build/typecheck/lint/format)
 - [x] Sub-phase G: Documentation & completion record (`phases/phase-1.7-settings-and-mfa.md`)
+
+---
+
+### TASK-0007: Phase 1.8 — End-to-End Hardening, Security Walk & Gate
+- **Started:** `2026-10-10 17:35:00 UTC`
+- **Ended:** `2026-10-10 19:25:00 UTC`
+- **Status:** Completed
+- [x] Sub-phase A: Cross-Tenant IDOR Audit Suite (`tests/api/idor-audit.spec.ts`, 22 attack vectors passing 100% green)
+- [x] Sub-phase B: Multi-Actor Lifecycle Walk (`tests/integration/phase-1-lifecycle-walk.spec.ts`, 11/11 tests across 10 lifecycle steps passing 100% green)
+- [x] Sub-phase C: Payment & Webhook Adversarial Security Suite (`tests/api/finance-adversarial.spec.ts`, 5/5 tests covering forged HMAC, replays, tampered amounts, and concurrency locks passing 100% green)
+- [x] Sub-phase D: Query Performance & Index Sanity (`tests/integration/query-performance.spec.ts`, 6/6 tests asserting PostgreSQL `EXPLAIN` Index Scan utilization passing 100% green)
+- [x] Sub-phase E: Documentation, Phase Record & Final Phase 1 PR (`phases/phase-1.8-phase-gate.md`, all quality gates certified green)
+
 
