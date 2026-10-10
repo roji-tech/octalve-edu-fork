@@ -50,11 +50,12 @@ model StaffRecord {
   createdAt  DateTime      @default(now())
   updatedAt  DateTime      @default(now()) @updatedAt
 
-  tenant      Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  campus      Campus?                  @relation(fields: [tenantId, campusId], references: [tenantId, id], onDelete: NoAction)
-  membership  TenantMembership?        @relation(fields: [userId, tenantId], references: [userId, tenantId], onDelete: NoAction)
-  assignments StaffSubjectAssignment[]
-  invitations Invitation[]
+  tenant         Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  campus         Campus?                  @relation(fields: [tenantId, campusId], references: [tenantId, id], onDelete: NoAction)
+  membership     TenantMembership?        @relation(fields: [userId, tenantId], references: [userId, tenantId], onDelete: NoAction)
+  assignments    StaffSubjectAssignment[]
+  invitations    Invitation[]
+  timetableSlots TimetableSlot[]
 
   @@unique([tenantId, id])
   @@index([tenantId])

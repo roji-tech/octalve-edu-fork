@@ -10,6 +10,8 @@ export const dynamic = "force-dynamic";
 // dashboard. What it already does is the whole trust boundary end to end — the URL's code is resolved and the
 // signed-in person's OWN membership verified (403 otherwise), and the campuses below are read through the tenant
 // context, so the page is itself a live check that the right school's rows come back.
+import { AnnouncementsFeed } from "@/components/announcements/AnnouncementsFeed";
+
 export default async function SchoolPage({ params }: { params: Promise<{ code: string }> }) {
   const { code } = await params;
   const { session, tenant } = await requireTenantPage(code);
@@ -35,7 +37,7 @@ export default async function SchoolPage({ params }: { params: Promise<{ code: s
           <GraduationCapIcon className="h-6 w-6" />
         </span>
         <div className="min-w-0">
-          <h2 className="text-xl font-semibold tracking-tight break-words text-fg">{tenant.tenantName}</h2>
+          <h2 className="text-xl font-semibold tracking-tight wrap-break-word text-fg">{tenant.tenantName}</h2>
           <p className="mt-1 text-base text-fg-muted">
             You&apos;re signed in as <strong className="font-semibold text-fg">{ROLE_LABELS[tenant.role]}</strong>
             {tenant.role === "ADMIN" ? " · all campuses" : ""}.
@@ -62,6 +64,8 @@ export default async function SchoolPage({ params }: { params: Promise<{ code: s
           </ul>
         )}
       </section>
+
+      <AnnouncementsFeed schoolCode={tenant.tenantCode} userRole={tenant.role} userId={session.user.id} campuses={campuses} />
     </div>
   );
 }

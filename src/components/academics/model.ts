@@ -22,6 +22,7 @@ export type CampusOption = { id: string; name: string };
 export type PageMeta = { page: number; limit: number; total: number; pages: number; hasNext: boolean };
 
 export const SECTIONS = [
+  { key: "timetable", label: "Timetable" },
   { key: "attendance", label: "Attendance" },
   { key: "sessions", label: "Sessions & terms" },
   { key: "classes", label: "Classes & subjects" },

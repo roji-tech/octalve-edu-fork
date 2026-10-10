@@ -1,0 +1,31 @@
+// --- Timetable & Curriculum Scheduling (Phase 1.6) ---
+//
+// Tenant-level RLS is enforced on TimetableSlot.
+// Recurring weekly schedule per class arm, subject, teacher, day of week, and time interval.
+// dayOfWeek: 1 = Monday ... 7 = Sunday (ISO-8601 standard weekday format).
+// startTime / endTime: "HH:MM" e.g. "08:00" to "08:45" (24-hour format).
+
+model TimetableSlot {
+  id            String   @id @default(cuid())
+  tenantId      String
+  classArmId    String
+  subjectId     String
+  staffRecordId String
+  dayOfWeek     Int // 1 = Monday ... 7 = Sunday
+  periodNumber  Int? // Optional period index (1, 2, 3...)
+  startTime     String // "08:00"
+  endTime       String // "08:45"
+  room          String? // Optional room / lab label
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @default(now()) @updatedAt
+
+  tenant      Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  classArm    ClassArm    @relation(fields: [tenantId, classArmId], references: [tenantId, id], onDelete: Cascade)
+  subject     Subject     @relation(fields: [tenantId, subjectId], references: [tenantId, id], onDelete: Cascade)
+  staffRecord StaffRecord @relation(fields: [tenantId, staffRecordId], references: [tenantId, id], onDelete: Cascade)
+
+  @@unique([tenantId, id])
+  @@index([tenantId, classArmId])
+  @@index([tenantId, staffRecordId])
+  @@index([tenantId, dayOfWeek])
+}
