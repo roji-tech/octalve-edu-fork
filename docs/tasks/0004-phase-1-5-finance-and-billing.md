@@ -4,7 +4,7 @@
 - **Status:** Completed
 - **Priority:** High
 - **Assignee:** Claude Agent / Maintainer
-- **Target Branch / PR:** `claude/phase-1-5-finance`
+- **Target Branch / PR:** [PR #14](https://github.com/roji-tech/octalve-edu-fork/pull/14) (`claude/phase-1-5-finance`)
 - **Started:** 2026-10-10 00:07:00 UTC
 - **Ended:** 2026-10-10 08:45:00 UTC
 
