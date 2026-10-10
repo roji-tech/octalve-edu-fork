@@ -127,6 +127,9 @@ process.env.DEV_TOOLS_TOKEN = "";
 export const TEST_MFA_KEY = Buffer.alloc(32, 7).toString("base64");
 process.env.MFA_ENCRYPTION_KEY = TEST_MFA_KEY;
 
+process.env.FORCE_MOCK_PAYSTACK = "true";
+process.env.PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY || "mock_sk_test_octalve_secret";
+
 /// Environment for the Next.js servers under test. Explicit and complete on
 /// purpose: nothing from a developer's shell or .env may change what is tested.
 export function serverEnv(appUrl: string): Record<string, string> {

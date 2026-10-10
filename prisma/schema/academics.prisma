@@ -67,8 +67,10 @@ model AcademicPeriod {
   updatedAt  DateTime   @default(now()) @updatedAt
 
   tenant  Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  session AcademicSession @relation(fields: [tenantId, sessionId], references: [tenantId, id], onDelete: NoAction)
-  results Result[]
+  session       AcademicSession @relation(fields: [tenantId, sessionId], references: [tenantId, id], onDelete: NoAction)
+  results       Result[]
+  feeStructures FeeStructure[]
+  invoices      Invoice[]
 
   @@unique([tenantId, id])
   @@index([tenantId, sessionId])
@@ -88,11 +90,12 @@ model ClassGroup {
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @default(now()) @updatedAt
 
-  tenant    Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  campus    Campus?            @relation(fields: [tenantId, campusId], references: [tenantId, id], onDelete: NoAction)
-  arms      ClassArm[]
-  offerings SubjectOffering[]
-  schemes   AssessmentScheme[]
+  tenant        Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  campus        Campus?            @relation(fields: [tenantId, campusId], references: [tenantId, id], onDelete: NoAction)
+  arms          ClassArm[]
+  offerings     SubjectOffering[]
+  schemes       AssessmentScheme[]
+  feeStructures FeeStructure[]
 
   @@unique([tenantId, id])
   @@index([tenantId])
