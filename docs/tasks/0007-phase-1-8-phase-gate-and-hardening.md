@@ -4,7 +4,7 @@
 - **Status:** Completed
 - **Priority:** Critical
 - **Assignee:** Claude Agent / Maintainer
-- **Target Branch / PR:** `claude/phase-1-8-gate`
+- **Target Branch / PR:** [PR #17](https://github.com/roji-tech/octalve-edu-fork/pull/17) (`claude/phase-1-8-gate`)
 - **Started:** 2026-10-10 17:35:00 UTC
 - **Ended:** 2026-10-10 19:25:00 UTC
 - **Duration:** ~1h 50m
@@ -81,4 +81,4 @@ Execute and pass the final **Phase 1 Verification Gate & Security Hardening Walk
 - [x] Create `docs/development-history/phases/phase-1.8-phase-gate.md`.
 - [x] Update `docs/development-history/octalve_edu_progress.md` marking Phase 1 100% complete.
 - [x] Run full repo quality gates (`pnpm test:unit`, `pnpm test:fast`, `pnpm build`, `pnpm typecheck`, `pnpm lint`, `pnpm format:check`, `pnpm tasks:check`).
-- [x] Commit, push to `claude/phase-1-8-gate`, and open PR.
+- [x] Commit, push to `claude/phase-1-8-gate`, and open PR ([#17](https://github.com/roji-tech/octalve-edu-fork/pull/17)).

@@ -37,10 +37,12 @@ replace a design pass — every phase still gets its design written into the pla
 | **1.3 Attendance & Operations** | ✅ built and verified (`fork/claude/phase-1-3-attendance`) | `phases/phase-1.3-attendance.md` |
 | **1.4 Results & Grading** | ✅ built and verified (`claude/phase-1-4-results`) | `phases/phase-1.4-results-and-grading.md` |
 | **1.5 Finance & Billing** | ✅ built and verified (`claude/phase-1-5-finance`, PR #14 merged) | `phases/phase-1.5-finance-and-billing.md` |
-| **1.6 Announcements & Timetable** | 🟡 in progress (`claude/phase-1-6-timetable`) | `phases/phase-1.6-announcements-and-timetable.md` |
-| Phase 1.7 … 5 | ⬜ | plan |
+| **1.6 Announcements & Timetable** | ✅ built and verified (`claude/phase-1-6-timetable`, PR #15 merged) | `phases/phase-1.6-announcements-and-timetable.md` |
+| **1.7 Settings UI & Step-up MFA** | ✅ built and verified (`claude/phase-1-7-settings`, PR #16 merged) | `phases/phase-1.7-settings-and-mfa.md` |
+| **1.8 End-to-End Hardening & Phase Gate** | ✅ built and verified (`claude/phase-1-8-gate`, PR #17 open) | `phases/phase-1.8-phase-gate.md` |
+| Phase 2 … 5 | ⬜ | plan |
 
-**Phase 1.6 is active on branch `claude/phase-1-6-timetable`.** Every new table ships RLS and runtime privileges in its own migration.
+**Phase 1 (Core SIS & Finance) is 100% built, verified, and gated.** Next up: Phase 2 (Communication).
 
 
 ---
