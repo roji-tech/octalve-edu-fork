@@ -158,14 +158,14 @@ export function TimetableCanvas({ schoolCode, slots, classArms, subjects, teache
       {viewMode === "grid" ? (
         <div className="overflow-x-auto rounded-2xl border border-line bg-surface p-4 shadow-sm">
           <div
-            className="grid min-w-[750px] grid-cols-5 gap-3"
+            className="grid min-w-187.5 grid-cols-5 gap-3"
             style={{ gridTemplateColumns: `repeat(${activeDays.length}, minmax(0, 1fr))` }}
           >
             {activeDays.map((day) => {
               const daySlots = filteredSlots.filter((s) => s.dayOfWeek === day).sort((a, b) => a.startTime.localeCompare(b.startTime));
 
               return (
-                <div key={day} className="flex flex-col rounded-xl border border-line bg-field/40 p-3 min-h-[360px]">
+                <div key={day} className="flex flex-col rounded-xl border border-line bg-field/40 p-3 min-h-90">
                   {/* Day Header */}
                   <div className="flex items-center justify-between border-b border-line pb-2 mb-3">
                     <span className="text-xs font-bold uppercase tracking-wider text-fg">{getDayName(day)}</span>
@@ -212,8 +212,8 @@ export function TimetableCanvas({ schoolCode, slots, classArms, subjects, teache
                             </div>
 
                             <div className="mt-2 flex items-center justify-between border-t border-line/60 pt-1.5 text-[10px]">
-                              <span className="font-medium text-brand-fg truncate max-w-[90px]">{slot.classArmName}</span>
-                              <span className="text-fg-muted truncate max-w-[90px]">{slot.teacherName}</span>
+                              <span className="font-medium text-brand-fg truncate max-w-22.5">{slot.classArmName}</span>
+                              <span className="text-fg-muted truncate max-w-22.5">{slot.teacherName}</span>
                             </div>
                           </div>
                         );
