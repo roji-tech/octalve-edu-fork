@@ -320,8 +320,8 @@ Record: `phases/phase-1.4-results-and-grading.md`, task register `docs/tasks/000
 ## Phase 1.5 Finance, Invoicing & Dual-Mode Paystack Integration (2026-10-10) — built, verified and merged (PR #14)
 Record: `phases/phase-1.5-finance-and-billing.md`, task register `docs/tasks/0004-phase-1-5-finance-and-billing.md`. Term fee structures by class group, automated batch invoice generation, partial payments, manual receipt recording, waiver support, dual-mode Paystack checkout (`PAYSTACK_MOCK_MODE=true` for instant interactive simulation / live HMAC-verified webhooks with replay protection via `PaymentWebhookEvent`), and parent/admin invoices dashboard. PR #14 merged into `fork/claude/phase-1-3-attendance`.
 
-## Phase 1.6 Announcements & Timetable Scheduling (2026-10-10) — built, verified, all quality gates green
-Record: `phases/phase-1.6-announcements-and-timetable.md`, task register `docs/tasks/0005-phase-1-6-announcements-and-timetable.md`. Branch `claude/phase-1-6-timetable`.
+## Phase 1.6 Announcements & Timetable Scheduling (2026-10-10) — built, verified, merged (PR #15)
+Record: `phases/phase-1.6-announcements-and-timetable.md`, task register `docs/tasks/0005-phase-1-6-announcements-and-timetable.md`. Branch `claude/phase-1-6-timetable`. PR #15 merged into `fork/claude/phase-1-3-attendance`.
 - Multi-audience broadcasts (`Announcement`) targeting `Role[]`, `campusId`, `classArmId` with active publish/expiry windows.
 - Recurring weekly `TimetableSlot` scheduling per `classArmId`, `subjectId`, `staffRecordId`, `dayOfWeek` (1–7), `startTime`, `endTime`, `room`.
 - Pure clash detection engine (`rules.ts`) preventing teacher double-booking, class arm schedule overlap, and room conflicts.
@@ -329,7 +329,16 @@ Record: `phases/phase-1.6-announcements-and-timetable.md`, task register `docs/t
 - Multi-tenant PostgreSQL RLS (`app_user`, `forTenant()`, `app_tenant_id()`) verified across all tables.
 - Full quality gates passing: 287/287 unit tests, 66/66 RLS tests, 20/20 API tests, clean build/typecheck/lint/format.
 
+## Phase 1.7 Settings UI, Step-up MFA & Audit Logging (2026-10-10) — built, verified, all quality gates green
+Record: `phases/phase-1.7-settings-and-mfa.md`, task register `docs/tasks/0006-phase-1-7-settings-and-mfa.md`. Branch `claude/phase-1-7-settings`.
+- Centralized PRD §14 workflow toggles at `/schools/[code]/settings`: `resultApprovalRequired`, `rolloverMode`, `classAutoAssignment`, `billingCycle`, `feeReminderEnabled`, `discountWorkflowMode`, `feeCostBearer`, `multiCampusEnabled`, `mfaRequiredForTeaching`.
+- Step-up authentication gate on all settings mutations: requires fresh TOTP 6-digit code or recovery code if user has MFA enabled, or password re-authentication (`proveOwnPassword`) if not. Explicit warning banner for security-weakening toggles.
+- Append-only `SettingsChangeAudit` table tracking actor, field, old value, new value, timestamp, and `stepUpVerifiedAt`. Database-level `REVOKE UPDATE, DELETE, TRUNCATE ... FROM app_user`.
+- Activated Settings navigation in `src/components/shell/nav.ts` (replacing disabled "Soon" text).
+- Full quality gates passing: 294/294 unit tests, 68/68 RLS tests, 15/15 API tests, Next.js build clean, typecheck clean, lint clean, format check clean.
+
 ## Next action
-1. Commit branch `claude/phase-1-6-timetable` and submit PR to fork.
-2. Advance to Phase 1.7: Settings UI, Step-up MFA & Audit Logging.
+1. Commit branch `claude/phase-1-7-settings` and submit PR to fork.
+2. Advance to Phase 1.8: End-to-End Hardening, Security Walk & Gate.
+
 

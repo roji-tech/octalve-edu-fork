@@ -39,3 +39,22 @@ model SchoolSettings {
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 }
+
+/// Immutable append-only audit log for SchoolSettings changes (PRD §14, plan §1.3).
+/// Every change requires stepUpVerifiedAt (re-authentication timestamp: fresh TOTP or password proof).
+model SettingsChangeAudit {
+  id               String   @id @default(cuid())
+  tenantId         String
+  actorUserId      String
+  field            String
+  fromValue        String
+  toValue          String
+  stepUpVerifiedAt DateTime
+  createdAt        DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, id])
+  @@index([tenantId])
+  @@index([tenantId, createdAt])
+}

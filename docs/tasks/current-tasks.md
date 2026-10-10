@@ -15,7 +15,7 @@
 | 3 | [TASK-0003](0003-phase-1-4-results-and-publishing.md) | Phase 1.4: Results, Grading & Publishing Workflow | [x] Completed | 2026-10-09 22:36:00 UTC | 2026-10-09 23:08:00 UTC | [PR #13](https://github.com/roji-tech/octalve-edu-fork/pull/13) (`claude/phase-1-4-results`) |
 | 4 | [TASK-0004](0004-phase-1-5-finance-and-billing.md) | Phase 1.5: Finance, Invoicing & Paystack Integration | [x] Completed | 2026-10-10 00:07:00 UTC | 2026-10-10 08:45:00 UTC | [PR #14](https://github.com/roji-tech/octalve-edu-fork/pull/14) (`claude/phase-1-5-finance`) |
 | 5 | [TASK-0005](0005-phase-1-6-announcements-and-timetable.md) | Phase 1.6: Announcements & Timetable Scheduling | [x] Completed | 2026-10-10 11:15:00 UTC | 2026-10-10 15:30:00 UTC | [PR #15](https://github.com/roji-tech/octalve-edu-fork/pull/15) (`claude/phase-1-6-timetable`) |
-| 6 | [TASK-0006](0006-phase-1-7-settings-and-mfa.md) | Phase 1.7: Settings UI, Step-up MFA & Audit Logging | [ ] Pending | — | — | `claude/phase-1-7-settings` |
+| 6 | [TASK-0006](0006-phase-1-7-settings-and-mfa.md) | Phase 1.7: Settings UI, Step-up MFA & Audit Logging | [x] Completed | 2026-10-10 16:00:00 UTC | 2026-10-10 17:10:00 UTC | `claude/phase-1-7-settings` |
 | 7 | [TASK-0007](0007-phase-1-8-phase-gate-and-hardening.md) | Phase 1.8: End-to-End Hardening, Security Walk & Gate | [ ] Pending | — | — | `claude/phase-1-8-gate` |
 
 ---
@@ -93,3 +93,18 @@
 - [x] Sub-phase E: UI components (`TimetableCanvas`, `SlotEditModal`, `AnnouncementsFeed`, `AnnouncementComposerModal`)
 - [x] Sub-phase F: Unit, integration, and API tests (287 unit, 66 RLS, 20 API)
 - [x] Sub-phase G: Quality gates (`pnpm typecheck`, `pnpm lint`, `pnpm format:check`, `pnpm tasks:check`) and PR submission
+
+---
+
+### TASK-0006: Phase 1.7 — Settings UI, Step-up MFA & Audit Logging
+- **Started:** `2026-10-10 16:00:00 UTC`
+- **Ended:** `2026-10-10 17:10:00 UTC`
+- **Status:** Completed
+- [x] Sub-phase A: Schema & migration (`settings.prisma`, `tenancy.prisma`, append-only `SettingsChangeAudit`, PostgreSQL RLS policies & revoked privileges)
+- [x] Sub-phase B: Pure rules & delta computation (`rules.ts`, `ALLOWED_SETTING_FIELDS`, `isControlWeakened`)
+- [x] Sub-phase C: Domain services & HTTP schemas (`service.ts`, `http.ts`, step-up proof verification via TOTP/recovery or password)
+- [x] Sub-phase D: API endpoints (`GET/PATCH /api/v1/schools/[code]/settings`, atomic settings mutation with audit row logging)
+- [x] Sub-phase E: UI components (`SchoolSettingsPanel`, `StepUpModal`, `SettingsAuditLog`, `/schools/[code]/settings` page, active shell nav)
+- [x] Sub-phase F: Testing & quality gates (294 unit tests, 68 RLS tests, 15 API tests, clean build/typecheck/lint/format)
+- [x] Sub-phase G: Documentation & completion record (`phases/phase-1.7-settings-and-mfa.md`)
+
